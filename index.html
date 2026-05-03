@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>OPERATION PRINTER SCANNER</title>
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+
+<!-- Intro Landing Screen -->
+<div id="intro-screen">
+  <h1 class="intro-title">OPERATION PRINTER SCANNER</h1>
+  <div class="intro-sub">SUBMARINE BATTLE IN YOUR OWN HOME</div>
+  <div id="intro-hero">
+    <img src="/Images/Splash_Screen.png" alt="Operation Printer Scanner">
+  </div>
+  <div class="intro-buttons">
+    <button id="intro-dive-btn">▶ DIVE IN</button>
+    <button id="intro-choose-btn">◈ CHOOSE A BATTLEGROUND</button>
+    <button id="intro-upload-btn">▲ UPLOAD A PLAN</button>
+  </div>
+</div>
+
+<!-- Battleground Selector Screen -->
+<div id="battleground-screen">
+  <button class="bg-back-btn" id="bg-back-btn">← BACK</button>
+  <div class="bg-screen-title">CHOOSE A BATTLEGROUND</div>
+  <div class="bg-grid" id="bg-grid"></div>
+</div>
+
+<!-- Upload / Floor Plan Screen -->
+<div id="upload-screen" style="display:none">
+  <h1>OPERATION PRINTER SCANNER</h1>
+  <div class="sub">UPLOAD YOUR OWN BATTLESPACE</div>
+  <div class="upload-panel">
+    <div class="upload-row">
+      <div class="upload-label">FLOOR PLAN IMAGE</div>
+      <canvas id="plan-canvas-preview" width="400" height="160"></canvas>
+    </div>
+    <div class="upload-row">
+      <button id="upload-file-btn">▲ CHOOSE IMAGE</button>
+      <input type="file" id="file-input" accept="image/*">
+    </div>
+    <div class="upload-row">
+      <div class="upload-label">WALL SENSITIVITY &nbsp;<span id="threshold-val">25% dark</span></div>
+      <input type="range" id="threshold-slider" min="5" max="60" value="25">
+      <div class="upload-stats" id="upload-stats">Upload a floor plan image to generate your battlespace</div>
+    </div>
+    <button id="launch-btn">▶ DIVE IN</button>
+    <button id="upload-back-btn">← BACK</button>
+  </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="hud">
+  <div class="bracket tl"></div>
+  <div class="bracket tr"></div>
+  <div class="bracket bl"></div>
+  <div class="bracket br"></div>
+
+  <div class="hud-corner" id="hud-tl">
+    <div id="hud-title">OPERATION PRINTER SCANNER</div>
+    <div id="hud-subtitle">LIVE BATTLESPACE FEED</div>
+    <div><span class="stat-label">GRID </span><span class="stat-val">317mm³</span></div>
+    <div><span class="stat-label">VOL  </span><span class="stat-val" id="vol-display">20m×15m×3m</span></div>
+    <div><span class="stat-label">TIME </span><span class="stat-val" id="clock">00:00:00Z</span></div>
+  </div>
+
+  <div class="hud-corner" id="hud-tr">
+    <div><span class="stat-label">SUB ALPHA &nbsp;</span></div>
+    <div><span class="stat-label">DEPTH &nbsp;</span><span class="stat-val" id="depth-display">-0.0m</span></div>
+    <div><span class="stat-label">SPEED &nbsp;</span><span class="stat-val" id="speed-display">0.0 kts</span></div>
+    <div><span class="stat-label">HEADING &nbsp;</span><span class="stat-val" id="heading-display">000°</span></div>
+    <div><span class="stat-label">TORPS &nbsp;</span><span class="stat-val" id="torp-count">∞</span></div>
+  </div>
+
+  <div id="mode-badge">◈ NAVIGATE</div>
+  <div id="view-transition"></div>
+
+  <div id="render-panel">
+    <div class="rp-label">POINTS</div>
+    <div class="rp-row">
+      <button class="rp-btn" id="peri-density-down">−</button>
+      <button class="rp-btn rp-toggle on" id="peri-dots-btn">ON</button>
+      <button class="rp-btn" id="peri-density-up">+</button>
+    </div>
+    <div class="rp-label">SIZE</div>
+    <div class="rp-row">
+      <button class="rp-btn" id="peri-size-down">−</button>
+      <button class="rp-btn" id="peri-size-val" style="min-width:40px;font-size:8px;pointer-events:none;">15</button>
+      <button class="rp-btn" id="peri-size-up">+</button>
+    </div>
+    <div class="rp-label">LINES</div>
+    <div class="rp-row">
+      <button class="rp-btn" id="peri-line-thin">−</button>
+      <button class="rp-btn rp-toggle on" id="peri-wireframe-btn">ON</button>
+      <button class="rp-btn" id="peri-line-thick">+</button>
+    </div>
+  </div>
+
+  <div id="periscope-overlay">
+    <canvas id="scope-mask" width="1" height="1" style="position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
+
+    <div id="peri-top-btns">
+      <button class="peri-top-btn" id="peri-btn-back">◈ COMMAND</button>
+      <button class="peri-top-btn" id="peri-btn-ping-peri">◎ PING</button>
+      <button class="peri-top-btn" id="peri-btn-reveal-peri">👁 ENEMY</button>
+      <button class="peri-top-btn" id="peri-btn-battlestations">🚨 RA</button>
+    </div>
+
+    <span id="peri-density-val" style="display:none;">POINTS</span>
+
+    <div id="peri-compass">
+      <canvas id="peri-compass-canvas" width="260" height="48"></canvas>
+    </div>
+
+    <div id="peri-info-left">
+      <div><span style="color:var(--teal-dim)">DEPTH </span><span id="peri-depth">-0m</span></div>
+      <div><span style="color:var(--teal-dim)">BEAR  </span><span id="peri-bearing">000°</span></div>
+    </div>
+    <div id="peri-info-right">
+      <div><span id="peri-contact">NO CONTACT</span></div>
+      <div><span style="color:var(--teal-dim)">TORPS </span><span id="peri-torps">∞</span></div>
+      <div><span style="color:var(--teal-dim)">HULL  </span><span id="peri-hull">100%</span></div>
+    </div>
+
+    <div id="peri-actions">
+      <div class="peri-slider-zone" id="peri-fwd-wrap">
+        <canvas id="peri-fwd-slider" width="120" height="200" style="width:100%;height:100%;touch-action:none;"></canvas>
+      </div>
+      <div class="peri-slider-zone" id="peri-depth-slider-wrap">
+        <div class="peri-slider-label">RISE</div>
+        <canvas id="peri-depth-slider" width="44" height="140" style="touch-action:none;"></canvas>
+        <div class="peri-slider-label">DIVE</div>
+      </div>
+      <div id="peri-fire-zone">
+        <button id="peri-btn-fire" class="peri-fire-circle"><span>FIRE</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="event-log"></div>
+  <div id="torpedo-aim-hint">▸ DRAG LEFT ZONE TO AIM · RIGHT ZONE FOR DEPTH<br>▸ TAP FIRE TO LAUNCH</div>
+
+  <div id="sonar-wrap" style="position:absolute;bottom:14px;left:14px;">
+    <div style="font-size:8px;letter-spacing:0.15em;color:#00ff9d;text-shadow:0 0 6px #00ff9d;margin-bottom:3px;">TACTICAL · SONAR</div>
+    <canvas id="sonar-canvas" width="200" height="200" style="display:block;width:200px;height:200px;border:1px solid #0097a7;background:rgba(0,10,20,0.95);box-shadow:0 0 16px rgba(0,229,255,0.25);"></canvas>
+    <div id="sonar-readout" style="font-size:8px;letter-spacing:0.1em;color:#0097a7;margin-top:3px;line-height:1.6;">BEARING —&nbsp; RANGE —&nbsp; DEPTH —</div>
+  </div>
+
+  <div id="sys-panel">
+    <h3>SYSTEM STATUS</h3>
+    <div class="sys-row"><span class="stat-label">SONAR</span><span class="stat-ok" id="sys-sonar">ONLINE</span></div>
+    <div class="sys-row"><span class="stat-label">COMMS</span><span class="stat-ok">SECURE</span></div>
+    <div class="sys-row"><span class="stat-label">REACTOR</span><span class="stat-ok" id="sys-reactor">NOMINAL</span></div>
+    <div class="sys-row"><span class="stat-label">WEAPONS</span><span class="stat-warn">ARMED</span></div>
+    <div class="sys-row"><span class="stat-label">HULL</span><span class="stat-ok" id="sys-hull">100%</span></div>
+    <div style="border-top:1px solid var(--teal-dim);margin-top:5px;padding-top:5px;">
+      <div class="sys-row"><span class="stat-label">ENEMY</span><span class="stat-val" id="enemy-status">HUNTING</span></div>
+      <div class="sys-row"><span class="stat-label">KILLS</span><span class="stat-val" id="kill-count">0</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="controls-wrap" style="position:absolute;bottom:0;left:0;right:0;">
+  <div id="rotate-hint">DRAG VIEW ← → ROTATE &nbsp;↕ ZOOM</div>
+  <div id="actions">
+    <button class="action-btn" id="btn-ping">◎ PING</button>
+    <button class="action-btn active" id="btn-reveal">👁 HIDE ENEMY</button>
+    <button class="action-btn" id="btn-periscope">⊙ PERISCOPE</button>
+    <button class="action-btn fire" id="btn-torpedo">⊛ TORPEDO</button>
+    <button class="action-btn fire" id="btn-fire" style="display:none">▶ FIRE</button>
+    <button class="action-btn" id="btn-resetview">⟳ VIEW</button>
+    <button class="action-btn" id="btn-density-down">◎ −</button>
+    <button class="action-btn" id="btn-density-up">◎ +</button>
+    <button class="action-btn" id="btn-respawn">↺ RESPAWN</button>
+    <button class="action-btn" id="btn-battlestations">🚨 RED ALERT</button>
+  </div>
+  <div id="controls">
+    <div class="drag-zone" id="zone-move">
+      <div class="drag-zone-label">MOVE / AIM XZ</div>
+      <div class="drag-zone-icon">✛</div>
+      <div class="drag-zone-sub">DRAG TO NAVIGATE</div>
+    </div>
+    <div class="drag-zone" id="zone-depth">
+      <div class="drag-zone-label">DIVE / RISE</div>
+      <div class="drag-zone-icon">⇅</div>
+      <div class="drag-zone-sub">↑ DIVE &nbsp; ↓ RISE</div>
+    </div>
+    <div id="depth-gauge-wrap">
+      <div id="depth-gauge-label">DEPTH</div>
+      <canvas id="depth-gauge-canvas" width="44" height="155"></canvas>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

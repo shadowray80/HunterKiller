@@ -168,6 +168,7 @@ left: 0; right: 0;
 display: flex;
 flex-direction: column;
 pointer-events: none;
+padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Button strip sits above drag zones */

@@ -1019,3 +1019,60 @@ font-size: 7px;
 letter-spacing: 0.12em;
 color: var(--accent);
 }
+
+/* ── WAYPOINT MISSION PANEL ── */
+#wp-panel {
+  position: absolute;
+  top: 94px;
+  right: 4px;
+  pointer-events: none;
+  z-index: 10;
+  background: rgba(0,8,20,0.88);
+  border: 1px solid rgba(0,160,200,0.35);
+  padding: 5px 6px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 104px;
+}
+.wp-panel-title {
+  font-family: var(--mono);
+  font-size: 6px;
+  letter-spacing: 0.18em;
+  color: rgba(0,160,200,0.6);
+  text-align: center;
+  border-bottom: 1px solid rgba(0,160,200,0.2);
+  padding-bottom: 3px;
+}
+.wp-digits-row {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+  padding: 2px 0;
+}
+.wp-digit-canvas { display: block; }
+.wp-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.wp-label {
+  font-family: var(--mono);
+  font-size: 7px;
+  letter-spacing: 0.12em;
+  color: rgba(0,150,180,0.55);
+}
+.wp-val {
+  font-family: var(--mono);
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  color: var(--teal);
+}
+#wp-result-text {
+  font-family: var(--mono);
+  font-size: 6px;
+  letter-spacing: 0.1em;
+  text-align: center;
+  min-height: 10px;
+  animation: blink 0.7s infinite;
+}

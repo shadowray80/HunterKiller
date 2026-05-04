@@ -261,6 +261,19 @@ const state = {
   enemyMoveTimer: 0,
 };
 
+// ── WAYPOINT MISSION ──
+const WP_DEFS = [
+  { num:1, x:15, y:3, z:20 },
+  { num:2, x:48, y:3, z:20 },
+  { num:3, x:58, y:3, z:30 },
+  { num:4, x:38, y:3, z:43 },
+  { num:5, x:10, y:3, z:35 },
+];
+state.wpMission = {
+  active: false, waypoints: [], nextRequired: 1, score: 0,
+  timeLeft: 0, triggerIn: 600, result: null, resultTimer: 0,
+};
+
 // ── AUDIO: Sonar ping via Web Audio API ──
 let audioCtx = null;
 function initAudio() {
@@ -1526,6 +1539,27 @@ function update() {
   const m=padL(Math.floor((t%3600)/60).toString(),2,'0');
   const s=padL((t%60).toString(),2,'0');
   document.getElementById('clock').textContent = `${h}:${m}:${s}Z`;
+
+  // ── WAYPOINT MISSION UPDATE ──
+  const wpm = state.wpMission;
+  if (!wpm.active && wpm.result === null) {
+    if (--wpm.triggerIn <= 0) startWaypointMission();
+  } else if (wpm.active) {
+    wpm.timeLeft--;
+    if (state.time % 60 === 0) updateWpPanel();
+    if (wpm.timeLeft <= 0) { missionFailed(); return; }
+    const nextWp = wpm.waypoints.find(w => w.num === wpm.nextRequired && !w.collected);
+    if (nextWp) {
+      const p = state.player;
+      if (Math.abs(p.x-nextWp.x)<2 && Math.abs(p.y-nextWp.y)<2 && Math.abs(p.z-nextWp.z)<2)
+        collectWaypoint(nextWp);
+    }
+  } else if (wpm.result !== null) {
+    if (--wpm.resultTimer <= 0) {
+      wpm.result = null;
+      document.getElementById('wp-panel').style.display = 'none';
+    }
+  }
 }
 
 // Check if a position (with sub radius) overlaps any solid furniture
@@ -3574,6 +3608,200 @@ const periFireBtn = document.getElementById('peri-btn-fire');
 periFireBtn.addEventListener('click',     periFireTorpedo);
 periFireBtn.addEventListener('pointerup', periFireTorpedo);
 
+// ══════════════════════════════════════════════
+// WAYPOINT MISSION SYSTEM
+// ══════════════════════════════════════════════
+
+function draw7Seg(canvas, digit, color) {
+  const c = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  c.clearRect(0, 0, W, H);
+  const p = 2, sw = 3, iw = W-p*2, ih = H-p*2, hh = ih/2;
+  const segs = [
+    [p,    p,    p+iw, p    ],  // 0 top
+    [p,    p,    p,    p+hh ],  // 1 top-left
+    [p+iw, p,    p+iw, p+hh],  // 2 top-right
+    [p,    p+hh, p+iw, p+hh],  // 3 middle
+    [p,    p+hh, p,    p+ih ],  // 4 bot-left
+    [p+iw, p+hh, p+iw, p+ih],  // 5 bot-right
+    [p,    p+ih, p+iw, p+ih],  // 6 bottom
+  ];
+  const on = { 1:[2,5], 2:[0,2,3,4,6], 3:[0,2,3,5,6], 4:[1,2,3,5], 5:[0,1,3,5,6] };
+  c.lineWidth = sw; c.lineCap = 'square';
+  c.strokeStyle = 'rgba(0,60,20,0.3)';
+  segs.forEach(([x1,y1,x2,y2]) => { c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke(); });
+  c.strokeStyle = color; c.shadowBlur = 6; c.shadowColor = color;
+  (on[digit]||[]).forEach(i => {
+    const [x1,y1,x2,y2] = segs[i];
+    c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke();
+  });
+  c.shadowBlur = 0;
+}
+
+function updateWpPanel() {
+  const m = state.wpMission;
+  [1,2,3,4,5].forEach(n => {
+    const wp = m.waypoints.find(w => w.num === n);
+    const cvs = document.getElementById('wp-d'+n);
+    if (!cvs) return;
+    draw7Seg(cvs, n, !wp ? 'rgba(0,60,20,0.3)' : wp.collected ? '#ff8800' : '#00ff66');
+  });
+  const se = document.getElementById('wp-score-val');
+  if (se) se.textContent = String(m.score).padStart(2,'0');
+  const te = document.getElementById('wp-timer-val');
+  if (te) {
+    const secs = Math.max(0, Math.ceil(m.timeLeft/60));
+    te.textContent = Math.floor(secs/60)+':'+String(secs%60).padStart(2,'0');
+    te.style.color = secs < 30 ? '#ff4444' : 'var(--teal)';
+  }
+  const re = document.getElementById('wp-result-text');
+  if (re) {
+    if (m.result === 'accomplished') { re.textContent = 'MISSION ACCOMPLISHED'; re.style.color = '#00ff9d'; }
+    else if (m.result === 'failed')  { re.textContent = 'MISSION FAILED';        re.style.color = '#ff4444'; }
+    else re.textContent = '';
+  }
+}
+
+function startWaypointMission() {
+  const m = state.wpMission;
+  m.active = true;
+  m.waypoints = WP_DEFS.map(d => ({...d, collected:false, rotAngle:Math.random()*Math.PI*2}));
+  m.nextRequired = 1; m.score = 0; m.timeLeft = 7200; m.result = null; m.resultTimer = 0;
+  document.getElementById('wp-panel').style.display = 'flex';
+  updateWpPanel();
+  addEvent('▸ INCOMING TRANSMISSION', false);
+  setTimeout(()=>addEvent('▸ WAYPOINT MISSION — PLOT COURSE IN SEQUENCE', false), 1200);
+  setTimeout(()=>addEvent('▸ NAVIGATE WAYPOINTS 1→5 — 2 MINUTES', false), 2400);
+  playWpStart();
+}
+
+function collectWaypoint(wp) {
+  wp.collected = true;
+  state.wpMission.score += wp.num;
+  state.wpMission.nextRequired++;
+  addEvent('⊛ WAYPOINT '+wp.num+' SECURED — +'+wp.num+' PTS', false);
+  playWpCollect();
+  updateWpPanel();
+  if (state.wpMission.nextRequired > 5) missionAccomplished();
+}
+
+function missionAccomplished() {
+  const m = state.wpMission;
+  m.active = false; m.result = 'accomplished'; m.resultTimer = 360;
+  m.triggerIn = 18000;
+  addEvent('★ MISSION ACCOMPLISHED — '+m.score+' PTS', false);
+  playWpAccomplished();
+  updateWpPanel();
+}
+
+function missionFailed() {
+  const m = state.wpMission;
+  m.active = false; m.result = 'failed'; m.resultTimer = 300;
+  m.timeLeft = 0; m.triggerIn = 10800;
+  addEvent('⚠ WAYPOINT MISSION FAILED', true);
+  playWpFailed();
+  updateWpPanel();
+}
+
+function playWpCollect() {
+  try {
+    if (!audioCtx) initAudio(); if (!audioCtx) return;
+    [440,554,659].forEach((freq,i) => {
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination); o.type='sine'; o.frequency.value=freq;
+      const t=audioCtx.currentTime+i*0.07;
+      g.gain.setValueAtTime(0.22,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+      o.start(t); o.stop(t+0.4);
+    });
+  } catch(e) {}
+}
+
+function playWpAccomplished() {
+  try {
+    if (!audioCtx) initAudio(); if (!audioCtx) return;
+    [[523,0],[659,0.12],[784,0.24],[1047,0.42],[784,0.58],[1047,0.74]].forEach(([freq,t])=>{
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination); o.type='square'; o.frequency.value=freq;
+      const at=audioCtx.currentTime+t;
+      g.gain.setValueAtTime(0.1,at); g.gain.exponentialRampToValueAtTime(0.001,at+0.22);
+      o.start(at); o.stop(at+0.25);
+    });
+  } catch(e) {}
+}
+
+function playWpFailed() {
+  try {
+    if (!audioCtx) initAudio(); if (!audioCtx) return;
+    [660,550,440,330].forEach((freq,i) => {
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination); o.type='sawtooth'; o.frequency.value=freq;
+      const t=audioCtx.currentTime+i*0.15;
+      g.gain.setValueAtTime(0.14,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+      o.start(t); o.stop(t+0.2);
+    });
+  } catch(e) {}
+}
+
+function playWpStart() {
+  try {
+    if (!audioCtx) initAudio(); if (!audioCtx) return;
+    [700,600,700,800,600,700,900].forEach((freq,i) => {
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination); o.type='sine'; o.frequency.value=freq;
+      const t=audioCtx.currentTime+i*0.09;
+      g.gain.setValueAtTime(0.1,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.07);
+      o.start(t); o.stop(t+0.1);
+    });
+  } catch(e) {}
+}
+
+function drawWpMarker(c, sx, sy, num, color, rotAngle, scale) {
+  const r = 14 * scale;
+  if (r < 1) return;
+  c.save();
+  c.translate(sx, sy);
+  // Rotating dashed ring
+  c.beginPath();
+  for (let i=0; i<8; i++) {
+    const a1 = rotAngle + i*Math.PI/4;
+    c.arc(0, 0, r, a1, a1+Math.PI/4*0.55);
+  }
+  c.strokeStyle = color; c.lineWidth = 2*scale;
+  c.shadowBlur = 10; c.shadowColor = color; c.stroke(); c.shadowBlur = 0;
+  // Inner diamond
+  const d = r*0.45;
+  c.beginPath(); c.moveTo(0,-d); c.lineTo(d,0); c.lineTo(0,d); c.lineTo(-d,0); c.closePath();
+  c.strokeStyle = color.replace(')',',0.35)').replace('rgb','rgba'); c.lineWidth = 1; c.stroke();
+  // Number
+  c.fillStyle = color; c.font = 'bold '+Math.round(Math.max(9,11*scale))+'px Share Tech Mono';
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.shadowBlur = 8; c.shadowColor = color; c.fillText(num, 0, 0); c.shadowBlur = 0;
+  c.restore();
+}
+
+function drawWaypoints() {
+  const m = state.wpMission;
+  if (!m.active && m.result === null) return;
+  m.waypoints.forEach(wp => {
+    wp.rotAngle = (wp.rotAngle||0) + (wp.collected ? 0.01 : 0.03);
+    const color = wp.collected ? '#ff8800' : '#00ff66';
+    const isNext = !wp.collected && wp.num === m.nextRequired;
+    const pulse = isNext ? (0.6 + 0.4*Math.sin(state.animFrame*0.12)) : 1;
+    ctx.globalAlpha = 0.9 * pulse;
+    if (state.viewMode === 'command' || state.viewMode === 'surfaced') {
+      const sp = project(wp.x, wp.y, wp.z);
+      drawWpMarker(ctx, sp.sx, sp.sy, wp.num, color, wp.rotAngle, 1);
+    } else if (state.viewMode === 'periscope' || state.viewMode === 'surface') {
+      const sp = projectPeriscope(wp.x, wp.y, wp.z);
+      if (sp && sp.depth > 0.5 && sp.depth < 25) {
+        const scale = Math.max(0.4, Math.min(2, 7/sp.depth));
+        drawWpMarker(ctx, sp.sx, sp.sy, wp.num, color, wp.rotAngle, scale);
+      }
+    }
+    ctx.globalAlpha = 1;
+  });
+}
+
 function loop() {
   try {
   update();
@@ -3600,6 +3828,7 @@ function loop() {
       drawShipPoints(ctx, ship, ship.sinking ? ship.sinkY : GRID.H, project);
     });
   }
+  drawWaypoints();
   drawSonar();
   drawDepthGauge();
   } catch(e) { resize(); }

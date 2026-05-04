@@ -1,5 +1,13 @@
 ﻿  * { margin: 0; padding: 0; box-sizing: border-box; }
 
+#controls-wrap {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+#sonar-wrap {
+  bottom: calc(14px + env(safe-area-inset-bottom)) !important;
+}
+
 :root {
 --teal: #00e5ff;
 --teal-dim: #0097a7;
@@ -24,7 +32,7 @@ height: 100%;
 overscroll-behavior: none;
 touch-action: none;
 width: 100vw;
-height: 100vh;
+height: 100dvh;
 user-select: none;
 }
 

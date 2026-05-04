@@ -885,11 +885,9 @@ function drawSonar() {
       const color = wp.collected ? '#ff8800' : '#00ff66';
       const pulse = wp.collected ? 1 : 0.5 + 0.5*Math.sin(state.animFrame*0.15 + wp.num);
       sc.beginPath(); sc.arc(wpos.x, wpos.y, 4, 0, Math.PI*2);
-      sc.fillStyle = color; sc.shadowBlur = 10*pulse; sc.shadowColor = color;
+      sc.fillStyle = color; sc.shadowBlur = 8*pulse; sc.shadowColor = color;
       sc.globalAlpha = 0.6 + 0.4*pulse;
       sc.fill(); sc.shadowBlur = 0; sc.globalAlpha = 1;
-      sc.font = '6px Share Tech Mono'; sc.textAlign = 'center'; sc.textBaseline = 'alphabetic';
-      sc.fillStyle = color; sc.fillText(wp.num, wpos.x, wpos.y - 6);
     });
   }
 

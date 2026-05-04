@@ -3814,7 +3814,11 @@ function drawWaypoints() {
   });
 }
 
-function loop() {
+let _lastFrameTime = 0;
+function loop(now) {
+  requestAnimationFrame(loop);
+  if (now - _lastFrameTime < 33) return; // cap at ~30fps
+  _lastFrameTime = now;
   try {
   update();
   if (state.viewMode === 'surfaced') {
@@ -3844,7 +3848,6 @@ function loop() {
   drawSonar();
   drawDepthGauge();
   } catch(e) { resize(); }
-  requestAnimationFrame(loop);
 }
 
 // Startup handled by launchGame()

@@ -877,6 +877,22 @@ function drawSonar() {
     sc.fillText('MEG', mp.x, mp.y - 6);
   });
 
+  // ── WAYPOINT BLIPS ──
+  const wpm = state.wpMission;
+  if (wpm.active || wpm.result !== null) {
+    wpm.waypoints.forEach(wp => {
+      const wpos = mm(wp.x, wp.z);
+      const color = wp.collected ? '#ff8800' : '#00ff66';
+      const pulse = wp.collected ? 1 : 0.5 + 0.5*Math.sin(state.animFrame*0.15 + wp.num);
+      sc.beginPath(); sc.arc(wpos.x, wpos.y, 4, 0, Math.PI*2);
+      sc.fillStyle = color; sc.shadowBlur = 10*pulse; sc.shadowColor = color;
+      sc.globalAlpha = 0.6 + 0.4*pulse;
+      sc.fill(); sc.shadowBlur = 0; sc.globalAlpha = 1;
+      sc.font = '6px Share Tech Mono'; sc.textAlign = 'center'; sc.textBaseline = 'alphabetic';
+      sc.fillStyle = color; sc.fillText(wp.num, wpos.x, wpos.y - 6);
+    });
+  }
+
   // ── LABELS ──
   sc.font='7px Share Tech Mono'; sc.textAlign='left'; sc.textBaseline='alphabetic';
   sc.fillStyle='rgba(0,180,220,0.5)';
@@ -3768,10 +3784,6 @@ function drawWpMarker(c, sx, sy, num, color, rotAngle, scale) {
   }
   c.strokeStyle = color; c.lineWidth = 2*scale;
   c.shadowBlur = 10; c.shadowColor = color; c.stroke(); c.shadowBlur = 0;
-  // Inner diamond
-  const d = r*0.45;
-  c.beginPath(); c.moveTo(0,-d); c.lineTo(d,0); c.lineTo(0,d); c.lineTo(-d,0); c.closePath();
-  c.strokeStyle = color.replace(')',',0.35)').replace('rgb','rgba'); c.lineWidth = 1; c.stroke();
   // Number
   c.fillStyle = color; c.font = 'bold '+Math.round(Math.max(9,11*scale))+'px Share Tech Mono';
   c.textAlign = 'center'; c.textBaseline = 'middle';

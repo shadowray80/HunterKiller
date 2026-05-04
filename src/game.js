@@ -2781,13 +2781,15 @@ function renderPeriscope() {
     state.muzzleFlash--;
     const mAlpha = state.muzzleFlash / 8;
     const mR = 30 * mAlpha;
-    const mg = ctx.createRadialGradient(pcx, pcy+60, 0, pcx, pcy+60, mR);
-    mg.addColorStop(0, `rgba(255,255,180,${mAlpha})`);
-    mg.addColorStop(1, `rgba(255,140,0,0)`);
-    ctx.fillStyle = mg;
-    ctx.beginPath();
-    ctx.arc(pcx, pcy+60, mR, 0, Math.PI*2);
-    ctx.fill();
+    if (mR > 0) {
+      const mg = ctx.createRadialGradient(pcx, pcy+60, 0, pcx, pcy+60, mR);
+      mg.addColorStop(0, `rgba(255,255,180,${mAlpha})`);
+      mg.addColorStop(1, `rgba(255,140,0,0)`);
+      ctx.fillStyle = mg;
+      ctx.beginPath();
+      ctx.arc(pcx, pcy+60, mR, 0, Math.PI*2);
+      ctx.fill();
+    }
   }
 
   // ── EXPLOSIONS IN PERISCOPE ──
@@ -3573,6 +3575,7 @@ periFireBtn.addEventListener('click',     periFireTorpedo);
 periFireBtn.addEventListener('pointerup', periFireTorpedo);
 
 function loop() {
+  try {
   update();
   if (state.viewMode === 'surfaced') {
     renderSurfacedView();
@@ -3599,6 +3602,7 @@ function loop() {
   }
   drawSonar();
   drawDepthGauge();
+  } catch(e) { resize(); }
   requestAnimationFrame(loop);
 }
 

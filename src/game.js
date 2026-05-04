@@ -560,8 +560,8 @@ function generateCloud() {
 // ── ISOMETRIC PROJECTION ──
 let W, H, cx, cy;
 function resize() {
-  W = canvas.width = canvas.offsetWidth;
-  H = canvas.height = canvas.offsetHeight;
+  W = canvas.width = canvas.offsetWidth || window.innerWidth;
+  H = canvas.height = canvas.offsetHeight || window.innerHeight;
   cx = W/2; cy = H * 0.38;
 }
 resize();

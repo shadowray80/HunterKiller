@@ -375,7 +375,9 @@ z-index: 5;
 #peri-info-left,
 #peri-info-right,
 #peri-actions,
-#peri-compass {
+#peri-compass,
+#peri-top-row,
+#peri-combat-btns {
 pointer-events: all;
 }
 
@@ -392,17 +394,60 @@ top: 0; left: 0; right: 0; bottom: 0;
 pointer-events: none;
 }
 
+/* Top bar: COMMAND | compass/hull | PING */
+#peri-top-row {
+position: absolute;
+top: 0;
+padding-top: env(safe-area-inset-top);
+left: 0; right: 0;
+display: flex;
+flex-direction: row;
+align-items: stretch;
+background: rgba(0,4,12,0.92);
+border-bottom: 1px solid rgba(0,180,220,0.4);
+pointer-events: all;
+z-index: 12;
+}
+#peri-top-row .peri-top-btn {
+flex: 0 0 70px;
+height: 52px;
+border-right: 1px solid rgba(0,180,220,0.25);
+border-bottom: none;
+}
+#peri-top-row .peri-top-btn:last-child {
+border-right: none;
+border-left: 1px solid rgba(0,180,220,0.25);
+}
+
+/* Combat buttons row above the control panel */
+#peri-combat-btns {
+position: absolute;
+bottom: 200px;
+left: 0; right: 0;
+height: 36px;
+display: flex;
+flex-direction: row;
+align-items: stretch;
+background: rgba(0,4,12,0.92);
+border-top: 1px solid rgba(0,180,220,0.3);
+border-bottom: 1px solid rgba(0,180,220,0.3);
+pointer-events: all;
+z-index: 12;
+}
+#peri-combat-btns .peri-top-btn {
+flex: 1;
+height: 36px;
+border-right: 1px solid rgba(0,180,220,0.2);
+}
+#peri-combat-btns .peri-top-btn:last-child { border-right: none; }
+
 /* Bearing compass strip + hull bar */
 #peri-compass {
-position: absolute;
-top: 38px;
-left: 50%;
-transform: translateX(-50%);
-width: calc(100% - 140px);
+flex: 1;
 height: 52px;
 background: rgba(0,8,18,0.75);
-border: 1px solid rgba(0,180,220,0.4);
 overflow: hidden;
+position: relative;
 }
 
 #peri-compass-canvas { display: block; width: 100%; }
@@ -553,23 +598,6 @@ text-shadow: 0 0 6px var(--teal);
 -webkit-tap-highlight-color: transparent;
 }
 .peri-cmd-btn:active { background: rgba(0,229,255,0.15); }
-
-/* Periscope top button strip */
-#peri-top-btns {
-position: absolute;
-top: 0;
-left: 0; right: 0;
-height: 34px;
-display: flex;
-flex-direction: row;
-align-items: center;
-justify-content: center;
-gap: 0;
-background: rgba(0,4,12,0.9);
-border-bottom: 1px solid rgba(0,180,220,0.3);
-pointer-events: all;
-z-index: 12;
-}
 
 .peri-top-btn {
 flex: 1;

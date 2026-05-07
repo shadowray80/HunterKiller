@@ -123,18 +123,16 @@
   <div id="periscope-overlay">
     <canvas id="scope-mask" width="1" height="1" style="position:absolute;top:0;left:0;width:100%;height:100%;"></canvas>
 
-    <div id="peri-top-btns">
+    <!-- Top bar: COMMAND | compass/hull | PING -->
+    <div id="peri-top-row">
       <button class="peri-top-btn" id="peri-btn-back">◈ COMMAND</button>
+      <div id="peri-compass">
+        <canvas id="peri-compass-canvas" width="260" height="48"></canvas>
+      </div>
       <button class="peri-top-btn" id="peri-btn-ping-peri">◎ PING</button>
-      <button class="peri-top-btn" id="peri-btn-reveal-peri">👁 ENEMY</button>
-      <button class="peri-top-btn" id="peri-btn-battlestations">🚨 RA</button>
     </div>
 
     <span id="peri-density-val" style="display:none;">POINTS</span>
-
-    <div id="peri-compass">
-      <canvas id="peri-compass-canvas" width="260" height="48"></canvas>
-    </div>
 
     <div id="peri-info-left">
       <div><span style="color:var(--teal-dim)">DEPTH </span><span id="peri-depth">-0m</span></div>
@@ -144,6 +142,12 @@
       <div><span id="peri-contact">NO CONTACT</span></div>
       <div><span style="color:var(--teal-dim)">TORPS </span><span id="peri-torps">∞</span></div>
       <div><span style="color:var(--teal-dim)">HULL  </span><span id="peri-hull">100%</span></div>
+    </div>
+
+    <!-- Combat buttons above the control panel -->
+    <div id="peri-combat-btns">
+      <button class="peri-top-btn" id="peri-btn-reveal-peri">👁 ENEMY</button>
+      <button class="peri-top-btn" id="peri-btn-battlestations">🚨 RED ALERT</button>
     </div>
 
     <div id="peri-actions">

@@ -171,16 +171,30 @@ function getEnemySpawn(avoidRoom) {
 }
 
 function spawnEnemy(avoidRoom) {
-  const options = SPAWN_POINTS.filter(s => s.name !== 'FAMILY ROOM' && s.name !== avoidRoom);
-  const preferred = options[Math.floor(Math.random() * options.length)];
-  const sp = findClearCell(preferred.x, preferred.z);
-  state.enemy.x = sp.x;
-  state.enemy.y = 3;
-  state.enemy.z = sp.z;
+  let ex, ez, ey;
+  if (window._isHeightfield) {
+    ex = 3 + Math.floor(Math.random() * (GRID.W - 6));
+    ez = 3 + Math.floor(Math.random() * (GRID.D - 6));
+    const gz = Math.min(ez, GRID.D-1), gx = Math.min(ex, GRID.W-1);
+    const raw = (window._canyonHeightGrid && window._canyonHeightGrid[gz] && window._canyonHeightGrid[gz][gx] !== undefined) ? window._canyonHeightGrid[gz][gx] : 0;
+    ey = Math.max((raw/255)*GRID.H + 2.5, GRID.H * 0.35);
+  } else {
+    const options = SPAWN_POINTS.filter(s => s.name !== 'FAMILY ROOM' && s.name !== avoidRoom);
+    const preferred = options[Math.floor(Math.random() * options.length)];
+    const sp = findClearCell(preferred.x, preferred.z);
+    ex = sp.x; ez = sp.z; ey = 3;
+    addEvent(`▸ ENEMY CONTACT — ${preferred.name}`, true);
+    setTimeout(() => addEvent('▸ WEAPONS HOT — GOOD HUNTING', false), 1500);
+  }
+  state.enemy.x = ex;
+  state.enemy.y = ey;
+  state.enemy.z = ez;
   state.enemy.alive = true;
   state.enemy.heading = Math.random() * Math.PI * 2;
-  addEvent(`▸ ENEMY CONTACT — ${preferred.name}`, true);
-  setTimeout(() => addEvent('▸ WEAPONS HOT — GOOD HUNTING', false), 1500);
+  if (window._isHeightfield) {
+    addEvent('▸ ENEMY CONTACT — CANYON SECTOR', true);
+    setTimeout(() => addEvent('▸ WEAPONS HOT — GOOD HUNTING', false), 1500);
+  }
 }
 
 function findClearCell(preferX, preferZ) {
@@ -210,8 +224,14 @@ function findClearCell(preferX, preferZ) {
 function spawnPlayer() {
   const sp = findClearCell(Math.floor(GRID.W/2), Math.floor(GRID.D/2));
   state.player.x = sp.x;
-  state.player.y = 3;
   state.player.z = sp.z;
+  if (window._isHeightfield && window._canyonHeightGrid) {
+    const gz = Math.min(Math.floor(sp.z), GRID.D-1), gx = Math.min(Math.floor(sp.x), GRID.W-1);
+    const raw = (window._canyonHeightGrid[gz] && window._canyonHeightGrid[gz][gx] !== undefined) ? window._canyonHeightGrid[gz][gx] : 0;
+    state.player.y = Math.max((raw/255)*GRID.H + 2.5, GRID.H * 0.35);
+  } else {
+    state.player.y = 3;
+  }
 }
 
 // ── GAME STATE ──
@@ -395,6 +415,36 @@ function buildFloorPlanGeometry() {
   const pieces = [];
   const GW = GRID.W, GD = GRID.D, GH = GRID.H;
 
+  // ── HEIGHTFIELD TERRAIN (canyon map) ───────────────────────────────
+  if (window._isHeightfield && window._canyonHeightGrid) {
+    const hg = window._canyonHeightGrid;
+    // Border walls full height
+    for (let gx = 0; gx < GW; gx++) {
+      pieces.push({type:'wall', x1:gx, y1:0, z1:0,    x2:gx+1, y2:GH, z2:1,    nx:0,ny:0,nz:-1});
+      pieces.push({type:'wall', x1:gx, y1:0, z1:GD-1, x2:gx+1, y2:GH, z2:GD,   nx:0,ny:0,nz:1});
+    }
+    for (let gz = 1; gz < GD-1; gz++) {
+      pieces.push({type:'wall', x1:0,    y1:0, z1:gz, x2:1,    y2:GH, z2:gz+1, nx:-1,ny:0,nz:0});
+      pieces.push({type:'wall', x1:GW-1, y1:0, z1:gz, x2:GW,   y2:GH, z2:gz+1, nx:1, ny:0,nz:0});
+    }
+    // Terrain columns — one box per cell, height from heightmap
+    for (let gz = 1; gz < GD-1; gz++) {
+      for (let gx = 1; gx < GW-1; gx++) {
+        const raw = (hg[gz] && hg[gz][gx] !== undefined) ? hg[gz][gx] : 0;
+        const h = (raw / 255) * GH;
+        if (h < 0.4) continue; // deep open water — nothing to draw
+        pieces.push({
+          type:'terrain', x1:gx, y1:0, z1:gz, x2:gx+1, y2:h, z2:gz+1,
+          nx:0, ny:1, nz:0, terrainH: h
+        });
+      }
+    }
+    // Water surface so player can still surface
+    pieces.push({type:'surface', x1:0, y1:GH, z1:0, x2:GW, y2:GH, z2:GD});
+    return pieces;
+  }
+
+  // ── STANDARD FLOOR PLAN ────────────────────────────────────────────
   // Floor and ceiling (always)
   pieces.push({ type:'floor',   x1:0, y1:0,   z1:0, x2:GW, y2:0,   z2:GD });
   pieces.push({ type:'surface', x1:0, y1:GH,  z1:0, x2:GW, y2:GH,  z2:GD });
@@ -491,7 +541,8 @@ function generateCloud() {
       if (f.nx * cam.x + f.nz * cam.z > 0.1) return;
     }
 
-    const step = (f.type === 'surface') ? Math.max(3.0, cloudDensity * 6) : cloudDensity;
+    const step = f.type === 'terrain'  ? Math.max(1.0, cloudDensity * 2.5) :
+                 f.type === 'surface'  ? Math.max(3.0, cloudDensity * 6)   : cloudDensity;
     const jit = step * 0.12; // small jitter — just enough to break grid lines, not enough to cause doubles
 
     const w = f.x2 - f.x1;
@@ -508,9 +559,10 @@ function generateCloud() {
         for (let x = f.x1 + xOffset; x <= f.x2; x += step) {
           cloudPoints.push({
             x: x + (rand()-0.5)*jit,
-            y: f.y2,  // no perpendicular jitter — stays on face
+            y: f.y2,
             z: z + (rand()-0.5)*jit,
-            type: f.type, nx: 0, ny: 1, nz: 0
+            type: f.type, nx: 0, ny: 1, nz: 0,
+            yFrac: f.terrainH !== undefined ? f.terrainH / GRID.H : undefined
           });
         }
       }
@@ -542,8 +594,9 @@ function generateCloud() {
             cloudPoints.push({
               x: x + (rand()-0.5)*jit,
               y: y + (rand()-0.5)*jit,
-              z: fz,  // no perpendicular jitter
-              type: f.type, nx: 0, ny: 0, nz: nz
+              z: fz,
+              type: f.type, nx: 0, ny: 0, nz: nz,
+              yFrac: f.terrainH !== undefined ? y / GRID.H : undefined
             });
           }
         }
@@ -558,10 +611,11 @@ function generateCloud() {
           const zOffset = (rowIdx % 2) * step * 0.5;
           for (let z = f.z1 + zOffset; z <= f.z2; z += step) {
             cloudPoints.push({
-              x: fx,  // no perpendicular jitter
+              x: fx,
               y: y + (rand()-0.5)*jit,
               z: z + (rand()-0.5)*jit,
-              type: f.type, nx: nx, ny: 0, nz: 0
+              type: f.type, nx: nx, ny: 0, nz: 0,
+              yFrac: f.terrainH !== undefined ? y / GRID.H : undefined
             });
           }
         }
@@ -659,8 +713,13 @@ function project(wx, wy, wz) {
   return { sx: cx + sx, sy: cy - sy };
 }
 
-function ptColor(type, alpha) {
+function ptColor(type, alpha, yFrac) {
   switch(type) {
+    case 'terrain': {
+      const f = yFrac !== undefined ? yFrac : 0.5;
+      const r = Math.round(55 + f*85),  g2 = Math.round(65 + f*55),  b = Math.round(45 + f*30);
+      return `rgba(${r},${g2},${b},${alpha*0.92})`;
+    }
     case 'floor':   return `rgba(0,120,160,${alpha*0.45})`;
     case 'surface': return `rgba(0,200,255,${alpha*0.65})`;
     case 'wall':    return `rgba(0,160,220,${alpha*0.65})`;
@@ -952,7 +1011,7 @@ function render() {
     const sz = p.type==='floor'||p.type==='surface' ? 0.8 : 1.0;
     ctx.beginPath();
     ctx.arc(p.sx, p.sy, sz, 0, Math.PI*2);
-    ctx.fillStyle = ptColor(p.type, 0.85);
+    ctx.fillStyle = ptColor(p.type, 0.85, p.yFrac);
     ctx.fill();
   });
 
@@ -2728,7 +2787,7 @@ function renderPeriscope() {
     const alpha = Math.max(0, 1 - pp.depth / 62) * 1.2;
     if (alpha < 0.02) return;
     const s = Math.max(0.6, Math.min(50, periPointSize / pp.depth));
-    ctx.fillStyle = ptColor(p.type, Math.min(1, alpha));
+    ctx.fillStyle = ptColor(p.type, Math.min(1, alpha), p.yFrac);
     ctx.fillRect(pp.sx - s * 0.5, pp.sy - s * 0.5, s, s);
   });
 
@@ -4421,6 +4480,7 @@ var BATTLEGROUNDS = [
     id: 'canyon', name: 'THE CANYON',
     desc: 'Natural rocky terrain — heightmap battleground',
     tag: 'TERRAIN',
+    isHeightfield: true,
     _hGrid: null,
     makeGrid: function() {
       // Synchronous fallback: open ocean with border walls only
@@ -4477,6 +4537,9 @@ var BATTLEGROUNDS = [
 
 // Launch with current grid
 function launchGame(planGrid) {
+  // Heightfield maps use GRID.H = 24 for deep canyon; standard maps use 6
+  GRID.H = window._isHeightfield ? 24 : 6;
+
   if (planGrid && planGrid !== FLOOR_PLAN) {
     for (let gz=0;gz<FLOOR_PLAN.length;gz++)
       for (let gx=0;gx<FLOOR_PLAN[0].length;gx++)
@@ -5836,6 +5899,7 @@ if (false) (function() {
 // ── INTRO SCREEN NAVIGATION ──
 document.getElementById('intro-dive-btn').addEventListener('click', function() {
   window._pendingGrid = null;
+  window._isHeightfield = false;
   launchGame(FLOOR_PLAN);
 });
 
@@ -5896,6 +5960,7 @@ document.getElementById('upload-back-btn').addEventListener('click', function() 
     card.addEventListener('click', function() {
       window._pendingGrid = mapGrid;
       window._pendingTypeGrid = null;
+      window._isHeightfield = !!bg.isHeightfield;
       launchGame(mapGrid);
     });
     return card;

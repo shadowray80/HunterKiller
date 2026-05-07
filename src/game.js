@@ -533,7 +533,7 @@ function generateCloud() {
       if (f.nx * cam.x + f.nz * cam.z > 0.1) return;
     }
 
-    const step = f.type === 'terrain'  ? Math.max(1.0, cloudDensity * 2.5) :
+    const step = f.type === 'terrain'  ? cloudDensity :
                  f.type === 'surface'  ? Math.max(3.0, cloudDensity * 6)   : cloudDensity;
     const jit = step * 0.12; // small jitter — just enough to break grid lines, not enough to cause doubles
 
@@ -4515,6 +4515,13 @@ var BATTLEGROUNDS = [
       var self = this;
       return new Promise(function(resolve) {
         var img = new Image();
+        function smoothHg(hg, R, C, passes) {
+          for(var p=0;p<passes;p++){
+            var t=[]; for(var z=0;z<R;z++){t[z]=[];for(var x=0;x<C;x++){var s=0,n=0;for(var dz=-1;dz<=1;dz++)for(var dx=-1;dx<=1;dx++){var nz=z+dz,nx2=x+dx;if(nz>=0&&nz<R&&nx2>=0&&nx2<C){s+=hg[nz][nx2];n++;}}t[z][x]=s/n;}}
+            for(var z=0;z<R;z++)for(var x=0;x<C;x++)hg[z][x]=t[z][x];
+          }
+          return hg;
+        }
         img.onload = function() {
           var tmp = document.createElement('canvas');
           tmp.width = 64; tmp.height = 48;
@@ -4526,11 +4533,11 @@ var BATTLEGROUNDS = [
             g[z]=[]; hg[z]=[];
             for(x=0;x<C;x++){
               var idx=(z*C+x)*4;
-              var bri=px[idx];
-              hg[z][x]=bri;
-              g[z][x]=(z===0||z===R-1||x===0||x===C-1)?1:(bri>140?1:0);
+              hg[z][x]=px[idx];
+              g[z][x]=0;
             }
           }
+          smoothHg(hg, R, C, 4);
           self._hGrid=hg; window._canyonHeightGrid=hg;
           resolve(g);
         };
@@ -4543,10 +4550,10 @@ var BATTLEGROUNDS = [
               var nx=x/C, nz=z/R;
               var h=Math.round(128+80*Math.sin(nx*3)*Math.sin(nz*4)+40*Math.sin(nx*7+1)*Math.cos(nz*6+2));
               if(h<0)h=0; if(h>255)h=255;
-              hg[z][x]=h;
-              g[z][x]=(z===0||z===R-1||x===0||x===C-1)?1:(h>140?1:0);
+              hg[z][x]=h; g[z][x]=0;
             }
           }
+          smoothHg(hg, R, C, 4);
           self._hGrid=hg; window._canyonHeightGrid=hg;
           resolve(g);
         };

@@ -418,18 +418,10 @@ function buildFloorPlanGeometry() {
   // ── HEIGHTFIELD TERRAIN (canyon map) ───────────────────────────────
   if (window._isHeightfield && window._canyonHeightGrid) {
     const hg = window._canyonHeightGrid;
-    // Border walls full height
-    for (let gx = 0; gx < GW; gx++) {
-      pieces.push({type:'wall', x1:gx, y1:0, z1:0,    x2:gx+1, y2:GH, z2:1,    nx:0,ny:0,nz:-1});
-      pieces.push({type:'wall', x1:gx, y1:0, z1:GD-1, x2:gx+1, y2:GH, z2:GD,   nx:0,ny:0,nz:1});
-    }
-    for (let gz = 1; gz < GD-1; gz++) {
-      pieces.push({type:'wall', x1:0,    y1:0, z1:gz, x2:1,    y2:GH, z2:gz+1, nx:-1,ny:0,nz:0});
-      pieces.push({type:'wall', x1:GW-1, y1:0, z1:gz, x2:GW,   y2:GH, z2:gz+1, nx:1, ny:0,nz:0});
-    }
     // Terrain columns — one box per cell, height from heightmap
-    for (let gz = 1; gz < GD-1; gz++) {
-      for (let gx = 1; gx < GW-1; gx++) {
+    // No border walls: player is clamped by movePlayer bounds, open black is fine
+    for (let gz = 0; gz < GD; gz++) {
+      for (let gx = 0; gx < GW; gx++) {
         const raw = (hg[gz] && hg[gz][gx] !== undefined) ? hg[gz][gx] : 0;
         const h = (raw / 255) * GH;
         if (h < 0.4) continue; // deep open water — nothing to draw
@@ -584,6 +576,9 @@ function generateCloud() {
       }
     }
 
+    // Terrain: top face only — skip sides to avoid volume fog
+    if (f.type === 'terrain') return;
+
     // Face: FRONT & BACK (z faces)
     if (d > 0.1) {
       [[f.z1, -1], [f.z2, 1]].forEach(([fz, nz]) => {
@@ -646,7 +641,7 @@ const wallEdges = [];
 function buildWallEdges() {
   wallEdges.length = 0;
   furniture.forEach(f => {
-    if (f.type === 'floor' || f.type === 'surface') return;
+    if (f.type === 'floor' || f.type === 'surface' || f.type === 'terrain') return;
     const {x1,y1,z1,x2,y2,z2,type} = f;
     const push = (ax,ay,az,bx,by,bz) => wallEdges.push({ax,ay,az,bx,by,bz,type});
     push(x1,y1,z1, x2,y1,z1); push(x2,y1,z1, x2,y1,z2);
@@ -656,6 +651,29 @@ function buildWallEdges() {
     push(x1,y1,z1, x1,y2,z1); push(x2,y1,z1, x2,y2,z1);
     push(x2,y1,z2, x2,y2,z2); push(x1,y1,z2, x1,y2,z2);
   });
+  // Heightfield: surface mesh — horizontal lines connecting adjacent terrain tops
+  if (window._isHeightfield && window._canyonHeightGrid) {
+    const hg = window._canyonHeightGrid;
+    const GH = GRID.H, GW = GRID.W, GD = GRID.D;
+    for (let gz = 1; gz < GD-1; gz += 2) {
+      for (let gx = 1; gx < GW-1; gx += 2) {
+        const raw = (hg[gz] && hg[gz][gx] !== undefined) ? hg[gz][gx] : 0;
+        const h = (raw / 255) * GH;
+        if (h < 0.4) continue;
+        const cx = gx + 0.5, cz = gz + 0.5;
+        if (gx + 2 < GW-1) {
+          const rawE = (hg[gz][gx+2] !== undefined) ? hg[gz][gx+2] : 0;
+          const hE = (rawE / 255) * GH;
+          if (hE >= 0.4) wallEdges.push({ax:cx, ay:h, az:cz, bx:cx+2, by:hE, bz:cz, type:'terrain'});
+        }
+        if (gz + 2 < GD-1) {
+          const rawS = (hg[gz+2] && hg[gz+2][gx] !== undefined) ? hg[gz+2][gx] : 0;
+          const hS = (rawS / 255) * GH;
+          if (hS >= 0.4) wallEdges.push({ax:cx, ay:h, az:cz, bx:cx, by:hS, bz:cz+2, type:'terrain'});
+        }
+      }
+    }
+  }
 }
 
 // ── STATIC BRICK-PATTERN DOTS ──
@@ -664,6 +682,7 @@ const staticDots = [];
 function buildStaticDots() {
   staticDots.length = 0;
   furniture.forEach(f => {
+    if (f.type === 'terrain') return; // terrain handled by cloud points only
     const {x1,y1,z1,x2,y2,z2,type} = f;
     const isFlat = type === 'floor' || type === 'surface';
     const step = isFlat ? 3.0 : 1.4; // sparse on floor/ceiling, moderate on walls
@@ -1022,7 +1041,7 @@ function render() {
     wallEdges.forEach(e => {
       const pa = project(e.ax, e.ay, e.az);
       const pb = project(e.bx, e.by, e.bz);
-      ctx.strokeStyle = `rgba(0,200,255,0.45)`;
+      ctx.strokeStyle = e.type === 'terrain' ? `rgba(80,160,90,0.3)` : `rgba(0,200,255,0.45)`;
       ctx.lineWidth = wireframeScale * 0.5;
       ctx.beginPath(); ctx.moveTo(pa.sx, pa.sy); ctx.lineTo(pb.sx, pb.sy); ctx.stroke();
     });
@@ -2805,7 +2824,9 @@ function renderPeriscope() {
       const a = Math.max(0, 1 - maxD / 50) * (minD < 8 ? 0.75 : 0.45);
       if (a < 0.02) return;
       ctx.lineWidth = (minD < 8 ? Math.max(0.6, 1.8 / minD) : 0.5) * wireframeScale;
-      ctx.strokeStyle = `rgba(0,200,255,${a})`;
+      ctx.strokeStyle = e.type === 'terrain'
+        ? `rgba(80,160,90,${a * 0.55})`
+        : `rgba(0,200,255,${a})`;
       ctx.beginPath(); ctx.moveTo(pa.sx, pa.sy); ctx.lineTo(pb.sx, pb.sy); ctx.stroke();
     });
     ctx.restore();

@@ -1019,6 +1019,11 @@ font-size: 7px;
 letter-spacing: 0.12em;
 color: var(--accent);
 }
+.bg-card-loading {
+opacity: 0.5;
+cursor: default;
+pointer-events: none;
+}
 
 /* ── WAYPOINT MISSION PANEL ── */
 #wp-panel {

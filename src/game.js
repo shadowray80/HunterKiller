@@ -4415,6 +4415,63 @@ var BATTLEGROUNDS = [
       }
       return g;
     }
+  },
+  // ── CANYON HEIGHTFIELD ─────────────────────────────────────────────
+  {
+    id: 'canyon', name: 'THE CANYON',
+    desc: 'Natural rocky terrain — heightmap battleground',
+    tag: 'TERRAIN',
+    _hGrid: null,
+    makeGrid: function() {
+      // Synchronous fallback: open ocean with border walls only
+      var R=48,C=64,z,x; var g=[];
+      for(z=0;z<R;z++){g[z]=[];for(x=0;x<C;x++)g[z][x]=0;}
+      for(x=0;x<C;x++){g[0][x]=1;g[R-1][x]=1;}
+      for(z=0;z<R;z++){g[z][0]=1;g[z][C-1]=1;}
+      return g;
+    },
+    loadAsync: function() {
+      var self = this;
+      return new Promise(function(resolve) {
+        var img = new Image();
+        img.onload = function() {
+          var tmp = document.createElement('canvas');
+          tmp.width = 64; tmp.height = 48;
+          var tc = tmp.getContext('2d');
+          tc.drawImage(img, 0, 0, 64, 48);
+          var px = tc.getImageData(0, 0, 64, 48).data;
+          var R=48,C=64,z,x; var g=[]; var hg=[];
+          for(z=0;z<R;z++){
+            g[z]=[]; hg[z]=[];
+            for(x=0;x<C;x++){
+              var idx=(z*C+x)*4;
+              var bri=px[idx];
+              hg[z][x]=bri;
+              g[z][x]=(z===0||z===R-1||x===0||x===C-1)?1:(bri>140?1:0);
+            }
+          }
+          self._hGrid=hg; window._canyonHeightGrid=hg;
+          resolve(g);
+        };
+        img.onerror = function() {
+          // Procedural fallback canyon if PNG not found
+          var R=48,C=64,z,x; var g=[]; var hg=[];
+          for(z=0;z<R;z++){
+            g[z]=[]; hg[z]=[];
+            for(x=0;x<C;x++){
+              var nx=x/C, nz=z/R;
+              var h=Math.round(128+80*Math.sin(nx*3)*Math.sin(nz*4)+40*Math.sin(nx*7+1)*Math.cos(nz*6+2));
+              if(h<0)h=0; if(h>255)h=255;
+              hg[z][x]=h;
+              g[z][x]=(z===0||z===R-1||x===0||x===C-1)?1:(h>140?1:0);
+            }
+          }
+          self._hGrid=hg; window._canyonHeightGrid=hg;
+          resolve(g);
+        };
+        img.src='/maps/canyon.png';
+      });
+    }
   }
 ];
 
@@ -5806,46 +5863,62 @@ document.getElementById('upload-back-btn').addEventListener('click', function() 
 // ── BATTLEGROUND CARDS ──
 (function() {
   var bgGrid = document.getElementById('bg-grid');
-  for (var i = 0; i < BATTLEGROUNDS.length; i++) {
-    (function(bg) {
-      var mapGrid = bg.makeGrid();
-      var card = document.createElement('div');
-      card.className = 'bg-card';
-      // Mini preview canvas
-      var pv = document.createElement('canvas');
-      pv.className = 'bg-card-preview';
-      pv.width = 128; pv.height = 54;
-      var pc = pv.getContext('2d');
-      pc.fillStyle = '#020d1a';
-      pc.fillRect(0, 0, 128, 54);
-      var cw = 128/64, ch = 54/48;
-      for (var mz = 0; mz < 48; mz++) {
-        for (var mx = 0; mx < 64; mx++) {
-          if (mapGrid[mz] && mapGrid[mz][mx]) {
-            pc.fillStyle = '#00e5ff';
-            pc.fillRect(mx*cw, mz*ch, Math.max(1,cw), Math.max(1,ch));
-          }
+
+  function drawCardPreview(pc, mapGrid, hGrid) {
+    pc.fillStyle = '#020d1a';
+    pc.fillRect(0, 0, 128, 54);
+    var cw = 128/64, ch = 54/48;
+    for (var mz = 0; mz < 48; mz++) {
+      for (var mx = 0; mx < 64; mx++) {
+        if (hGrid) {
+          var h = hGrid[mz][mx] / 255;
+          pc.fillStyle = 'rgb('+Math.round(h*20)+','+Math.round(40+h*180)+','+Math.round(80+h*175)+')';
+          pc.fillRect(mx*cw, mz*ch, Math.max(1,cw), Math.max(1,ch));
+        } else if (mapGrid[mz] && mapGrid[mz][mx]) {
+          pc.fillStyle = '#00e5ff';
+          pc.fillRect(mx*cw, mz*ch, Math.max(1,cw), Math.max(1,ch));
         }
       }
-      var nm = document.createElement('div');
-      nm.className = 'bg-card-name';
-      nm.textContent = bg.name;
-      var ds = document.createElement('div');
-      ds.className = 'bg-card-desc';
-      ds.textContent = bg.desc;
-      var tg = document.createElement('div');
-      tg.className = 'bg-card-tag';
-      tg.textContent = bg.tag;
-      card.appendChild(pv);
-      card.appendChild(nm);
-      card.appendChild(ds);
-      card.appendChild(tg);
-      card.addEventListener('click', function() {
-        window._pendingGrid = mapGrid;
-        window._pendingTypeGrid = null;
-        launchGame(mapGrid);
-      });
-      bgGrid.appendChild(card);
+    }
+  }
+
+  function buildCard(bg, mapGrid) {
+    var card = document.createElement('div');
+    card.className = 'bg-card';
+    var pv = document.createElement('canvas');
+    pv.className = 'bg-card-preview';
+    pv.width = 128; pv.height = 54;
+    drawCardPreview(pv.getContext('2d'), mapGrid, bg._hGrid || null);
+    var nm = document.createElement('div'); nm.className = 'bg-card-name'; nm.textContent = bg.name;
+    var ds = document.createElement('div'); ds.className = 'bg-card-desc'; ds.textContent = bg.desc;
+    var tg = document.createElement('div'); tg.className = 'bg-card-tag'; tg.textContent = bg.tag;
+    card.appendChild(pv); card.appendChild(nm); card.appendChild(ds); card.appendChild(tg);
+    card.addEventListener('click', function() {
+      window._pendingGrid = mapGrid;
+      window._pendingTypeGrid = null;
+      launchGame(mapGrid);
+    });
+    return card;
+  }
+
+  for (var i = 0; i < BATTLEGROUNDS.length; i++) {
+    (function(bg) {
+      if (bg.loadAsync) {
+        var placeholder = document.createElement('div');
+        placeholder.className = 'bg-card bg-card-loading';
+        var pnm = document.createElement('div'); pnm.className='bg-card-name'; pnm.textContent=bg.name;
+        var pds = document.createElement('div'); pds.className='bg-card-desc'; pds.textContent='Loading terrain…';
+        var ptg = document.createElement('div'); ptg.className='bg-card-tag'; ptg.textContent=bg.tag;
+        placeholder.appendChild(pnm); placeholder.appendChild(pds); placeholder.appendChild(ptg);
+        bgGrid.appendChild(placeholder);
+        bg.loadAsync().then(function(mapGrid) {
+          var card = buildCard(bg, mapGrid);
+          bgGrid.insertBefore(card, placeholder);
+          placeholder.remove();
+        });
+      } else {
+        bgGrid.appendChild(buildCard(bg, bg.makeGrid()));
+      }
     })(BATTLEGROUNDS[i]);
   }
 })();

@@ -2696,7 +2696,7 @@ function projectPeriscope(wx, wy, wz) {
 
 function renderPeriscope() {
   // Use fixed screen centre for periscope — independent of command view pan
-  const pcx = W/2, pcy = H * 0.42;
+  const pcx = W/2, pcy = H * 0.44;
 
   // Dark ocean background
   const bg = ctx.createLinearGradient(0, 0, 0, H);
@@ -2929,7 +2929,7 @@ function renderPeriscope() {
   const sc = scopeCtx;
   sc.clearRect(0, 0, W, H);
 
-  const scopeR = Math.min(W, H) * 0.48;
+  const scopeR = Math.min(W, H) * 0.52;
   const scopeCX = pcx, scopeCY = pcy;
 
   // Dark outside the circle
@@ -5247,7 +5247,7 @@ function drawShipPoints(ctx2d, ship, yLevel, projectFn) {
 // ── SURFACE PERISCOPE VIEW ──
 
 function renderSurfacePeriscope() {
-  const pcx = W/2, pcy = H * 0.42;
+  const pcx = W/2, pcy = H * 0.44;
   const horizonY = pcy;
   const f = state.animFrame;
   const FOV = 0.8;

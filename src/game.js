@@ -2792,21 +2792,6 @@ function renderPeriscope() {
     });
   }
 
-  // ── POINT CLOUD — no sort, no jitter, fillRect for speed ──
-  if (state.showDots) cloudPoints.forEach(p => {
-    // Backface cull: skip faces pointing away from player
-    const dx = state.player.x - p.x, dy = state.player.y - p.y, dz = state.player.z - p.z;
-    if (p.nx*dx + p.ny*dy + p.nz*dz <= 0) return;
-    const pp = projectPeriscope(p.x, p.y, p.z);
-    if (!pp || pp.depth < 0.1 || pp.depth > 72) return;
-    if (pp.sx < -80 || pp.sx > W+80 || pp.sy < -80 || pp.sy > H+80) return;
-    const alpha = Math.max(0, 1 - pp.depth / 62) * 1.2;
-    if (alpha < 0.02) return;
-    const s = Math.max(0.6, Math.min(50, periPointSize / pp.depth));
-    ctx.fillStyle = ptColor(p.type, Math.min(1, alpha), p.yFrac);
-    ctx.fillRect(pp.sx - s * 0.5, pp.sy - s * 0.5, s, s);
-  });
-
   // ── TERRAIN: painter's algorithm — fill then edge per quad, back to front ──
   // Edges drawn here, NOT in wallEdges loop, so near fills always cover distant lines
   if (window._isHeightfield && terrainQuads.length > 0) {
@@ -2858,6 +2843,20 @@ function renderPeriscope() {
     }
     ctx.restore();
   }
+
+  // ── POINT CLOUD — drawn after terrain fills so dots sit on the surface ──
+  if (state.showDots) cloudPoints.forEach(p => {
+    const dx = state.player.x - p.x, dy = state.player.y - p.y, dz = state.player.z - p.z;
+    if (p.nx*dx + p.ny*dy + p.nz*dz <= 0) return;
+    const pp = projectPeriscope(p.x, p.y, p.z);
+    if (!pp || pp.depth < 0.1 || pp.depth > 72) return;
+    if (pp.sx < -80 || pp.sx > W+80 || pp.sy < -80 || pp.sy > H+80) return;
+    const alpha = Math.max(0, 1 - pp.depth / 62) * 1.2;
+    if (alpha < 0.02) return;
+    const s = Math.max(0.6, Math.min(50, periPointSize / pp.depth));
+    ctx.fillStyle = ptColor(p.type, Math.min(1, alpha), p.yFrac);
+    ctx.fillRect(pp.sx - s * 0.5, pp.sy - s * 0.5, s, s);
+  });
 
   // ── WIREFRAME OVERLAY (toggleable with ◈ LINES button) ──
   if (state.showWireframe) {

@@ -636,10 +636,12 @@ let surfaceBearing = 0; // surface periscope bearing
 window._activeTypeGrid = null; // set by launchGame when colour plan loaded
 const ISO_MIN = 5, ISO_MAX = 30;
 
-// ── WALL EDGES for wireframe periscope rendering ──
+// ── WALL EDGES + TERRAIN QUADS for wireframe / solid rendering ──
 const wallEdges = [];
+const terrainQuads = []; // flat [x0,y0,z0, x1,y1,z1, x2,y2,z2, x3,y3,z3] per quad
 function buildWallEdges() {
   wallEdges.length = 0;
+  terrainQuads.length = 0;
   furniture.forEach(f => {
     if (f.type === 'floor' || f.type === 'surface' || f.type === 'terrain') return;
     const {x1,y1,z1,x2,y2,z2,type} = f;
@@ -651,31 +653,28 @@ function buildWallEdges() {
     push(x1,y1,z1, x1,y2,z1); push(x2,y1,z1, x2,y2,z1);
     push(x2,y1,z2, x2,y2,z2); push(x1,y1,z2, x1,y2,z2);
   });
-  // Heightfield: synthwave wireframe — regular XZ grid projected onto terrain heights
-  // Each vertex connects to its right/down/diagonal neighbours → reads as solid surface
+  // Heightfield: synthwave wireframe + solid quad fills
   if (window._isHeightfield && window._canyonHeightGrid) {
     const hg = window._canyonHeightGrid;
     const GH = GRID.H;
     const HCOLS = 64, HROWS = 48;
-    const stride = 2; // grid spacing — 1=dense, 2=classic synth spacing
-    const h = (gz, gx) => (hg[gz] && hg[gz][gx] !== undefined) ? (hg[gz][gx] / 255) * GH : 0;
+    const stride = 2;
+    const hv = (gz, gx) => (hg[gz] && hg[gz][gx] !== undefined) ? (hg[gz][gx] / 255) * GH : 0;
     for (let gz = 0; gz < HROWS; gz += stride) {
       for (let gx = 0; gx < HCOLS; gx += stride) {
-        const h00 = h(gz, gx);
-        // row line →
-        if (gx + stride < HCOLS) {
-          const h10 = h(gz, gx + stride);
-          wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx+stride, by:h10, bz:gz, type:'terrain'});
-        }
-        // column line ↓
-        if (gz + stride < HROWS) {
-          const h01 = h(gz + stride, gx);
-          wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx, by:h01, bz:gz+stride, type:'terrain'});
-        }
-        // diagonal line ↘ (triangulation)
-        if (gx + stride < HCOLS && gz + stride < HROWS) {
-          const h11 = h(gz + stride, gx + stride);
-          wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx+stride, by:h11, bz:gz+stride, type:'terrain'});
+        const h00 = hv(gz, gx);
+        const hasR = gx + stride < HCOLS;
+        const hasD = gz + stride < HROWS;
+        const h10 = hasR ? hv(gz, gx + stride) : h00;
+        const h01 = hasD ? hv(gz + stride, gx) : h00;
+        const h11 = (hasR && hasD) ? hv(gz + stride, gx + stride) : h00;
+        // wireframe edges
+        if (hasR) wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx+stride, by:h10, bz:gz, type:'terrain'});
+        if (hasD) wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx, by:h01, bz:gz+stride, type:'terrain'});
+        if (hasR && hasD) wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx+stride, by:h11, bz:gz+stride, type:'terrain'});
+        // solid quad for painter fill [v0 v1 v2 v3] = TL TR BR BL
+        if (hasR && hasD) {
+          terrainQuads.push(gx, h00, gz, gx+stride, h10, gz, gx+stride, h11, gz+stride, gx, h01, gz+stride);
         }
       }
     }
@@ -2816,6 +2815,38 @@ function renderPeriscope() {
     ctx.fillRect(pp.sx - s * 0.5, pp.sy - s * 0.5, s, s);
   });
 
+  // ── TERRAIN SOLID FILLS (painter's algorithm — back to front) ──
+  if (window._isHeightfield && terrainQuads.length > 0) {
+    const pq = [];
+    for (let i = 0; i < terrainQuads.length; i += 12) {
+      const p0 = projectPeriscope(terrainQuads[i],   terrainQuads[i+1],  terrainQuads[i+2]);
+      const p1 = projectPeriscope(terrainQuads[i+3], terrainQuads[i+4],  terrainQuads[i+5]);
+      const p2 = projectPeriscope(terrainQuads[i+6], terrainQuads[i+7],  terrainQuads[i+8]);
+      const p3 = projectPeriscope(terrainQuads[i+9], terrainQuads[i+10], terrainQuads[i+11]);
+      if (!p0 || !p1 || !p2 || !p3) continue;
+      const avgD = (p0.depth + p1.depth + p2.depth + p3.depth) * 0.25;
+      if (avgD > 58 || avgD < 0.3) continue;
+      pq.push(p0.sx, p0.sy, p1.sx, p1.sy, p2.sx, p2.sy, p3.sx, p3.sy, avgD);
+    }
+    // sort back-to-front (9 floats per entry, depth at index 8)
+    const stride9 = 9;
+    const n = pq.length / stride9;
+    const idx = Array.from({length: n}, (_, i) => i).sort((a, b) => pq[b*stride9+8] - pq[a*stride9+8]);
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,6,18,0.97)';
+    for (let ii = 0; ii < idx.length; ii++) {
+      const o = idx[ii] * stride9;
+      ctx.beginPath();
+      ctx.moveTo(pq[o],   pq[o+1]);
+      ctx.lineTo(pq[o+2], pq[o+3]);
+      ctx.lineTo(pq[o+4], pq[o+5]);
+      ctx.lineTo(pq[o+6], pq[o+7]);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // ── WIREFRAME OVERLAY (toggleable with ◈ LINES button) ──
   if (state.showWireframe) {
     ctx.save();
@@ -4571,8 +4602,8 @@ var BATTLEGROUNDS = [
 
 // Launch with current grid
 function launchGame(planGrid) {
-  // Heightfield maps use GRID.H = 48 for deep canyon; standard maps use 6
-  GRID.H = window._isHeightfield ? 48 : 6;
+  // Heightfield maps use GRID.H = 32 for canyon depth; standard maps use 6
+  GRID.H = window._isHeightfield ? 32 : 6;
 
   if (planGrid && planGrid !== FLOOR_PLAN) {
     for (let gz=0;gz<FLOOR_PLAN.length;gz++)

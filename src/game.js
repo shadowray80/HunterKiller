@@ -653,29 +653,21 @@ function buildWallEdges() {
     push(x1,y1,z1, x1,y2,z1); push(x2,y1,z1, x2,y2,z1);
     push(x2,y1,z2, x2,y2,z2); push(x1,y1,z2, x1,y2,z2);
   });
-  // Heightfield: synthwave wireframe + solid quad fills
+  // Heightfield: synthwave grid — quads only, edges drawn in painter pass (no wallEdges for terrain)
   if (window._isHeightfield && window._canyonHeightGrid) {
     const hg = window._canyonHeightGrid;
     const GH = GRID.H;
     const HCOLS = 64, HROWS = 48;
-    const stride = 2;
     const hv = (gz, gx) => (hg[gz] && hg[gz][gx] !== undefined) ? (hg[gz][gx] / 255) * GH : 0;
-    for (let gz = 0; gz < HROWS; gz += stride) {
-      for (let gx = 0; gx < HCOLS; gx += stride) {
-        const h00 = hv(gz, gx);
-        const hasR = gx + stride < HCOLS;
-        const hasD = gz + stride < HROWS;
-        const h10 = hasR ? hv(gz, gx + stride) : h00;
-        const h01 = hasD ? hv(gz + stride, gx) : h00;
-        const h11 = (hasR && hasD) ? hv(gz + stride, gx + stride) : h00;
-        // wireframe edges
-        if (hasR) wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx+stride, by:h10, bz:gz, type:'terrain'});
-        if (hasD) wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx, by:h01, bz:gz+stride, type:'terrain'});
-        if (hasR && hasD) wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx+stride, by:h11, bz:gz+stride, type:'terrain'});
-        // solid quad for painter fill [v0 v1 v2 v3] = TL TR BR BL
-        if (hasR && hasD) {
-          terrainQuads.push(gx, h00, gz, gx+stride, h10, gz, gx+stride, h11, gz+stride, gx, h01, gz+stride);
-        }
+    for (let gz = 0; gz < HROWS - 1; gz++) {
+      for (let gx = 0; gx < HCOLS - 1; gx++) {
+        // flat array: [TL TR BR BL] world coords — 12 floats per quad
+        terrainQuads.push(
+          gx,   hv(gz,   gx),   gz,
+          gx+1, hv(gz,   gx+1), gz,
+          gx+1, hv(gz+1, gx+1), gz+1,
+          gx,   hv(gz+1, gx),   gz+1
+        );
       }
     }
   }
@@ -2815,9 +2807,10 @@ function renderPeriscope() {
     ctx.fillRect(pp.sx - s * 0.5, pp.sy - s * 0.5, s, s);
   });
 
-  // ── TERRAIN SOLID FILLS (painter's algorithm — back to front) ──
+  // ── TERRAIN: painter's algorithm — fill then edge per quad, back to front ──
+  // Edges drawn here, NOT in wallEdges loop, so near fills always cover distant lines
   if (window._isHeightfield && terrainQuads.length > 0) {
-    const pq = [];
+    const pq = []; // [sx0,sy0, sx1,sy1, sx2,sy2, sx3,sy3, avgDepth]  — 9 per quad
     for (let i = 0; i < terrainQuads.length; i += 12) {
       const p0 = projectPeriscope(terrainQuads[i],   terrainQuads[i+1],  terrainQuads[i+2]);
       const p1 = projectPeriscope(terrainQuads[i+3], terrainQuads[i+4],  terrainQuads[i+5]);
@@ -2825,17 +2818,26 @@ function renderPeriscope() {
       const p3 = projectPeriscope(terrainQuads[i+9], terrainQuads[i+10], terrainQuads[i+11]);
       if (!p0 || !p1 || !p2 || !p3) continue;
       const avgD = (p0.depth + p1.depth + p2.depth + p3.depth) * 0.25;
-      if (avgD > 58 || avgD < 0.3) continue;
+      if (avgD > 55 || avgD < 0.3) continue;
+      // broad offscreen cull
+      if (p0.sx < -60 && p1.sx < -60 && p2.sx < -60 && p3.sx < -60) continue;
+      if (p0.sx > W+60 && p1.sx > W+60 && p2.sx > W+60 && p3.sx > W+60) continue;
+      if (p0.sy < -60 && p1.sy < -60 && p2.sy < -60 && p3.sy < -60) continue;
+      if (p0.sy > H+60 && p1.sy > H+60 && p2.sy > H+60 && p3.sy > H+60) continue;
       pq.push(p0.sx, p0.sy, p1.sx, p1.sy, p2.sx, p2.sy, p3.sx, p3.sy, avgD);
     }
-    // sort back-to-front (9 floats per entry, depth at index 8)
-    const stride9 = 9;
-    const n = pq.length / stride9;
-    const idx = Array.from({length: n}, (_, i) => i).sort((a, b) => pq[b*stride9+8] - pq[a*stride9+8]);
+    const S = 9;
+    const idx = Array.from({length: pq.length / S}, (_, i) => i)
+                     .sort((a, b) => pq[b*S+8] - pq[a*S+8]);
     ctx.save();
-    ctx.fillStyle = 'rgba(0,6,18,0.97)';
+    ctx.lineWidth = 0.7;
+    ctx.lineCap = 'round';
     for (let ii = 0; ii < idx.length; ii++) {
-      const o = idx[ii] * stride9;
+      const o = idx[ii] * S;
+      const d = pq[o+8];
+      const lineA = Math.max(0, 1 - d / 50) * 0.8;
+      // opaque fill — completely blocks anything painted earlier
+      ctx.fillStyle = 'rgb(2,8,20)';
       ctx.beginPath();
       ctx.moveTo(pq[o],   pq[o+1]);
       ctx.lineTo(pq[o+2], pq[o+3]);
@@ -2843,6 +2845,16 @@ function renderPeriscope() {
       ctx.lineTo(pq[o+6], pq[o+7]);
       ctx.closePath();
       ctx.fill();
+      // wireframe edges on top of fill
+      if (lineA > 0.02) {
+        ctx.strokeStyle = `rgba(80,180,100,${lineA})`;
+        ctx.stroke(); // quad outline (reuses same path)
+        // diagonal TL→BR for triangulated mesh look
+        ctx.beginPath();
+        ctx.moveTo(pq[o],   pq[o+1]);
+        ctx.lineTo(pq[o+4], pq[o+5]);
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }
@@ -2852,6 +2864,7 @@ function renderPeriscope() {
     ctx.save();
     ctx.lineCap = 'round';
     wallEdges.forEach(e => {
+      if (e.type === 'terrain') return; // terrain edges drawn in painter pass above
       const pa = projectPeriscope(e.ax, e.ay, e.az);
       const pb = projectPeriscope(e.bx, e.by, e.bz);
       if (!pa || !pb) return;
@@ -2861,9 +2874,7 @@ function renderPeriscope() {
       const a = Math.max(0, 1 - maxD / 50) * (minD < 8 ? 0.75 : 0.45);
       if (a < 0.02) return;
       ctx.lineWidth = (minD < 8 ? Math.max(0.6, 1.8 / minD) : 0.5) * wireframeScale;
-      ctx.strokeStyle = e.type === 'terrain'
-        ? `rgba(80,160,90,${a * 0.55})`
-        : `rgba(0,200,255,${a})`;
+      ctx.strokeStyle = `rgba(0,200,255,${a})`;
       ctx.beginPath(); ctx.moveTo(pa.sx, pa.sy); ctx.lineTo(pb.sx, pb.sy); ctx.stroke();
     });
     ctx.restore();

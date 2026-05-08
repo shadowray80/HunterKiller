@@ -651,38 +651,31 @@ function buildWallEdges() {
     push(x1,y1,z1, x1,y2,z1); push(x2,y1,z1, x2,y2,z1);
     push(x2,y1,z2, x2,y2,z2); push(x1,y1,z2, x1,y2,z2);
   });
-  // Heightfield: topographic contour lines via marching squares
-  // Lines run at constant Y heights — they sit on the terrain surface, no see-through
+  // Heightfield: synthwave wireframe — regular XZ grid projected onto terrain heights
+  // Each vertex connects to its right/down/diagonal neighbours → reads as solid surface
   if (window._isHeightfield && window._canyonHeightGrid) {
     const hg = window._canyonHeightGrid;
     const GH = GRID.H;
     const HCOLS = 64, HROWS = 48;
-    const numContours = 12;
-    const contourStep = GH / numContours;
-    for (let gz = 0; gz < HROWS-1; gz++) {
-      for (let gx = 0; gx < HCOLS-1; gx++) {
-        const h00 = (hg[gz][gx]         / 255) * GH;
-        const h10 = (hg[gz][gx+1]       / 255) * GH;
-        const h01 = (hg[gz+1][gx]       / 255) * GH;
-        const h11 = (hg[gz+1][gx+1]     / 255) * GH;
-        const minH = Math.min(h00,h10,h01,h11);
-        const maxH = Math.max(h00,h10,h01,h11);
-        const firstL = Math.ceil(minH / contourStep);
-        const lastL  = Math.floor(maxH / contourStep);
-        for (let li = firstL; li <= lastL; li++) {
-          const L = li * contourStep;
-          if (L <= 0 || L > GH) continue;
-          const pts = [];
-          // top edge (z=gz):    h00 -> h10
-          if ((h00<L) !== (h10<L)) { const t=(L-h00)/(h10-h00); pts.push([gx+t, L, gz  ]); }
-          // right edge (x=gx+1): h10 -> h11
-          if ((h10<L) !== (h11<L)) { const t=(L-h10)/(h11-h10); pts.push([gx+1, L, gz+t]); }
-          // bottom edge (z=gz+1): h01 -> h11
-          if ((h01<L) !== (h11<L)) { const t=(L-h01)/(h11-h01); pts.push([gx+t, L, gz+1]); }
-          // left edge (x=gx):   h00 -> h01
-          if ((h00<L) !== (h01<L)) { const t=(L-h00)/(h01-h00); pts.push([gx,   L, gz+t]); }
-          if (pts.length >= 2) wallEdges.push({ax:pts[0][0],ay:pts[0][1],az:pts[0][2], bx:pts[1][0],by:pts[1][1],bz:pts[1][2], type:'terrain'});
-          if (pts.length === 4) wallEdges.push({ax:pts[2][0],ay:pts[2][1],az:pts[2][2], bx:pts[3][0],by:pts[3][1],bz:pts[3][2], type:'terrain'});
+    const stride = 2; // grid spacing — 1=dense, 2=classic synth spacing
+    const h = (gz, gx) => (hg[gz] && hg[gz][gx] !== undefined) ? (hg[gz][gx] / 255) * GH : 0;
+    for (let gz = 0; gz < HROWS; gz += stride) {
+      for (let gx = 0; gx < HCOLS; gx += stride) {
+        const h00 = h(gz, gx);
+        // row line →
+        if (gx + stride < HCOLS) {
+          const h10 = h(gz, gx + stride);
+          wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx+stride, by:h10, bz:gz, type:'terrain'});
+        }
+        // column line ↓
+        if (gz + stride < HROWS) {
+          const h01 = h(gz + stride, gx);
+          wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx, by:h01, bz:gz+stride, type:'terrain'});
+        }
+        // diagonal line ↘ (triangulation)
+        if (gx + stride < HCOLS && gz + stride < HROWS) {
+          const h11 = h(gz + stride, gx + stride);
+          wallEdges.push({ax:gx, ay:h00, az:gz, bx:gx+stride, by:h11, bz:gz+stride, type:'terrain'});
         }
       }
     }

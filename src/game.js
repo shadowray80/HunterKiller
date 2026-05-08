@@ -245,6 +245,7 @@ const state = {
   torpCount: Infinity,
   kills: 0,
   hull: 100,
+  lives: 3,
   sonarPings: [],
   particles: [],
   revealed: false,
@@ -1446,6 +1447,7 @@ function drawExplosions() {
 
 // ── HULL DAMAGE & DEATH ──
 var _imploding = false;
+var _gameOver = false;
 function applyHullDamage(dmg, msg) {
   if (_imploding) return;
   state.hull = Math.max(0, state.hull - dmg);
@@ -1453,6 +1455,31 @@ function applyHullDamage(dmg, msg) {
   document.getElementById('peri-hull').textContent = state.hull + '%';
   if (msg) addEvent(msg, true);
   if (state.hull <= 0) triggerImplosion();
+}
+
+function updateLivesDisplay() {
+  var ids = ['p1','p2','p3'];
+  for (var i = 0; i < 3; i++) {
+    var alive = i < state.lives;
+    var h = document.getElementById('hud-life-' + ids[i]);
+    var p = document.getElementById('life-' + ids[i]);
+    if (h) { h.classList.toggle('dead', !alive); }
+    if (p) { p.classList.toggle('dead', !alive); }
+  }
+}
+
+function gameOver() {
+  _imploding = false;
+  addEvent('▸ ALL SUBMARINES LOST — MISSION FAILED', true);
+  setTimeout(function() {
+    _gameOver = true;
+    document.getElementById('periscope-overlay').classList.remove('active');
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('controls-wrap').style.display = 'none';
+    document.getElementById('sonar-wrap').style.display = 'none';
+    document.getElementById('canvas').style.display = 'none';
+    document.getElementById('intro-screen').style.display = '';
+  }, 2500);
 }
 
 function triggerImplosion() {
@@ -1465,7 +1492,13 @@ function triggerImplosion() {
     // Second bigger explosion — implosion crush
     spawnExplosion(state.player.x, state.player.y, state.player.z, false);
     spawnExplosion(state.player.x, state.player.y, state.player.z, false);
-    addEvent('▸ SUBMARINE LOST — RESPAWNING', false);
+    state.lives = Math.max(0, state.lives - 1);
+    updateLivesDisplay();
+    if (state.lives <= 0) {
+      gameOver();
+      return;
+    }
+    addEvent('▸ SUBMARINE LOST — RESPAWNING (' + state.lives + ' LEFT)', false);
     setTimeout(function() {
       state.hull = 100;
       _imploding = false;
@@ -3959,6 +3992,7 @@ function drawWaypoints() {
 
 let _lastFrameTime = 0;
 function loop(now) {
+  if (_gameOver) return;
   requestAnimationFrame(loop);
   if (now - _lastFrameTime < 33) return; // cap at ~30fps
   _lastFrameTime = now;
@@ -4727,9 +4761,22 @@ function launchGame(planGrid) {
   state.megalodons = [];
   setTimeout(spawnMegalodon, 30000);
 
+  // Reset lives and game-over flag
+  _gameOver = false;
+  state.lives = 3;
+  updateLivesDisplay();
+  state.hull = 100;
+  document.getElementById('sys-hull').textContent = '100%';
+  document.getElementById('peri-hull').textContent = '100%';
+
   uploadScreen.style.display = 'none';
   document.getElementById('intro-screen').style.display = 'none';
   document.getElementById('battleground-screen').style.display = 'none';
+  // Restore game UI in case we're returning from game over
+  document.getElementById('hud').style.display = '';
+  document.getElementById('controls-wrap').style.display = '';
+  document.getElementById('sonar-wrap').style.display = '';
+  document.getElementById('canvas').style.display = '';
   // Start in periscope view
   state.viewMode = 'periscope';
   setAmbientMode('underwater');

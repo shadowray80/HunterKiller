@@ -108,6 +108,46 @@ justify-content: flex-end;
 
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
+/* ── LIVES DISPLAY ── */
+#hud-lives {
+display: flex;
+gap: 5px;
+justify-content: flex-end;
+margin-top: 4px;
+}
+#peri-lives {
+display: flex;
+gap: 5px;
+justify-content: flex-end;
+margin-top: 4px;
+}
+.life-icon {
+display: inline-block;
+width: 22px;
+height: 10px;
+position: relative;
+background: #1a8cff;
+border-radius: 50% / 40%;
+box-shadow: 0 0 5px rgba(26,140,255,0.7);
+}
+.life-icon::before {
+content: '';
+position: absolute;
+top: -5px;
+left: 7px;
+width: 6px;
+height: 6px;
+background: #1a8cff;
+border-radius: 2px 2px 0 0;
+}
+.life-icon.dead {
+background: rgba(26,140,255,0.15);
+box-shadow: none;
+}
+.life-icon.dead::before {
+background: rgba(26,140,255,0.15);
+}
+
 /* ── SONAR PANEL ── */
 #sonar-panel {
 position: absolute;

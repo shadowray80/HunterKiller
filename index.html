@@ -80,6 +80,11 @@
     <div><span class="stat-label">SPEED &nbsp;</span><span class="stat-val" id="speed-display">0.0 kts</span></div>
     <div><span class="stat-label">HEADING &nbsp;</span><span class="stat-val" id="heading-display">000°</span></div>
     <div><span class="stat-label">TORPS &nbsp;</span><span class="stat-val" id="torp-count">∞</span></div>
+    <div id="hud-lives">
+      <span class="life-icon" id="hud-life-p1"></span>
+      <span class="life-icon" id="hud-life-p2"></span>
+      <span class="life-icon" id="hud-life-p3"></span>
+    </div>
   </div>
 
   <div id="mode-badge">◈ NAVIGATE</div>
@@ -142,6 +147,11 @@
       <div><span id="peri-contact">NO CONTACT</span></div>
       <div><span style="color:var(--teal-dim)">TORPS </span><span id="peri-torps">∞</span></div>
       <div><span style="color:var(--teal-dim)">HULL  </span><span id="peri-hull">100%</span></div>
+      <div id="peri-lives">
+        <span class="life-icon" id="life-p1"></span>
+        <span class="life-icon" id="life-p2"></span>
+        <span class="life-icon" id="life-p3"></span>
+      </div>
     </div>
 
     <!-- Combat buttons above the control panel -->

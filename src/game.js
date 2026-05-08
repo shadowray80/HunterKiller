@@ -2843,53 +2843,96 @@ function renderPeriscope() {
     });
   }
 
-  // ── TERRAIN: painter's algorithm — fill then edge per quad, back to front ──
-  // Edges drawn here, NOT in wallEdges loop, so near fills always cover distant lines
-  if (window._isHeightfield && terrainQuads.length > 0) {
-    const pq = []; // [sx0,sy0, sx1,sy1, sx2,sy2, sx3,sy3, avgDepth]  — 9 per quad
-    for (let i = 0; i < terrainQuads.length; i += 12) {
-      const p0 = projectPeriscope(terrainQuads[i],   terrainQuads[i+1],  terrainQuads[i+2]);
-      const p1 = projectPeriscope(terrainQuads[i+3], terrainQuads[i+4],  terrainQuads[i+5]);
-      const p2 = projectPeriscope(terrainQuads[i+6], terrainQuads[i+7],  terrainQuads[i+8]);
-      const p3 = projectPeriscope(terrainQuads[i+9], terrainQuads[i+10], terrainQuads[i+11]);
-      if (!p0 || !p1 || !p2 || !p3) continue;
-      const avgD = (p0.depth + p1.depth + p2.depth + p3.depth) * 0.25;
-      if (avgD > 55 || avgD < 0.3) continue;
-      // broad offscreen cull
-      if (p0.sx < -60 && p1.sx < -60 && p2.sx < -60 && p3.sx < -60) continue;
-      if (p0.sx > W+60 && p1.sx > W+60 && p2.sx > W+60 && p3.sx > W+60) continue;
-      if (p0.sy < -60 && p1.sy < -60 && p2.sy < -60 && p3.sy < -60) continue;
-      if (p0.sy > H+60 && p1.sy > H+60 && p2.sy > H+60 && p3.sy > H+60) continue;
-      pq.push(p0.sx, p0.sy, p1.sx, p1.sy, p2.sx, p2.sy, p3.sx, p3.sy, avgD);
+  // ── COMBINED PAINTER: terrain quads + entities, depth-sorted ──
+  // All items sorted farthest-first so near terrain quads occlude distant entities
+  {
+    const drawQueue = [];
+
+    // Terrain quads
+    if (window._isHeightfield && terrainQuads.length > 0) {
+      for (let i = 0; i < terrainQuads.length; i += 12) {
+        const p0 = projectPeriscope(terrainQuads[i],   terrainQuads[i+1],  terrainQuads[i+2]);
+        const p1 = projectPeriscope(terrainQuads[i+3], terrainQuads[i+4],  terrainQuads[i+5]);
+        const p2 = projectPeriscope(terrainQuads[i+6], terrainQuads[i+7],  terrainQuads[i+8]);
+        const p3 = projectPeriscope(terrainQuads[i+9], terrainQuads[i+10], terrainQuads[i+11]);
+        if (!p0 || !p1 || !p2 || !p3) continue;
+        const avgD = (p0.depth + p1.depth + p2.depth + p3.depth) * 0.25;
+        if (avgD > 55 || avgD < 0.3) continue;
+        if (p0.sx < -60 && p1.sx < -60 && p2.sx < -60 && p3.sx < -60) continue;
+        if (p0.sx > W+60 && p1.sx > W+60 && p2.sx > W+60 && p3.sx > W+60) continue;
+        if (p0.sy < -60 && p1.sy < -60 && p2.sy < -60 && p3.sy < -60) continue;
+        if (p0.sy > H+60 && p1.sy > H+60 && p2.sy > H+60 && p3.sy > H+60) continue;
+        drawQueue.push({ depth: avgD, kind: 'quad', c: [p0.sx, p0.sy, p1.sx, p1.sy, p2.sx, p2.sy, p3.sx, p3.sy] });
+      }
     }
-    const S = 9;
-    const idx = Array.from({length: pq.length / S}, (_, i) => i)
-                     .sort((a, b) => pq[b*S+8] - pq[a*S+8]);
+
+    // Enemy sub
+    const showEnemyP = state.forceReveal || state.revealAlpha > 0;
+    if (state.enemy.alive && showEnemyP) {
+      const ep = projectPeriscope(state.enemy.x, state.enemy.y, state.enemy.z);
+      if (ep && ep.depth > 0.2) drawQueue.push({ depth: ep.depth, kind: 'enemy', ep });
+    }
+
+    // Whales
+    if (state.whales) state.whales.forEach(function(w) {
+      if (!w.alive) return;
+      const pp = projectPeriscope(w.x, w.y, w.z);
+      if (!pp || pp.depth < 0.1 || pp.depth > 50) return;
+      drawQueue.push({ depth: pp.depth, kind: 'whale', w });
+    });
+
+    // Megalodons
+    if (state.megalodons) state.megalodons.forEach(function(m) {
+      if (!m.alive) return;
+      const pp = projectPeriscope(m.x, m.y, m.z);
+      if (!pp || pp.depth < 0.1 || pp.depth > 55) return;
+      drawQueue.push({ depth: pp.depth, kind: 'megalodon', m });
+    });
+
+    // Sort farthest first
+    drawQueue.sort(function(a, b) { return b.depth - a.depth; });
+
     ctx.save();
-    ctx.lineWidth = 0.7;
-    ctx.lineCap = 'round';
-    for (let ii = 0; ii < idx.length; ii++) {
-      const o = idx[ii] * S;
-      const d = pq[o+8];
-      const lineA = Math.max(0, 1 - d / 50) * 0.8;
-      // opaque fill — completely blocks anything painted earlier
-      ctx.fillStyle = 'rgb(2,8,20)';
-      ctx.beginPath();
-      ctx.moveTo(pq[o],   pq[o+1]);
-      ctx.lineTo(pq[o+2], pq[o+3]);
-      ctx.lineTo(pq[o+4], pq[o+5]);
-      ctx.lineTo(pq[o+6], pq[o+7]);
-      ctx.closePath();
-      ctx.fill();
-      // wireframe edges on top of fill — only when lines are toggled on
-      if (lineA > 0.02 && state.showWireframe) {
-        ctx.strokeStyle = `rgba(0,210,230,${lineA})`;
-        ctx.stroke(); // quad outline (reuses same path)
-        // diagonal TL→BR for triangulated mesh look
+    ctx.lineWidth = 0.7; ctx.lineCap = 'round';
+    for (let qi = 0; qi < drawQueue.length; qi++) {
+      const item = drawQueue[qi];
+      if (item.kind === 'quad') {
+        const c = item.c, d = item.depth;
+        const lineA = Math.max(0, 1 - d / 50) * 0.8;
+        ctx.fillStyle = 'rgb(2,8,20)';
         ctx.beginPath();
-        ctx.moveTo(pq[o],   pq[o+1]);
-        ctx.lineTo(pq[o+4], pq[o+5]);
-        ctx.stroke();
+        ctx.moveTo(c[0], c[1]); ctx.lineTo(c[2], c[3]);
+        ctx.lineTo(c[4], c[5]); ctx.lineTo(c[6], c[7]);
+        ctx.closePath(); ctx.fill();
+        if (lineA > 0.02 && state.showWireframe) {
+          ctx.strokeStyle = `rgba(0,210,230,${lineA})`;
+          ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(c[4], c[5]); ctx.stroke();
+        }
+      } else if (item.kind === 'enemy') {
+        const ep = item.ep;
+        const eScale = Math.max(0.4, Math.min(2, 8 / ep.depth));
+        const eAlpha = state.forceReveal ? 1 : state.revealAlpha;
+        ctx.save();
+        ctx.translate(ep.sx, ep.sy);
+        ctx.globalAlpha = eAlpha;
+        ctx.shadowBlur = 12; ctx.shadowColor = '#ff4444';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 12*eScale, 5*eScale, 0, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(255,68,68,0.15)';
+        ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 1.2;
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#ff4444';
+        ctx.fillRect(-2*eScale, -8*eScale, 4*eScale, 5*eScale);
+        ctx.shadowBlur = 0;
+        ctx.font = `${Math.round(7*eScale)}px Share Tech Mono`;
+        ctx.fillStyle = '#ff4444'; ctx.textAlign = 'center';
+        ctx.fillText('BRAVO', 0, -12*eScale);
+        ctx.restore();
+      } else if (item.kind === 'whale') {
+        drawWhalePeri(item.w);
+      } else if (item.kind === 'megalodon') {
+        drawMegalodonPeri(item.m);
       }
     }
     ctx.restore();
@@ -2930,41 +2973,6 @@ function renderPeriscope() {
     ctx.restore();
   }
 
-  // ── ENEMY SUB IN PERISCOPE ──
-  const showEnemyP = state.forceReveal || state.revealAlpha > 0;
-  if (state.enemy.alive && showEnemyP) {
-    const ep = projectPeriscope(state.enemy.x, state.enemy.y, state.enemy.z);
-    if (ep && ep.depth > 0.2) {
-      const eScale = Math.max(0.4, Math.min(2, 8 / ep.depth));
-      const eAlpha = state.forceReveal ? 1 : state.revealAlpha;
-      ctx.save();
-      ctx.translate(ep.sx, ep.sy);
-      ctx.globalAlpha = eAlpha;
-      ctx.shadowBlur = 12; ctx.shadowColor = '#ff4444';
-      // Hull
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 12*eScale, 5*eScale, 0, 0, Math.PI*2);
-      ctx.fillStyle = 'rgba(255,68,68,0.15)';
-      ctx.strokeStyle = '#ff4444';
-      ctx.lineWidth = 1.2;
-      ctx.fill(); ctx.stroke();
-      // Tower
-      ctx.fillStyle = '#ff4444';
-      ctx.fillRect(-2*eScale, -8*eScale, 4*eScale, 5*eScale);
-      ctx.shadowBlur = 0;
-      ctx.font = `${Math.round(7*eScale)}px Share Tech Mono`;
-      ctx.fillStyle = '#ff4444';
-      ctx.textAlign = 'center';
-      ctx.fillText('BRAVO', 0, -12*eScale);
-      ctx.restore();
-    }
-  }
-
-  // ── WHALES IN PERISCOPE ──
-  if (state.whales) state.whales.forEach(function(w){ drawWhalePeri(w); });
-
-  // ── MEGALODONS IN PERISCOPE ──
-  if (state.megalodons) state.megalodons.forEach(function(m){ drawMegalodonPeri(m); });
 
   // ── TORPEDOES IN PERISCOPE ──
   // Project each torpedo dot from world space — accurate trail toward actual target

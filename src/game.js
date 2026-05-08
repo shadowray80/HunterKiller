@@ -2738,7 +2738,7 @@ function projectPeriscope(wx, wy, wz) {
   const FOV = 0.7; // radians half-angle
   const fovScale = (W * 0.5) / Math.tan(FOV);
   const sx = W/2 - (fx / ffz) * fovScale;  // negated fx to unmirror
-  const sy = H*0.42 - (ffy / ffz) * fovScale;
+  const sy = H*0.44 - (ffy / ffz) * fovScale;
   return { sx, sy, depth: ffz };
 }
 

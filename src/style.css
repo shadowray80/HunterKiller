@@ -111,41 +111,43 @@ justify-content: flex-end;
 /* ── LIVES DISPLAY ── */
 #hud-lives {
 display: flex;
-gap: 5px;
+gap: 6px;
 justify-content: flex-end;
-margin-top: 4px;
+margin-top: 6px;
 }
 #peri-lives {
 display: flex;
-gap: 5px;
+gap: 6px;
 justify-content: flex-end;
-margin-top: 4px;
+margin-top: 6px;
 }
 .life-icon {
 display: inline-block;
-width: 22px;
-height: 10px;
+width: 26px;
+height: 12px;
 position: relative;
 background: #1a8cff;
 border-radius: 50% / 40%;
-box-shadow: 0 0 5px rgba(26,140,255,0.7);
+box-shadow: 0 0 7px rgba(26,140,255,0.9), 0 0 2px #fff;
 }
 .life-icon::before {
 content: '';
 position: absolute;
-top: -5px;
-left: 7px;
-width: 6px;
-height: 6px;
+top: -6px;
+left: 9px;
+width: 7px;
+height: 7px;
 background: #1a8cff;
 border-radius: 2px 2px 0 0;
+box-shadow: 0 0 4px rgba(26,140,255,0.7);
 }
 .life-icon.dead {
-background: rgba(26,140,255,0.15);
+background: rgba(26,140,255,0.12);
 box-shadow: none;
 }
 .life-icon.dead::before {
-background: rgba(26,140,255,0.15);
+background: rgba(26,140,255,0.12);
+box-shadow: none;
 }
 
 /* ── SONAR PANEL ── */
@@ -493,9 +495,9 @@ position: relative;
 #peri-compass-canvas { display: block; width: 100%; }
 
 /* Periscope info panels */
-#peri-info-left-OLD {
+#peri-info-left {
 position: absolute;
-top: 44px; left: 12px;
+top: 60px; left: 12px;
 font-size: 9px;
 letter-spacing: 0.12em;
 line-height: 1.8;
@@ -504,11 +506,13 @@ text-shadow: 0 0 6px var(--teal);
 background: rgba(0,8,18,0.6);
 padding: 6px 10px;
 border: 1px solid rgba(0,180,220,0.25);
+pointer-events: all;
+z-index: 8;
 }
 
-#peri-info-right-OLD {
+#peri-info-right {
 position: absolute;
-top: 44px; right: 12px;
+top: 60px; right: 12px;
 font-size: 9px;
 letter-spacing: 0.12em;
 line-height: 1.8;
@@ -518,6 +522,16 @@ background: rgba(0,8,18,0.6);
 padding: 6px 10px;
 border: 1px solid rgba(0,180,220,0.25);
 text-align: right;
+pointer-events: all;
+z-index: 8;
+}
+
+#peri-info-left-OLD {
+display: none;
+}
+
+#peri-info-right-OLD {
+display: none;
 }
 
 /* Periscope action bar */

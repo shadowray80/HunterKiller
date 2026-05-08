@@ -651,25 +651,38 @@ function buildWallEdges() {
     push(x1,y1,z1, x1,y2,z1); push(x2,y1,z1, x2,y2,z1);
     push(x2,y1,z2, x2,y2,z2); push(x1,y1,z2, x1,y2,z2);
   });
-  // Heightfield: surface mesh — horizontal lines connecting adjacent terrain tops
+  // Heightfield: topographic contour lines via marching squares
+  // Lines run at constant Y heights — they sit on the terrain surface, no see-through
   if (window._isHeightfield && window._canyonHeightGrid) {
     const hg = window._canyonHeightGrid;
-    const GH = GRID.H, GW = GRID.W, GD = GRID.D;
-    for (let gz = 1; gz < GD-1; gz += 2) {
-      for (let gx = 1; gx < GW-1; gx += 2) {
-        const raw = (hg[gz] && hg[gz][gx] !== undefined) ? hg[gz][gx] : 0;
-        const h = (raw / 255) * GH;
-        if (h < 0.4) continue;
-        const cx = gx + 0.5, cz = gz + 0.5;
-        if (gx + 2 < GW-1) {
-          const rawE = (hg[gz][gx+2] !== undefined) ? hg[gz][gx+2] : 0;
-          const hE = (rawE / 255) * GH;
-          if (hE >= 0.4) wallEdges.push({ax:cx, ay:h, az:cz, bx:cx+2, by:hE, bz:cz, type:'terrain'});
-        }
-        if (gz + 2 < GD-1) {
-          const rawS = (hg[gz+2] && hg[gz+2][gx] !== undefined) ? hg[gz+2][gx] : 0;
-          const hS = (rawS / 255) * GH;
-          if (hS >= 0.4) wallEdges.push({ax:cx, ay:h, az:cz, bx:cx, by:hS, bz:cz+2, type:'terrain'});
+    const GH = GRID.H;
+    const HCOLS = 64, HROWS = 48;
+    const numContours = 12;
+    const contourStep = GH / numContours;
+    for (let gz = 0; gz < HROWS-1; gz++) {
+      for (let gx = 0; gx < HCOLS-1; gx++) {
+        const h00 = (hg[gz][gx]         / 255) * GH;
+        const h10 = (hg[gz][gx+1]       / 255) * GH;
+        const h01 = (hg[gz+1][gx]       / 255) * GH;
+        const h11 = (hg[gz+1][gx+1]     / 255) * GH;
+        const minH = Math.min(h00,h10,h01,h11);
+        const maxH = Math.max(h00,h10,h01,h11);
+        const firstL = Math.ceil(minH / contourStep);
+        const lastL  = Math.floor(maxH / contourStep);
+        for (let li = firstL; li <= lastL; li++) {
+          const L = li * contourStep;
+          if (L <= 0 || L > GH) continue;
+          const pts = [];
+          // top edge (z=gz):    h00 -> h10
+          if ((h00<L) !== (h10<L)) { const t=(L-h00)/(h10-h00); pts.push([gx+t, L, gz  ]); }
+          // right edge (x=gx+1): h10 -> h11
+          if ((h10<L) !== (h11<L)) { const t=(L-h10)/(h11-h10); pts.push([gx+1, L, gz+t]); }
+          // bottom edge (z=gz+1): h01 -> h11
+          if ((h01<L) !== (h11<L)) { const t=(L-h01)/(h11-h01); pts.push([gx+t, L, gz+1]); }
+          // left edge (x=gx):   h00 -> h01
+          if ((h00<L) !== (h01<L)) { const t=(L-h00)/(h01-h00); pts.push([gx,   L, gz+t]); }
+          if (pts.length >= 2) wallEdges.push({ax:pts[0][0],ay:pts[0][1],az:pts[0][2], bx:pts[1][0],by:pts[1][1],bz:pts[1][2], type:'terrain'});
+          if (pts.length === 4) wallEdges.push({ax:pts[2][0],ay:pts[2][1],az:pts[2][2], bx:pts[3][0],by:pts[3][1],bz:pts[3][2], type:'terrain'});
         }
       }
     }
@@ -4537,7 +4550,7 @@ var BATTLEGROUNDS = [
               g[z][x]=0;
             }
           }
-          smoothHg(hg, R, C, 4);
+          smoothHg(hg, R, C, 2);
           self._hGrid=hg; window._canyonHeightGrid=hg;
           resolve(g);
         };
@@ -4553,7 +4566,7 @@ var BATTLEGROUNDS = [
               hg[z][x]=h; g[z][x]=0;
             }
           }
-          smoothHg(hg, R, C, 4);
+          smoothHg(hg, R, C, 2);
           self._hGrid=hg; window._canyonHeightGrid=hg;
           resolve(g);
         };
@@ -4565,8 +4578,8 @@ var BATTLEGROUNDS = [
 
 // Launch with current grid
 function launchGame(planGrid) {
-  // Heightfield maps use GRID.H = 24 for deep canyon; standard maps use 6
-  GRID.H = window._isHeightfield ? 24 : 6;
+  // Heightfield maps use GRID.H = 48 for deep canyon; standard maps use 6
+  GRID.H = window._isHeightfield ? 48 : 6;
 
   if (planGrid && planGrid !== FLOOR_PLAN) {
     for (let gz=0;gz<FLOOR_PLAN.length;gz++)

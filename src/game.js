@@ -751,7 +751,7 @@ function ptColor(type, alpha, yFrac) {
   switch(type) {
     case 'terrain': {
       const f = yFrac !== undefined ? yFrac : 0.5;
-      const r = Math.round(55 + f*85),  g2 = Math.round(65 + f*55),  b = Math.round(45 + f*30);
+      const r = Math.round(f * 20), g2 = Math.round(120 + f*110), b = Math.round(160 + f*80);
       return `rgba(${r},${g2},${b},${alpha*0.92})`;
     }
     case 'floor':   return `rgba(0,120,160,${alpha*0.45})`;
@@ -2848,9 +2848,9 @@ function renderPeriscope() {
       ctx.lineTo(pq[o+6], pq[o+7]);
       ctx.closePath();
       ctx.fill();
-      // wireframe edges on top of fill
-      if (lineA > 0.02) {
-        ctx.strokeStyle = `rgba(80,180,100,${lineA})`;
+      // wireframe edges on top of fill — only when lines are toggled on
+      if (lineA > 0.02 && state.showWireframe) {
+        ctx.strokeStyle = `rgba(0,210,230,${lineA})`;
         ctx.stroke(); // quad outline (reuses same path)
         // diagonal TL→BR for triangulated mesh look
         ctx.beginPath();
@@ -4623,6 +4623,69 @@ var BATTLEGROUNDS = [
           resolve(g);
         };
         img.src='/maps/canyon.png';
+      });
+    }
+  },
+  // ── TRENCH HEIGHTFIELD ─────────────────────────────────────────────
+  {
+    id: 'trench', name: 'THE TRENCH',
+    desc: 'Deep ocean trench — extreme depth and narrow passages',
+    tag: 'TERRAIN',
+    isHeightfield: true,
+    _hGrid: null,
+    makeGrid: function() {
+      var R=48,C=64,z,x; var g=[];
+      for(z=0;z<R;z++){g[z]=[];for(x=0;x<C;x++)g[z][x]=0;}
+      for(x=0;x<C;x++){g[0][x]=1;g[R-1][x]=1;}
+      for(z=0;z<R;z++){g[z][0]=1;g[z][C-1]=1;}
+      return g;
+    },
+    loadAsync: function() {
+      var self = this;
+      return new Promise(function(resolve) {
+        var img = new Image();
+        function smoothHg(hg, R, C, passes) {
+          for(var p=0;p<passes;p++){
+            var t=[]; for(var z=0;z<R;z++){t[z]=[];for(var x=0;x<C;x++){var s=0,n=0;for(var dz=-1;dz<=1;dz++)for(var dx=-1;dx<=1;dx++){var nz=z+dz,nx2=x+dx;if(nz>=0&&nz<R&&nx2>=0&&nx2<C){s+=hg[nz][nx2];n++;}}t[z][x]=s/n;}}
+            for(var z=0;z<R;z++)for(var x=0;x<C;x++)hg[z][x]=t[z][x];
+          }
+          return hg;
+        }
+        img.onload = function() {
+          var tmp = document.createElement('canvas');
+          tmp.width = 64; tmp.height = 48;
+          var tc = tmp.getContext('2d');
+          tc.drawImage(img, 0, 0, 64, 48);
+          var px = tc.getImageData(0, 0, 64, 48).data;
+          var R=48,C=64,z,x; var g=[]; var hg=[];
+          for(z=0;z<R;z++){
+            g[z]=[]; hg[z]=[];
+            for(x=0;x<C;x++){
+              var idx=(z*C+x)*4;
+              hg[z][x]=px[idx];
+              g[z][x]=0;
+            }
+          }
+          smoothHg(hg, R, C, 2);
+          self._hGrid=hg; window._canyonHeightGrid=hg;
+          resolve(g);
+        };
+        img.onerror = function() {
+          var R=48,C=64,z,x; var g=[]; var hg=[];
+          for(z=0;z<R;z++){
+            g[z]=[]; hg[z]=[];
+            for(x=0;x<C;x++){
+              var nx=x/C, nz=z/R;
+              var h=Math.round(100+60*Math.sin(nx*2)*Math.sin(nz*3)+80*Math.abs(Math.sin(nx*5+nz*4)));
+              if(h<0)h=0; if(h>255)h=255;
+              hg[z][x]=h; g[z][x]=0;
+            }
+          }
+          smoothHg(hg, R, C, 2);
+          self._hGrid=hg; window._canyonHeightGrid=hg;
+          resolve(g);
+        };
+        img.src='/maps/trench.png';
       });
     }
   }

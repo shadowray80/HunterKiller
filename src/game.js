@@ -533,6 +533,9 @@ function generateCloud() {
       if (f.nx * cam.x + f.nz * cam.z > 0.1) return;
     }
 
+    // Heightfield terrain: skip flat column tops — bilinear infill added in buildWallEdges
+    if (f.type === 'terrain' && window._isHeightfield) return;
+
     const step = f.type === 'terrain'  ? cloudDensity :
                  f.type === 'surface'  ? Math.max(3.0, cloudDensity * 6)   : cloudDensity;
     const jit = step * 0.12; // small jitter — just enough to break grid lines, not enough to cause doubles
@@ -668,6 +671,21 @@ function buildWallEdges() {
           gx+1, hv(gz+1, gx+1), gz+1,
           gx,   hv(gz+1, gx),   gz+1
         );
+      }
+    }
+    // Bilinearly-interpolated surface points — sit at the smooth terrain height
+    // within each quad, not at flat column tops, so they read as texture not planes
+    let rngS = 98765;
+    const rng = () => { rngS = ((rngS * 1664525 + 1013904223) >>> 0); return rngS / 4294967296; };
+    for (let gz = 0; gz < HROWS - 1; gz++) {
+      for (let gx = 0; gx < HCOLS - 1; gx++) {
+        const h00 = hv(gz,   gx),   h10 = hv(gz,   gx+1);
+        const h01 = hv(gz+1, gx),   h11 = hv(gz+1, gx+1);
+        for (let p = 0; p < 6; p++) {
+          const u = rng(), v = rng();
+          const wy = h00*(1-u)*(1-v) + h10*u*(1-v) + h01*(1-u)*v + h11*u*v;
+          cloudPoints.push({ x: gx+u, y: wy, z: gz+v, type:'terrain', nx:0, ny:1, nz:0, yFrac: wy/GH });
+        }
       }
     }
   }

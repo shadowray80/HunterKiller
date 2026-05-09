@@ -972,6 +972,29 @@ function drawSonar() {
     sc.fillText('MEG', mp.x, mp.y - 6);
   });
 
+  // ── SURFACE SHIP CONTACTS ──
+  if (state.ships) state.ships.forEach(function(ship) {
+    if (!ship.alive && !ship.sinking) return;
+    var sp2 = mm(ship.x, ship.z);
+    // Heading tick — small line showing ship direction
+    var hx = sp2.x + Math.sin(ship.heading) * 7, hz = sp2.y + Math.cos(ship.heading) * 7;
+    sc.beginPath(); sc.moveTo(sp2.x, sp2.y); sc.lineTo(hx, hz);
+    sc.strokeStyle = 'rgba(255,230,80,0.55)'; sc.lineWidth = 1; sc.stroke();
+    // Diamond contact blip
+    sc.save();
+    sc.translate(sp2.x, sp2.y);
+    sc.rotate(Math.PI / 4);
+    sc.beginPath(); sc.rect(-3, -3, 6, 6);
+    var shipAlpha = ship.sinking ? Math.max(0.3, ship.sinkY / GRID.H) : 1.0;
+    sc.fillStyle = `rgba(255,220,60,${shipAlpha})`;
+    sc.shadowBlur = 8; sc.shadowColor = '#ffdd00';
+    sc.fill(); sc.shadowBlur = 0;
+    sc.restore();
+    sc.font = '6px Share Tech Mono'; sc.textAlign = 'center'; sc.textBaseline = 'alphabetic';
+    sc.fillStyle = `rgba(255,220,60,${shipAlpha * 0.8})`;
+    sc.fillText(ship.label.split(' ')[0], sp2.x, sp2.y - 6);
+  });
+
   // ── WAYPOINT BLIPS ──
   const wpm = state.wpMission;
   if (wpm.active || wpm.result !== null) {
@@ -2827,14 +2850,15 @@ function renderPeriscope() {
       }
     }
 
-    // ── SURFACE SHIPS — hull-bottom silhouette as seen from underwater ──
+    // ── SURFACE SHIPS — side-profile silhouette at waterline ──
+    // Ship sits at cy ≈ sy0. As it sinks, cy drops below sy0 but masts remain visible.
     if (state.ships) state.ships.forEach(function(ship) {
-      if (!ship.alive && !ship.sinking) return;
+      if (!ship.alive && !ship.sinking) return;  // wrecks not shown in any view
       var wy = ship.sinking ? ship.sinkY : GRID.H;
-      if (ship.sinking && wy < GRID.H * 0.5) return; // fully submerged — in draw queue
       var sp = projectPeriscope(ship.x, wy, ship.z);
       if (!sp) return;
-      if (sp.sy > sy0 + 40) return;  // too deep below waterline on screen
+      if (sp.depth > 55 || sp.depth < 0.1) return;
+      if (sp.sy > sy0 + 180) return;  // fully sunk below visible range
       var bowP   = projectPeriscope(ship.x + Math.sin(ship.heading)*ship.length*0.5, wy, ship.z + Math.cos(ship.heading)*ship.length*0.5);
       var sternP = projectPeriscope(ship.x - Math.sin(ship.heading)*ship.length*0.5, wy, ship.z - Math.cos(ship.heading)*ship.length*0.5);
       if (!bowP || !sternP) return;
@@ -2842,13 +2866,12 @@ function renderPeriscope() {
       var screenLen = Math.sqrt(sdx*sdx + sdy*sdy);
       if (screenLen < 5) return;
       var screenAngle = Math.atan2(sdy, sdx);
-      var halfLen  = screenLen * 0.5;
-      var halfBeam = halfLen / ship.length * ship.beam * 1.1;   // true hull proportions
+      var halfLen = screenLen * 0.5;
       var sc = Math.max(0.3, Math.min(3, 8 / sp.depth));
-      var alpha = Math.min(1, 1.0 - Math.max(0, sp.depth - 6) / 38);
-      if (ship.sinking) alpha *= Math.max(0.15, ship.sinkY / GRID.H);
+      var alpha = Math.max(0.05, 1 - sp.depth / 50);
+      if (ship.sinking) alpha *= Math.max(0.1, ship.sinkY / GRID.H);
       if (alpha < 0.04) return;
-      _drawShipHull(ctx, ship, sp.sx, sp.sy, halfLen, halfBeam, sc, screenAngle, ship.sinking ? ship.tilt : 0, alpha, false);
+      _drawShipProfile(ctx, ship, sp.sx, sp.sy, halfLen, sc, screenAngle, ship.sinking ? ship.tilt : 0, alpha);
     });
   }
 
@@ -2906,18 +2929,6 @@ function renderPeriscope() {
       drawQueue.push({ depth: pp.depth, kind: 'squid', s });
     });
 
-    // Ships — sinking (underwater portion) and wrecks on seabed
-    if (state.ships) state.ships.forEach(function(ship) {
-      var isSinking = ship.sinking;
-      var isSunken = !ship.alive && !ship.sinking;
-      if (!isSinking && !isSunken) return;
-      var wy = isSinking ? ship.sinkY : 0;
-      if (isSinking && wy > GRID.H * 0.5) return; // upper half drawn in surface section
-      var pp = projectPeriscope(ship.x, wy, ship.z);
-      if (!pp || pp.depth < 0.1 || pp.depth > 65) return;
-      drawQueue.push({ depth: pp.depth, kind: 'ship', ship: ship, wy: wy });
-    });
-
     // Sort farthest first
     drawQueue.sort(function(a, b) { return b.depth - a.depth; });
 
@@ -2964,8 +2975,6 @@ function renderPeriscope() {
         drawMegalodonPeri(item.m);
       } else if (item.kind === 'squid') {
         drawSquidPeri(item.s);
-      } else if (item.kind === 'ship') {
-        _drawShipPeriQueue(item.ship, item.wy);
       }
     }
     ctx.restore();
@@ -5328,100 +5337,108 @@ function drawSquidPeri(sq) {
   ctx.restore();
 }
 
-// ── SHIP HULL RENDERER (periscope / underwater view) ──
-// Draws the hull bottom as seen from below — what you'd actually see looking up from underwater.
-function _drawShipHull(c, ship, cx, cy, halfLen, halfBeam, sc, screenAngle, tilt, alpha, isSunken) {
-  if (halfLen < 4) return;
-  var hl = halfLen, hb = Math.max(2, halfBeam);
+// ── SHIP SIDE-PROFILE RENDERER (surface / periscope-at-surface view) ──
+// Draws a proper naval ship silhouette as seen looking horizontally at the waterline.
+// cx,cy = projected waterline centre (≈ sy0 on screen). Bow points in +X (local after rotation).
+function _drawShipProfile(c, ship, cx, cy, halfLen, sc, screenAngle, tilt, alpha) {
+  if (halfLen < 6) return;
+  var hl = halfLen;
+  var fb  = hl * 0.09;    // freeboard  — hull above waterline
+  var dr  = hl * 0.05;    // draft      — keel below waterline
+  var col = '#00bbee';
+  var deckY = -fb * 1.08; // top of main deck in local Y (negative = above waterline)
 
   c.save();
   c.translate(cx, cy);
   c.rotate(screenAngle);
   c.rotate(tilt);
   c.globalAlpha = alpha;
+  c.shadowBlur = 8; c.shadowColor = '#002244';
 
-  var hullFill  = isSunken ? 'rgba(8,12,20,0.96)'  : 'rgba(2,5,16,0.97)';
-  var hullStroke = isSunken ? `rgba(38,65,82,${alpha*0.8})` : `rgba(0,155,205,${alpha*0.75})`;
-
-  c.shadowBlur = isSunken ? 0 : 10;
-  c.shadowColor = '#003355';
-
-  // Hull bottom silhouette — bow points +X, stern -X, viewed from below (keel faces camera)
-  c.strokeStyle = hullStroke; c.fillStyle = hullFill; c.lineWidth = 1.0;
+  // ── HULL ──
+  c.strokeStyle = col; c.fillStyle = 'rgba(0,6,20,0.97)'; c.lineWidth = 1.1;
   c.beginPath();
-  c.moveTo( hl,        0);
-  c.bezierCurveTo( hl*0.72, -hb*0.88,  hl*0.05, -hb*1.06, -hl*0.44, -hb*0.98);
-  c.lineTo(-hl*0.85, -hb*0.58);
-  c.lineTo(-hl,      -hb*0.26);   // stern port
-  c.lineTo(-hl,       hb*0.26);   // stern transom flat
-  c.lineTo(-hl*0.85,  hb*0.58);
-  c.lineTo(-hl*0.44,  hb*0.98);
-  c.bezierCurveTo( hl*0.05, hb*1.06,  hl*0.72, hb*0.88,  hl, 0);
+  c.moveTo(-hl,       dr * 0.35);   // stern keel
+  c.lineTo(-hl,      -fb);           // stern transom
+  c.lineTo(-hl*0.90, -fb*1.08);     // stern deck step
+  c.lineTo(-hl*0.18, -fb*1.18);     // main aft deck
+  c.lineTo( hl*0.55, -fb*1.10);     // foredeck
+  c.lineTo( hl*0.83, -fb*0.62);     // bow rake
+  c.lineTo( hl,       0);            // bow tip (waterline)
+  c.lineTo( hl*0.90,  dr);           // bow keel
+  c.lineTo(-hl*0.95,  dr);           // keel
   c.closePath();
-  c.fill();
+  c.fill(); c.stroke();
 
-  // Waterline glow outline
-  if (!isSunken) { c.shadowBlur = 14; c.shadowColor = '#007799'; }
-  c.stroke();
-  c.shadowBlur = 0;
+  // ── FOREDECK GUN ──
+  c.lineWidth = 0.8; c.fillStyle = 'rgba(0,4,16,0.98)';
+  c.beginPath(); c.rect(hl*0.42, deckY - fb*0.55, hl*0.16, fb*0.55); c.fill(); c.stroke();
+  c.lineWidth = 0.7;
+  c.beginPath(); c.moveTo(hl*0.56, deckY - fb*0.28); c.lineTo(hl*0.78, deckY - fb*0.22); c.stroke();
 
-  if (!isSunken) {
-    // Keel line (centreline running bow–stern)
-    c.strokeStyle = `rgba(0,120,170,${alpha*0.32})`; c.lineWidth = 0.6;
-    c.beginPath(); c.moveTo(-hl*0.88, 0); c.lineTo(hl*0.92, 0); c.stroke();
+  // ── MAIN DECKHOUSE (amidships–aft) ──
+  var dhX = -hl*0.16, dhW = hl*0.52, dhH = fb*2.05;
+  c.lineWidth = 1; c.fillStyle = 'rgba(0,4,16,0.98)';
+  c.beginPath(); c.rect(dhX - dhW*0.5, deckY - dhH, dhW, dhH); c.fill(); c.stroke();
 
-    // Bilge keels — two faint parallel lines either side of keel
-    var bk = hb * 0.53;
-    c.strokeStyle = `rgba(0,100,150,${alpha*0.2})`; c.lineWidth = 0.5;
-    c.beginPath(); c.moveTo(-hl*0.68, -bk); c.lineTo(hl*0.52, -bk); c.stroke();
-    c.beginPath(); c.moveTo(-hl*0.68,  bk); c.lineTo(hl*0.52,  bk); c.stroke();
+  // ── BRIDGE (stepped up, forward of deckhouse centre) ──
+  var brX = dhX + dhW*0.07, brW = dhW*0.50, brH = fb*1.45;
+  c.beginPath(); c.rect(brX - brW*0.5, deckY - dhH - brH, brW, brH); c.fill(); c.stroke();
 
-    // Sonar / bulbous bow dome
-    c.beginPath();
-    c.ellipse(hl*0.88, 0, hb*0.28, hb*0.2, 0, 0, Math.PI*2);
-    c.fillStyle = 'rgba(0,15,35,0.95)';
-    c.strokeStyle = `rgba(0,140,190,${alpha*0.45})`; c.lineWidth = 0.7;
-    c.fill(); c.stroke();
-
-    // Label
-    c.shadowBlur = 0;
-    c.rotate(-screenAngle - tilt);
-    c.font = Math.round(Math.max(6, Math.min(9, hl*0.14))) + 'px Share Tech Mono';
-    c.fillStyle = `rgba(0,175,225,${alpha*0.72})`; c.textAlign = 'center';
-    c.fillText(ship.label, 0, -hb - 5);
-  } else {
-    // Wreck — cracked hull, dimmer
-    c.strokeStyle = `rgba(35,58,72,${alpha*0.55})`; c.lineWidth = 0.5;
-    c.beginPath(); c.moveTo(-hl*0.15,-hb*0.7); c.lineTo(-hl*0.05,0); c.lineTo(-hl*0.2,hb*0.55); c.stroke();
-    c.shadowBlur = 0;
-    c.rotate(-screenAngle - tilt);
-    c.font = Math.round(Math.max(5, Math.min(7, hl*0.1))) + 'px Share Tech Mono';
-    c.fillStyle = `rgba(38,78,98,${alpha*0.72})`; c.textAlign = 'center';
-    c.fillText(ship.label + ' WRECK', 0, -hb - 4);
+  // Bridge windows
+  c.fillStyle = `rgba(0,225,255,${alpha*0.55})`; c.shadowBlur = 3; c.shadowColor = '#00aaff';
+  var nw = Math.max(3, Math.floor(brW / 6));
+  for (var wi = 0; wi < nw; wi++) {
+    var wx = brX - brW*0.38 + wi * brW * 0.76 / Math.max(1, nw - 1);
+    c.fillRect(wx - 1.5, deckY - dhH - brH*0.68, 3, brH * 0.28);
   }
+  c.shadowBlur = 8; c.shadowColor = '#002244';
+  c.strokeStyle = col; c.fillStyle = 'rgba(0,4,16,0.98)'; c.lineWidth = 1;
+
+  // ── FUNNEL ──
+  var fnX = dhX - dhW*0.18, fnW = hl*0.054, fnH = fb*1.8;
+  c.beginPath(); c.rect(fnX - fnW, deckY - dhH - fnH, fnW*2, fnH); c.fill(); c.stroke();
+  c.beginPath(); c.rect(fnX - fnW*1.9, deckY - dhH - fnH - 1.5, fnW*3.8, 2.5); c.fill(); c.stroke();
+
+  // ── SMALL AFT DECKHOUSE ──
+  c.lineWidth = 0.8;
+  var adhX = dhX - dhW*0.42, adhW = dhW*0.22, adhH = fb*1.15;
+  c.beginPath(); c.rect(adhX - adhW*0.5, deckY - adhH, adhW, adhH); c.fill(); c.stroke();
+
+  // ── FORE MAST ──
+  c.strokeStyle = col; c.lineWidth = 0.9; c.shadowBlur = 5; c.shadowColor = col;
+  var fmX   = brX + brW*0.22;
+  var fmBot = deckY - dhH - brH;
+  var fmTop = fmBot - fb * 3.8;
+  c.beginPath(); c.moveTo(fmX, fmBot); c.lineTo(fmX, fmTop); c.stroke();
+  c.lineWidth = 0.6;
+  c.beginPath(); c.moveTo(fmX - fb*1.3, fmTop + fb*0.7); c.lineTo(fmX + fb*0.9, fmTop + fb*0.7); c.stroke();
+  c.beginPath(); c.moveTo(fmX - fb*0.9, fmTop + fb*1.7); c.lineTo(fmX + fb*0.6, fmTop + fb*1.7); c.stroke();
+
+  // ── AFT MAST ──
+  c.lineWidth = 0.8;
+  var amX   = dhX - dhW*0.28;
+  var amBot = deckY - dhH;
+  var amTop = amBot - fb * 2.4;
+  c.beginPath(); c.moveTo(amX, amBot); c.lineTo(amX, amTop); c.stroke();
+  c.lineWidth = 0.5;
+  c.beginPath(); c.moveTo(amX - fb*0.8, amTop + fb*0.5); c.lineTo(amX + fb*0.55, amTop + fb*0.5); c.stroke();
+
+  // ── WATERLINE ACCENT ──
+  c.strokeStyle = `rgba(0,200,255,${alpha*0.28})`; c.lineWidth = 0.5;
+  c.setLineDash([4, 3]);
+  c.beginPath(); c.moveTo(-hl*0.95, 0); c.lineTo(hl*0.9, 0); c.stroke();
+  c.setLineDash([]);
+
+  // ── LABEL ──
+  c.shadowBlur = 0;
+  c.rotate(-screenAngle - tilt);
+  c.font = Math.round(Math.max(6, Math.min(10, hl*0.12))) + 'px Share Tech Mono';
+  c.fillStyle = `rgba(0,200,255,${alpha*0.85})`; c.textAlign = 'center';
+  c.fillText(ship.label, 0, fmTop - 6);
 
   c.shadowBlur = 0;
   c.restore();
-}
-
-function _drawShipPeriQueue(ship, wy) {
-  var pp = projectPeriscope(ship.x, wy, ship.z);
-  if (!pp || pp.depth < 0.1 || pp.depth > 65) return;
-  var bowP   = projectPeriscope(ship.x + Math.sin(ship.heading)*ship.length*0.5, wy, ship.z + Math.cos(ship.heading)*ship.length*0.5);
-  var sternP = projectPeriscope(ship.x - Math.sin(ship.heading)*ship.length*0.5, wy, ship.z - Math.cos(ship.heading)*ship.length*0.5);
-  if (!bowP || !sternP) return;
-  var sdx = bowP.sx - sternP.sx, sdy = bowP.sy - sternP.sy;
-  var screenLen = Math.sqrt(sdx*sdx + sdy*sdy);
-  if (screenLen < 4) return;
-  var screenAngle = Math.atan2(sdy, sdx);
-  var halfLen  = screenLen * 0.5;
-  var halfBeam = halfLen / ship.length * ship.beam * 1.1;   // true hull proportions
-  var sc = Math.max(0.2, 7 / pp.depth);
-  var isSunken = !ship.alive && !ship.sinking;
-  var alpha = Math.max(0.12, 1 - pp.depth / 55) * (isSunken ? 0.6 : 1.0);
-  if (alpha < 0.04) return;
-  var tilt = ship.sinking ? ship.tilt * 0.85 : (isSunken ? ship.tilt : 0);
-  _drawShipHull(ctx, ship, pp.sx, pp.sy, halfLen, halfBeam, sc, screenAngle, tilt, alpha, isSunken);
 }
 
 // ── SURFACE SHIPS ──

@@ -5339,18 +5339,17 @@ function drawSquidPeri(sq) {
   ctx.restore();
 }
 
-// ── SHIP SIDE-PROFILE RENDERER (surface / periscope-at-surface view) ──
-// Draws a proper naval ship silhouette as seen looking horizontally at the waterline.
-// cx,cy = projected waterline centre (≈ sy0 on screen). Bow points in +X (local after rotation).
+// ── BATTLESHIP SIDE-PROFILE RENDERER ──
+// Iowa/Yamato-class silhouette: bow right (+X), superstructure above (local -Y = screen up).
 function _drawShipProfile(c, ship, cx, cy, halfLen, sc, screenAngle, tilt, alpha) {
   if (halfLen < 6) return;
   var hl = halfLen;
-  var fb  = hl * 0.09;    // freeboard  — hull above waterline
-  var dr  = hl * 0.05;    // draft      — keel below waterline
-  var col = '#00bbee';
-  var deckY = -fb * 1.08; // top of main deck in local Y (negative = above waterline)
+  // Proportions
+  var fb = hl * 0.13;   // freeboard (hull above waterline)
+  var dr = hl * 0.07;   // draft (keel below waterline)
+  var dk = -fb;         // top of main deck (local Y, negative = above waterline)
 
-  // Normalize angle so superstructure always faces screen-up (local -Y → screen -Y)
+  // Normalize: superstructure must face screen-up
   if (Math.cos(screenAngle) < 0) screenAngle += Math.PI;
 
   c.save();
@@ -5358,91 +5357,156 @@ function _drawShipProfile(c, ship, cx, cy, halfLen, sc, screenAngle, tilt, alpha
   c.rotate(screenAngle);
   c.rotate(tilt);
   c.globalAlpha = alpha;
-  c.shadowBlur = 8; c.shadowColor = '#002244';
+
+  var col   = '#00ccff';
+  var dark  = 'rgba(0,8,22,0.98)';
+  var mid   = 'rgba(0,18,38,0.97)';
 
   // ── HULL ──
-  c.strokeStyle = col; c.fillStyle = 'rgba(0,6,20,0.97)'; c.lineWidth = 1.1;
+  c.strokeStyle = col; c.fillStyle = dark; c.lineWidth = 1.2;
   c.beginPath();
-  c.moveTo(-hl,       dr * 0.35);   // stern keel
-  c.lineTo(-hl,      -fb);           // stern transom
-  c.lineTo(-hl*0.90, -fb*1.08);     // stern deck step
-  c.lineTo(-hl*0.18, -fb*1.18);     // main aft deck
-  c.lineTo( hl*0.55, -fb*1.10);     // foredeck
-  c.lineTo( hl*0.83, -fb*0.62);     // bow rake
-  c.lineTo( hl,       0);            // bow tip (waterline)
-  c.lineTo( hl*0.90,  dr);           // bow keel
-  c.lineTo(-hl*0.95,  dr);           // keel
+  c.moveTo(-hl,        dr * 0.4);      // stern bottom
+  c.lineTo(-hl,       -fb * 0.85);     // stern transom
+  c.lineTo(-hl * 0.92, dk);            // stern deck edge
+  c.lineTo( hl * 0.60, dk);            // main deck (long flat run)
+  c.lineTo( hl * 0.78, dk + fb*0.28);  // bow sheer step up
+  c.lineTo( hl * 0.92, dk + fb*0.55);  // bow flare
+  c.lineTo( hl,        0);             // clipper bow at waterline
+  c.lineTo( hl * 0.94, dr);            // bow keel
+  c.lineTo(-hl * 0.97, dr);            // keel run
   c.closePath();
   c.fill(); c.stroke();
 
-  // ── FOREDECK GUN ──
-  c.lineWidth = 0.8; c.fillStyle = 'rgba(0,4,16,0.98)';
-  c.beginPath(); c.rect(hl*0.42, deckY - fb*0.55, hl*0.16, fb*0.55); c.fill(); c.stroke();
-  c.lineWidth = 0.7;
-  c.beginPath(); c.moveTo(hl*0.56, deckY - fb*0.28); c.lineTo(hl*0.78, deckY - fb*0.22); c.stroke();
+  // ── BELT ARMOUR LINE (red stripe at waterline) ──
+  c.strokeStyle = 'rgba(180,30,30,0.55)'; c.lineWidth = fb * 0.18;
+  c.beginPath(); c.moveTo(-hl*0.96, -fb*0.22); c.lineTo(hl*0.88, -fb*0.22); c.stroke();
+  c.strokeStyle = col;
 
-  // ── MAIN DECKHOUSE (amidships–aft) ──
-  var dhX = -hl*0.16, dhW = hl*0.52, dhH = fb*2.05;
-  c.lineWidth = 1; c.fillStyle = 'rgba(0,4,16,0.98)';
-  c.beginPath(); c.rect(dhX - dhW*0.5, deckY - dhH, dhW, dhH); c.fill(); c.stroke();
-
-  // ── BRIDGE (stepped up, forward of deckhouse centre) ──
-  var brX = dhX + dhW*0.07, brW = dhW*0.50, brH = fb*1.45;
-  c.beginPath(); c.rect(brX - brW*0.5, deckY - dhH - brH, brW, brH); c.fill(); c.stroke();
-
-  // Bridge windows
-  c.fillStyle = `rgba(0,225,255,${alpha*0.55})`; c.shadowBlur = 3; c.shadowColor = '#00aaff';
-  var nw = Math.max(3, Math.floor(brW / 6));
-  for (var wi = 0; wi < nw; wi++) {
-    var wx = brX - brW*0.38 + wi * brW * 0.76 / Math.max(1, nw - 1);
-    c.fillRect(wx - 1.5, deckY - dhH - brH*0.68, 3, brH * 0.28);
+  // ── TURRET helper: draws a triple-gun turret ──
+  // tx = centre X on deck, facing = +1 (guns point bow) or -1 (guns point stern)
+  function turret(tx, facing) {
+    var tw = hl * 0.11, th = fb * 1.0;
+    var tyBot = dk, tyTop = dk - th;
+    // Base box
+    c.fillStyle = mid; c.strokeStyle = col; c.lineWidth = 1;
+    c.beginPath(); c.rect(tx - tw * 0.5, tyTop, tw, th); c.fill(); c.stroke();
+    // Rounded mantlet (front face)
+    c.beginPath(); c.arc(tx + facing * tw * 0.35, tyTop + th * 0.45, tw * 0.32, 0, Math.PI * 2); c.fill(); c.stroke();
+    // Three gun barrels
+    var barLen = hl * 0.28, barY0 = tyTop + th * 0.28, barSp = th * 0.18;
+    c.lineWidth = 1.4;
+    for (var gi = -1; gi <= 1; gi++) {
+      c.beginPath();
+      c.moveTo(tx + facing * tw * 0.5, barY0 + gi * barSp);
+      c.lineTo(tx + facing * (tw * 0.5 + barLen), barY0 + gi * barSp);
+      c.stroke();
+    }
   }
-  c.shadowBlur = 8; c.shadowColor = '#002244';
-  c.strokeStyle = col; c.fillStyle = 'rgba(0,4,16,0.98)'; c.lineWidth = 1;
 
-  // ── FUNNEL ──
-  var fnX = dhX - dhW*0.18, fnW = hl*0.054, fnH = fb*1.8;
-  c.beginPath(); c.rect(fnX - fnW, deckY - dhH - fnH, fnW*2, fnH); c.fill(); c.stroke();
-  c.beginPath(); c.rect(fnX - fnW*1.9, deckY - dhH - fnH - 1.5, fnW*3.8, 2.5); c.fill(); c.stroke();
+  // Fore turret A (foremost, lower)
+  turret(hl * 0.48, 1);
+  // Fore turret B (superfiring, higher — raised platform)
+  var sfH = fb * 0.55;
+  c.fillStyle = mid; c.strokeStyle = col; c.lineWidth = 0.8;
+  c.beginPath(); c.rect(hl*0.25 - hl*0.07, dk - sfH, hl*0.14, sfH); c.fill(); c.stroke();
+  turret(hl * 0.25, 1); // drawn on top of platform (shares dk line — platform lifts it)
+  // Aft turret (facing stern)
+  turret(-hl * 0.52, -1);
 
-  // ── SMALL AFT DECKHOUSE ──
+  // ── MAIN CITADEL / SUPERSTRUCTURE ──
+  // Step 1: wide lower belt
+  var s1X = hl*0.05, s1W = hl*0.38, s1H = fb*1.6;
+  c.fillStyle = mid; c.strokeStyle = col; c.lineWidth = 1.1;
+  c.beginPath(); c.rect(s1X - s1W*0.5, dk - s1H, s1W, s1H); c.fill(); c.stroke();
+
+  // Step 2: narrower mid level
+  var s2W = s1W*0.72, s2H = fb*1.3;
+  c.beginPath(); c.rect(s1X - s2W*0.5, dk - s1H - s2H, s2W, s2H); c.fill(); c.stroke();
+
+  // Step 3: bridge tower (pagoda style — narrows at top)
+  var s3W = s2W*0.55, s3H = fb*1.4;
+  c.beginPath(); c.rect(s1X - s3W*0.5, dk - s1H - s2H - s3H, s3W, s3H); c.fill(); c.stroke();
+
+  // Step 4: top rangefinder platform
+  var s4W = s3W*0.75, s4H = fb*0.6;
   c.lineWidth = 0.8;
-  var adhX = dhX - dhW*0.42, adhW = dhW*0.22, adhH = fb*1.15;
-  c.beginPath(); c.rect(adhX - adhW*0.5, deckY - adhH, adhW, adhH); c.fill(); c.stroke();
+  c.beginPath(); c.rect(s1X - s4W*0.5, dk - s1H - s2H - s3H - s4H, s4W, s4H); c.fill(); c.stroke();
 
-  // ── FORE MAST ──
-  c.strokeStyle = col; c.lineWidth = 0.9; c.shadowBlur = 5; c.shadowColor = col;
-  var fmX   = brX + brW*0.22;
-  var fmBot = deckY - dhH - brH;
-  var fmTop = fmBot - fb * 3.8;
-  c.beginPath(); c.moveTo(fmX, fmBot); c.lineTo(fmX, fmTop); c.stroke();
+  // Bridge windows (row of lit slits)
+  var winY = dk - s1H - s2H - s3H * 0.55;
+  c.fillStyle = 'rgba(0,220,255,0.6)'; c.shadowBlur = 4; c.shadowColor = '#00aaff';
+  for (var wi = 0; wi < 5; wi++) {
+    c.fillRect(s1X - s3W*0.34 + wi * s3W*0.17, winY, s3W*0.1, fb*0.28);
+  }
+  c.shadowBlur = 0;
+  c.strokeStyle = col; c.fillStyle = mid;
+
+  // ── AFT SUPERSTRUCTURE ──
+  var aX = -hl*0.22, aW = hl*0.16, aH = fb*1.2;
+  c.lineWidth = 1;
+  c.beginPath(); c.rect(aX - aW*0.5, dk - aH, aW, aH); c.fill(); c.stroke();
+  var a2W = aW*0.65, a2H = fb*0.8;
+  c.beginPath(); c.rect(aX - a2W*0.5, dk - aH - a2H, a2W, a2H); c.fill(); c.stroke();
+
+  // ── FUNNELS (two, raked aft) ──
+  var fnH = fb * 1.9, fnW = hl * 0.05, fnRake = hl * 0.04;
+  var fn1X = hl * 0.02, fn2X = -hl * 0.07;
+  c.lineWidth = 1;
+  for (var fi = 0; fi < 2; fi++) {
+    var fnX2 = fi === 0 ? fn1X : fn2X;
+    c.beginPath();
+    c.moveTo(fnX2 - fnW, dk - s1H);
+    c.lineTo(fnX2 - fnW - fnRake, dk - s1H - fnH);
+    c.lineTo(fnX2 + fnW - fnRake, dk - s1H - fnH);
+    c.lineTo(fnX2 + fnW, dk - s1H);
+    c.closePath(); c.fill(); c.stroke();
+    // Cap
+    c.beginPath(); c.rect(fnX2 - fnW*1.6 - fnRake, dk - s1H - fnH - 1.5, fnW*3.2, 2); c.fill(); c.stroke();
+    // Smoke puff
+    c.fillStyle = 'rgba(40,60,80,0.35)';
+    c.beginPath(); c.arc(fnX2 - fnRake*2, dk - s1H - fnH - 5, fb*0.7, 0, Math.PI*2); c.fill();
+    c.fillStyle = mid;
+  }
+
+  // ── FORE MAST (tripod legs + top platform) ──
+  var mfX  = s1X + s3W*0.3;
+  var mfBot = dk - s1H - s2H - s3H - s4H;
+  var mfTop = mfBot - fb * 4.5;
+  c.strokeStyle = col; c.lineWidth = 1; c.shadowBlur = 4; c.shadowColor = col;
+  // Tripod
+  c.beginPath(); c.moveTo(mfX, mfBot); c.lineTo(mfX, mfTop); c.stroke();
   c.lineWidth = 0.6;
-  c.beginPath(); c.moveTo(fmX - fb*1.3, fmTop + fb*0.7); c.lineTo(fmX + fb*0.9, fmTop + fb*0.7); c.stroke();
-  c.beginPath(); c.moveTo(fmX - fb*0.9, fmTop + fb*1.7); c.lineTo(fmX + fb*0.6, fmTop + fb*1.7); c.stroke();
+  c.beginPath(); c.moveTo(mfX - fb*1.2, mfBot); c.lineTo(mfX, mfTop + fb); c.stroke();
+  c.beginPath(); c.moveTo(mfX + fb*0.7, mfBot); c.lineTo(mfX, mfTop + fb); c.stroke();
+  // Yardarms
+  c.beginPath(); c.moveTo(mfX - fb*1.8, mfTop + fb*0.9); c.lineTo(mfX + fb*1.2, mfTop + fb*0.9); c.stroke();
+  c.beginPath(); c.moveTo(mfX - fb*1.1, mfTop + fb*2.1); c.lineTo(mfX + fb*0.7, mfTop + fb*2.1); c.stroke();
+  // Crow's nest box
+  c.fillStyle = mid; c.lineWidth = 0.8;
+  c.beginPath(); c.rect(mfX - fb*0.55, mfTop, fb*1.1, fb*0.8); c.fill(); c.stroke();
 
   // ── AFT MAST ──
-  c.lineWidth = 0.8;
-  var amX   = dhX - dhW*0.28;
-  var amBot = deckY - dhH;
-  var amTop = amBot - fb * 2.4;
-  c.beginPath(); c.moveTo(amX, amBot); c.lineTo(amX, amTop); c.stroke();
+  var maX  = aX + a2W*0.2;
+  var maBot = dk - aH - a2H;
+  var maTop = maBot - fb * 3.2;
+  c.lineWidth = 0.9;
+  c.beginPath(); c.moveTo(maX, maBot); c.lineTo(maX, maTop); c.stroke();
   c.lineWidth = 0.5;
-  c.beginPath(); c.moveTo(amX - fb*0.8, amTop + fb*0.5); c.lineTo(amX + fb*0.55, amTop + fb*0.5); c.stroke();
+  c.beginPath(); c.moveTo(maX - fb*1.0, maTop + fb*0.7); c.lineTo(maX + fb*0.7, maTop + fb*0.7); c.stroke();
+  c.shadowBlur = 0;
 
-  // ── WATERLINE ACCENT ──
-  c.strokeStyle = `rgba(0,200,255,${alpha*0.28})`; c.lineWidth = 0.5;
-  c.setLineDash([4, 3]);
-  c.beginPath(); c.moveTo(-hl*0.95, 0); c.lineTo(hl*0.9, 0); c.stroke();
+  // ── WATERLINE ──
+  c.strokeStyle = `rgba(0,200,255,0.22)`; c.lineWidth = 0.5;
+  c.setLineDash([5, 4]);
+  c.beginPath(); c.moveTo(-hl*0.96, 0); c.lineTo(hl*0.92, 0); c.stroke();
   c.setLineDash([]);
 
   // ── LABEL ──
-  c.shadowBlur = 0;
   c.rotate(-screenAngle - tilt);
-  c.font = Math.round(Math.max(6, Math.min(10, hl*0.12))) + 'px Share Tech Mono';
-  c.fillStyle = `rgba(0,200,255,${alpha*0.85})`; c.textAlign = 'center';
-  c.fillText(ship.label, 0, fmTop - 6);
+  c.font = Math.round(Math.max(6, Math.min(10, hl * 0.11))) + 'px Share Tech Mono';
+  c.fillStyle = `rgba(0,200,255,${alpha * 0.85})`; c.textAlign = 'center';
+  c.fillText(ship.label, 0, mfTop - 5);
 
-  c.shadowBlur = 0;
   c.restore();
 }
 

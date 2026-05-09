@@ -2850,10 +2850,12 @@ function renderPeriscope() {
       }
     }
 
-    // ── SURFACE SHIPS — side-profile silhouette at waterline ──
-    // Ship sits at cy ≈ sy0. As it sinks, cy drops below sy0 but masts remain visible.
-    if (state.ships) state.ships.forEach(function(ship) {
-      if (!ship.alive && !ship.sinking) return;  // wrecks not shown in any view
+    // ── SURFACE SHIPS — only visible when player is near the surface ──
+    // surfaceFrac=1 → player at surface; surfaceFrac=0 → player at seabed.
+    // Ships fade out below 70% depth so they don't appear in the underwater view.
+    var depthVis = Math.max(0, (surfaceFrac - 0.70) / 0.30);
+    if (depthVis > 0.02 && state.ships) state.ships.forEach(function(ship) {
+      if (!ship.alive && !ship.sinking) return;
       var wy = ship.sinking ? ship.sinkY : GRID.H;
       var sp = projectPeriscope(ship.x, wy, ship.z);
       if (!sp) return;
@@ -2866,14 +2868,13 @@ function renderPeriscope() {
       if (screenLen < 5) return;
       var screenAngle = Math.atan2(sdy, sdx);
       var halfLen = screenLen * 0.5;
-      var sc = Math.max(0.3, Math.min(3, 8 / sp.depth));
-      var alpha = Math.max(0.05, 1 - sp.depth / 50);
-      if (ship.sinking) alpha *= Math.max(0.1, ship.sinkY / GRID.H);
+      var alpha = (1 - sp.depth / 55) * depthVis;
+      if (ship.sinking) alpha *= Math.max(0.15, ship.sinkY / GRID.H);
       if (alpha < 0.04) return;
-      // Pin to waterline: floating ships sit at sy0; sinking ships drop below it
+      // Pin to waterline; sinking ships descend below it
       var sinkFrac = ship.sinking ? (1 - ship.sinkY / GRID.H) : 0;
       var shipCY = sy0 + sinkFrac * 240;
-      _drawShipProfile(ctx, ship, sp.sx, shipCY, halfLen, sc, screenAngle, ship.sinking ? ship.tilt : 0, alpha);
+      _drawShipProfile(ctx, ship, sp.sx, shipCY, halfLen, 1, screenAngle, ship.sinking ? ship.tilt : 0, alpha);
     });
   }
 

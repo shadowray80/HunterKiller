@@ -292,8 +292,9 @@ const WP_DEFS = [
 ];
 state.wpMission = {
   active: false, waypoints: [], nextRequired: 1, score: 0,
-  timeLeft: 0, triggerIn: 600, result: null, resultTimer: 0,
+  timeLeft: 0, triggerIn: Infinity, result: null, resultTimer: 0,
 };
+state.squids = [];
 
 // ── AUDIO: Sonar ping via Web Audio API ──
 let audioCtx = null;
@@ -1189,6 +1190,9 @@ function render() {
   // Draw megalodons
   if (state.megalodons) state.megalodons.forEach(function(m){ drawMegalodon(m); });
 
+  // Draw squids
+  if (state.squids) state.squids.forEach(function(s){ drawSquid(s); });
+
   // Explosions — drawn on top of everything
   drawExplosions();
 
@@ -1565,6 +1569,7 @@ function update() {
   updateDepthCharges();
   updateWhales();
   updateMegalodons();
+  updateSquids();
 
   // Update torpedoes
   state.torpedoes = state.torpedoes.filter(t => {
@@ -1618,6 +1623,24 @@ function update() {
           spawnExplosion(t.x, t.y, t.z, false, '#6688aa');
           addEvent('⊛ MEGALODON TERMINATED', false);
           setTimeout(function(){ addEvent('▸ MEGALODON EXTINCT — WHALES SAFE', false); }, 1500);
+          return false;
+        }
+      }
+    }
+
+    // Hit giant squid
+    if (travelDist > 3.5 && !t.isEnemy && state.squids) {
+      for (var _si = 0; _si < state.squids.length; _si++) {
+        var _sq = state.squids[_si];
+        if (!_sq.alive) continue;
+        if (Math.abs(t.x-_sq.x)<2.0 && Math.abs(t.y-_sq.y)<2.5 && Math.abs(t.z-_sq.z)<2.0) {
+          _sq.alive = false;
+          playExplosion(false);
+          spawnExplosion(t.x, t.y, t.z, false, '#9933ff');
+          spawnExplosion(t.x, t.y, t.z, false, '#cc44ff');
+          addEvent('⊛ LEVIATHAN TAKE DOWN!', false);
+          setTimeout(function(){ addEvent('▸ WAYPOINT MISSION UNLOCKED', false); }, 1000);
+          setTimeout(function(){ startWaypointMission(); }, 1800);
           return false;
         }
       }
@@ -2889,6 +2912,14 @@ function renderPeriscope() {
       drawQueue.push({ depth: pp.depth, kind: 'megalodon', m });
     });
 
+    // Squids
+    if (state.squids) state.squids.forEach(function(s) {
+      if (!s.alive) return;
+      const pp = projectPeriscope(s.x, s.y, s.z);
+      if (!pp || pp.depth < 0.1 || pp.depth > 55) return;
+      drawQueue.push({ depth: pp.depth, kind: 'squid', s });
+    });
+
     // Sort farthest first
     drawQueue.sort(function(a, b) { return b.depth - a.depth; });
 
@@ -2933,6 +2964,8 @@ function renderPeriscope() {
         drawWhalePeri(item.w);
       } else if (item.kind === 'megalodon') {
         drawMegalodonPeri(item.m);
+      } else if (item.kind === 'squid') {
+        drawSquidPeri(item.s);
       }
     }
     ctx.restore();
@@ -3874,12 +3907,12 @@ function startWaypointMission() {
   const m = state.wpMission;
   m.active = true;
   m.waypoints = WP_DEFS.map(d => ({...d, collected:false, rotAngle:Math.random()*Math.PI*2}));
-  m.nextRequired = 1; m.score = 0; m.timeLeft = 7200; m.result = null; m.resultTimer = 0;
+  m.nextRequired = 1; m.score = 0; m.timeLeft = 3600; m.result = null; m.resultTimer = 0;
   document.getElementById('wp-panel').style.display = 'flex';
   updateWpPanel();
   addEvent('▸ INCOMING TRANSMISSION', false);
   setTimeout(()=>addEvent('▸ WAYPOINT MISSION — PLOT COURSE IN SEQUENCE', false), 1200);
-  setTimeout(()=>addEvent('▸ NAVIGATE WAYPOINTS 1→5 — 2 MINUTES', false), 2400);
+  setTimeout(()=>addEvent('▸ NAVIGATE WAYPOINTS 1→5 — 1 MINUTE', false), 2400);
   playWpStart();
 }
 
@@ -4777,6 +4810,11 @@ function launchGame(planGrid) {
   state.megalodons = [];
   setTimeout(spawnMegalodon, 30000);
 
+  // Reset squids and schedule first spawn
+  state.squids = [];
+  state.wpMission.triggerIn = Infinity;
+  setTimeout(spawnSquid, 8000);
+
   // Reset lives and game-over flag
   _gameOver = false;
   state.lives = 3;
@@ -5147,6 +5185,146 @@ function drawMegalodonPeri(meg) {
   ctx.font = Math.round(7*mScale) + 'px Share Tech Mono';
   ctx.fillStyle = col; ctx.textAlign = 'center';
   ctx.fillText('MEGALODON', 0, -24*mScale);
+  ctx.restore();
+}
+
+// ── GIANT SQUID ──
+var SQUID_MAX = 1;
+var SQUID_SPAWN_INTERVAL = 14400; // respawn ~8 min after kill (at 30fps)
+
+function spawnSquid() {
+  if (!state.squids) state.squids = [];
+  if (state.squids.filter(function(s){ return s.alive; }).length >= SQUID_MAX) return;
+  var sx = 5 + Math.floor(Math.random() * (GRID.W - 10));
+  var sz = 5 + Math.floor(Math.random() * (GRID.D - 10));
+  var sp = findClearCell(sx, sz);
+  state.squids.push({
+    x: sp.x + Math.random() * 2 - 1,
+    y: 2.0 + Math.random() * (GRID.H - 4),
+    z: sp.z + Math.random() * 2 - 1,
+    heading: Math.random() * Math.PI * 2,
+    speed: 0.005 + Math.random() * 0.003,
+    alive: true,
+    turnTimer: 0,
+    turnInterval: 200 + Math.floor(Math.random() * 280),
+    tentPhase: Math.random() * Math.PI * 2,
+  });
+  addEvent('▸ ANOMALOUS CONTACT — GIANT SQUID', true);
+  setTimeout(function(){ addEvent('▸ LEVIATHAN DETECTED — ENGAGE TO UNLOCK MISSION', false); }, 1500);
+}
+
+function updateSquids() {
+  if (!state.squids) state.squids = [];
+  state.squids = state.squids.filter(function(s){ return s.alive; });
+  var missionIdle = !state.wpMission.active && state.wpMission.result === null;
+  if (missionIdle && state.squids.length === 0 && state.time > 0 && state.time % SQUID_SPAWN_INTERVAL === 0) spawnSquid();
+  state.squids.forEach(function(sq) {
+    sq.tentPhase += 0.08;
+    sq.turnTimer++;
+    if (sq.turnTimer >= sq.turnInterval) {
+      sq.heading += (Math.random() - 0.5) * Math.PI * 1.1;
+      sq.turnTimer = 0;
+      sq.turnInterval = 200 + Math.floor(Math.random() * 280);
+    }
+    sq.x += Math.sin(sq.heading) * sq.speed;
+    sq.z += Math.cos(sq.heading) * sq.speed;
+    sq.y += Math.sin(sq.tentPhase * 0.3) * 0.008;
+    sq.y = Math.max(1.5, Math.min(GRID.H - 1.5, sq.y));
+    if (sq.x < 2 || sq.x > GRID.W - 2) { sq.heading = Math.PI - sq.heading; sq.x = Math.max(2, Math.min(GRID.W-2, sq.x)); }
+    if (sq.z < 2 || sq.z > GRID.D - 2) { sq.heading = -sq.heading; sq.z = Math.max(2, Math.min(GRID.D-2, sq.z)); }
+  });
+}
+
+function drawSquid(sq) {
+  if (!sq.alive) return;
+  var sp = project(sq.x, sq.y, sq.z);
+  var col = '#ff8800';
+  var screenAngle = -(sq.heading - camRotY);
+  ctx.save();
+  ctx.translate(sp.sx, sp.sy);
+  ctx.rotate(screenAngle);
+  ctx.globalAlpha = 0.88;
+  var grd = ctx.createRadialGradient(0,0,0,0,0,22);
+  grd.addColorStop(0, 'rgba(255,100,0,0.22)');
+  grd.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(0,0,22,0,Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 10; ctx.shadowColor = col;
+  // Mantle (body)
+  ctx.beginPath();
+  ctx.ellipse(4, 0, 12, 6, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,100,0,0.18)'; ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+  ctx.fill(); ctx.stroke();
+  // Head
+  ctx.beginPath();
+  ctx.ellipse(-4, 0, 6, 5, 0, 0, Math.PI*2);
+  ctx.fill(); ctx.stroke();
+  // Tentacles (8, wiggling with tentPhase)
+  for (var ti = 0; ti < 8; ti++) {
+    var tAng = (ti / 8) * Math.PI * 2;
+    var tWave = Math.sin(sq.tentPhase + ti * 0.8) * 4;
+    ctx.beginPath();
+    ctx.moveTo(-6, 0);
+    ctx.quadraticCurveTo(-12 + tWave, Math.sin(tAng)*8, -18 + tWave, Math.sin(tAng)*14);
+    ctx.strokeStyle = col; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.6;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 0.88;
+  ctx.shadowBlur = 0;
+  ctx.rotate(-screenAngle);
+  ctx.font = '7px Share Tech Mono'; ctx.fillStyle = col;
+  ctx.textAlign = 'center'; ctx.fillText('SQUID', 0, -22);
+  ctx.restore();
+}
+
+function drawSquidPeri(sq) {
+  if (!sq.alive) return;
+  var pp = projectPeriscope(sq.x, sq.y, sq.z);
+  if (!pp || pp.depth < 0.1 || pp.depth > 55) return;
+  var sc = Math.max(0.3, Math.min(2.5, 9 / pp.depth));
+  var alpha = Math.max(0, 1 - pp.depth / 46) * 0.95;
+  if (alpha < 0.05) return;
+  var col = '#ff7700';
+  ctx.save();
+  ctx.translate(pp.sx, pp.sy);
+  ctx.globalAlpha = alpha;
+  ctx.shadowBlur = 14; ctx.shadowColor = '#ff5500';
+  // Mantle
+  ctx.beginPath();
+  ctx.ellipse(5*sc, 0, 14*sc, 7*sc, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,100,0,0.18)'; ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+  ctx.fill(); ctx.stroke();
+  // Head
+  ctx.beginPath();
+  ctx.ellipse(-4*sc, 0, 7*sc, 6*sc, 0, 0, Math.PI*2);
+  ctx.fill(); ctx.stroke();
+  // Fin lobes
+  ctx.beginPath();
+  ctx.moveTo(10*sc, -7*sc); ctx.lineTo(16*sc, -13*sc); ctx.lineTo(14*sc, -7*sc);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,100,0,0.2)'; ctx.fill(); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(10*sc,  7*sc); ctx.lineTo(16*sc,  13*sc); ctx.lineTo(14*sc,  7*sc);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  // Tentacles — 8, fanning out from head, wiggling
+  ctx.lineWidth = 0.9;
+  for (var ti = 0; ti < 8; ti++) {
+    var spread = ((ti / 7) - 0.5) * Math.PI * 0.9;
+    var wave = Math.sin(sq.tentPhase + ti * 0.9) * 5 * sc;
+    var tx1 = -10*sc, ty1 = Math.sin(spread) * 5*sc;
+    var tx2 = -20*sc + wave, ty2 = Math.sin(spread) * 14*sc;
+    var tx3 = -28*sc + wave * 1.4, ty3 = Math.sin(spread) * 20*sc;
+    ctx.beginPath();
+    ctx.moveTo(tx1, ty1);
+    ctx.quadraticCurveTo(tx2, ty2, tx3, ty3);
+    ctx.strokeStyle = `rgba(255,120,0,${0.7 - ti * 0.04})`;
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  ctx.font = Math.round(7*sc) + 'px Share Tech Mono';
+  ctx.fillStyle = col; ctx.textAlign = 'center';
+  ctx.fillText('GIANT SQUID', 0, -22*sc);
   ctx.restore();
 }
 

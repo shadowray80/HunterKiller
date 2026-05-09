@@ -5348,6 +5348,9 @@ function _drawShipProfile(c, ship, cx, cy, halfLen, sc, screenAngle, tilt, alpha
   var col = '#00bbee';
   var deckY = -fb * 1.08; // top of main deck in local Y (negative = above waterline)
 
+  // Normalize angle so superstructure always faces screen-up (local -Y → screen -Y)
+  if (Math.cos(screenAngle) < 0) screenAngle += Math.PI;
+
   c.save();
   c.translate(cx, cy);
   c.rotate(screenAngle);

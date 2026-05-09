@@ -2333,26 +2333,24 @@ function setTacticalSonar(on) {
   const fwd = document.getElementById('peri-fwd-wrap').getBoundingClientRect();
   const sc = document.getElementById('sonar-canvas');
   // Resize canvas resolution to match drag zone
-  sc.width = Math.round(fwd.width);
-  sc.height = Math.round(fwd.height);
+  // Keep canvas at 200×200 resolution — CSS scales it to fill the zone
   sc.style.width = '100%';
   sc.style.height = '100%';
   sc.style.boxShadow = 'none';
   sc.style.border = 'none';
+  sc.style.display = 'block';
   // Hide label and readout — canvas fills the whole wrapper
   wrap.querySelector('div:first-child').style.display = 'none';
   document.getElementById('sonar-readout').style.display = 'none';
-  // Position wrapper exactly over the forward drag zone
+  // Position wrapper exactly over the forward drag zone, no border
   Object.assign(wrap.style, {
     display: 'block', position: 'fixed',
     left: fwd.left + 'px', top: fwd.top + 'px',
     width: fwd.width + 'px', height: fwd.height + 'px',
     bottom: 'auto', margin: '0', padding: '0',
-    background: 'rgba(0,8,18,0.82)',
-    border: '1px solid rgba(0,151,167,0.5)',
+    background: 'none', border: 'none',
     zIndex: '20',
   });
-  _sonarTerrainCache = null; // rebuild at new canvas size
 }
 document.getElementById('peri-btn-tactical').addEventListener('click', () => setTacticalSonar(!_tacticalOn));
 

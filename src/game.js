@@ -3071,6 +3071,9 @@ function renderPeriscope() {
     }
   }
 
+  // ── DEPTH CHARGES ──
+  drawDepthCharges();
+
   // ── EXPLOSIONS IN PERISCOPE ──
   drawExplosions();
 
@@ -5548,6 +5551,82 @@ function initShips() {
 }
 
 // ── DEPTH CHARGES ──
+function drawDepthCharges() {
+  if (!state.depthCharges || !state.depthCharges.length) return;
+  state.depthCharges.forEach(function(dc) {
+    if (dc.exploded) return;
+
+    // ── TRAIL (dot trace as barrel descends) ──
+    if (dc.trail) {
+      dc.trail.forEach(function(pt, i) {
+        var pp = projectPeriscope(pt.x, pt.y, pt.z);
+        if (!pp || pp.depth > 60) return;
+        var a = (i / dc.trail.length) * 0.55;
+        var r = Math.max(0.8, 2.5 - pp.depth * 0.04);
+        ctx.beginPath();
+        ctx.arc(pp.sx, pp.sy, r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,160,40,' + a + ')';
+        ctx.fill();
+      });
+    }
+
+    // ── BARREL ──
+    var p = projectPeriscope(dc.x, dc.y, dc.z);
+    if (!p || p.depth > 60 || p.depth < 0.1) return;
+
+    var sc2 = Math.max(0.4, Math.min(2.5, 7 / p.depth));
+    var bw = 6 * sc2;   // barrel width
+    var bh = 9 * sc2;   // barrel height
+    var bx = p.sx, by = p.sy;
+
+    ctx.save();
+    ctx.translate(bx, by);
+
+    // Body — dark olive/brown
+    ctx.fillStyle = 'rgba(60,45,20,0.95)';
+    ctx.strokeStyle = '#cc8800';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.roundRect(-bw * 0.5, -bh * 0.5, bw, bh, bw * 0.28);
+    ctx.fill();
+    ctx.stroke();
+
+    // Metal bands (3 straps)
+    ctx.strokeStyle = 'rgba(220,150,30,0.85)';
+    ctx.lineWidth = Math.max(0.5, 0.9 * sc2);
+    [-bh * 0.3, 0, bh * 0.3].forEach(function(sy2) {
+      ctx.beginPath();
+      ctx.moveTo(-bw * 0.5, sy2);
+      ctx.lineTo( bw * 0.5, sy2);
+      ctx.stroke();
+    });
+
+    // Detonator cap (top)
+    ctx.fillStyle = 'rgba(200,60,20,0.95)';
+    ctx.strokeStyle = '#ff4400';
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.ellipse(0, -bh * 0.5, bw * 0.3, bh * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+
+    // Glow when close to player depth
+    var depthDiff = Math.abs(dc.y - state.player.y);
+    if (depthDiff < 3) {
+      var g = 1 - depthDiff / 3;
+      ctx.shadowBlur = 12 * g;
+      ctx.shadowColor = '#ff4400';
+      ctx.strokeStyle = 'rgba(255,80,0,' + (g * 0.7) + ')';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(-bw * 0.5, -bh * 0.5, bw, bh, bw * 0.28);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+  });
+}
+
 function playDepthCharge(dist) {
   var vol = Math.max(0.08, Math.min(1.0, 1.0 - (dist || 0) / 18));
   var a = new Audio('/Sounds/Depth_Charge_Distant.mp3');
@@ -5578,10 +5657,11 @@ function updateDepthCharges() {
         x: ship.x + (Math.random()-0.5)*4,
         y: GRID.H,
         z: ship.z + (Math.random()-0.5)*4,
-        vy: 0,        // falling velocity
+        vy: 0,
         armed: false,
         exploded: false,
-        label: ship.label
+        label: ship.label,
+        trail: []
       });
       addEvent(`⚠ DEPTH CHARGES! — ${ship.label}`, true);
         setTimeout(()=>addEvent('⚠ BRACE FOR IMPACT', true), 800);
@@ -5596,6 +5676,11 @@ function updateDepthCharges() {
     dc.vy += 0.015;
     dc.y = Math.max(0, dc.y - dc.vy);
     if (!dc.armed && dc.y < GRID.H - 1) dc.armed = true;
+
+    // Trail
+    if (!dc.trail) dc.trail = [];
+    dc.trail.push({ x: dc.x, y: dc.y, z: dc.z });
+    if (dc.trail.length > 50) dc.trail.shift();
 
     // Explode at player depth or seabed
     const dy = Math.abs(dc.y - state.player.y);

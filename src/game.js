@@ -745,7 +745,7 @@ function project(wx, wy, wz) {
   const rz = gx * Math.sin(camRotY) + gz * Math.cos(camRotY);
   // Project to screen (isometric-style, fixed elevation angle)
   const sx = rx * ISO_SCALE;
-  const sy = (-gy * 0.82 + rz * 0.55) * ISO_SCALE;
+  const sy = (gy * 0.82 + rz * 0.55) * ISO_SCALE;
   return { sx: cx + sx, sy: cy - sy };
 }
 

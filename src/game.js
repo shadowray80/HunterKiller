@@ -2858,7 +2858,6 @@ function renderPeriscope() {
       var sp = projectPeriscope(ship.x, wy, ship.z);
       if (!sp) return;
       if (sp.depth > 55 || sp.depth < 0.1) return;
-      if (sp.sy > sy0 + 180) return;  // fully sunk below visible range
       var bowP   = projectPeriscope(ship.x + Math.sin(ship.heading)*ship.length*0.5, wy, ship.z + Math.cos(ship.heading)*ship.length*0.5);
       var sternP = projectPeriscope(ship.x - Math.sin(ship.heading)*ship.length*0.5, wy, ship.z - Math.cos(ship.heading)*ship.length*0.5);
       if (!bowP || !sternP) return;
@@ -2871,7 +2870,10 @@ function renderPeriscope() {
       var alpha = Math.max(0.05, 1 - sp.depth / 50);
       if (ship.sinking) alpha *= Math.max(0.1, ship.sinkY / GRID.H);
       if (alpha < 0.04) return;
-      _drawShipProfile(ctx, ship, sp.sx, sp.sy, halfLen, sc, screenAngle, ship.sinking ? ship.tilt : 0, alpha);
+      // Pin to waterline: floating ships sit at sy0; sinking ships drop below it
+      var sinkFrac = ship.sinking ? (1 - ship.sinkY / GRID.H) : 0;
+      var shipCY = sy0 + sinkFrac * 240;
+      _drawShipProfile(ctx, ship, sp.sx, shipCY, halfLen, sc, screenAngle, ship.sinking ? ship.tilt : 0, alpha);
     });
   }
 

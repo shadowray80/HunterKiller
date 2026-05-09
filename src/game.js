@@ -808,27 +808,68 @@ function drawSonar() {
   sc.lineWidth = 1;
   sc.strokeRect(r0.x, r0.y, r1.x-r0.x, r1.y-r0.y);
 
-  // ── FURNITURE FOOTPRINTS ──
-  furniture.forEach(f => {
-    if (f.type==='floor'||f.type==='surface'||f.type==='wall') return;
-    const fp0 = mm(f.x1, f.z1), fp1 = mm(f.x2, f.z2);
-    sc.fillStyle = 'rgba(0,120,180,0.18)';
-    sc.strokeStyle = 'rgba(0,150,200,0.3)';
-    sc.lineWidth = 0.5;
-    sc.fillRect(fp0.x, fp0.y, fp1.x-fp0.x, fp1.y-fp0.y);
-    sc.strokeRect(fp0.x, fp0.y, fp1.x-fp0.x, fp1.y-fp0.y);
-  });
+  // ── TERRAIN HEIGHTMAP (canyon / heightfield battleground) ──
+  if (window._isHeightfield && window._canyonHeightGrid) {
+    const hg = window._canyonHeightGrid;
+    for (let gz = 0; gz < GRID.D; gz++) {
+      for (let gx = 0; gx < GRID.W; gx++) {
+        const raw = (hg[gz] && hg[gz][gx] !== undefined) ? hg[gz][gx] : 0;
+        const h = raw / 255; // 0=seabed, 1=peak
+        if (h < 0.01) continue;
+        const p0 = mm(gx, gz), p1 = mm(gx + 1, gz + 1);
+        const cw = Math.max(1, p1.x - p0.x), ch = Math.max(1, p1.y - p0.y);
+        // Colour: dark navy (deep) → teal (mid) → bright green-teal (peak)
+        const green = Math.round(30 + h * 225);
+        const blue  = Math.round(50 + h * 130);
+        const alpha = 0.35 + h * 0.55;
+        sc.fillStyle = `rgba(0,${green},${blue},${alpha})`;
+        sc.fillRect(p0.x, p0.y, cw, ch);
+      }
+    }
+    // Contour lines at 25% / 50% / 75% height
+    [0.25, 0.5, 0.75].forEach(thresh => {
+      sc.strokeStyle = `rgba(0,255,180,${0.08 + thresh * 0.08})`;
+      sc.lineWidth = 0.4;
+      for (let gz = 0; gz < GRID.D - 1; gz++) {
+        for (let gx = 0; gx < GRID.W - 1; gx++) {
+          const h0 = ((hg[gz]   && hg[gz][gx]     !== undefined) ? hg[gz][gx]     : 0) / 255;
+          const h1 = ((hg[gz]   && hg[gz][gx+1]   !== undefined) ? hg[gz][gx+1]   : 0) / 255;
+          const h2 = ((hg[gz+1] && hg[gz+1][gx]   !== undefined) ? hg[gz+1][gx]   : 0) / 255;
+          // Draw edge if threshold crosses between neighbours
+          if ((h0 < thresh) !== (h1 < thresh)) {
+            const a = mm(gx+1, gz), b = mm(gx+1, gz+1);
+            sc.beginPath(); sc.moveTo(a.x,a.y); sc.lineTo(b.x,b.y); sc.stroke();
+          }
+          if ((h0 < thresh) !== (h2 < thresh)) {
+            const a = mm(gx, gz+1), b = mm(gx+1, gz+1);
+            sc.beginPath(); sc.moveTo(a.x,a.y); sc.lineTo(b.x,b.y); sc.stroke();
+          }
+        }
+      }
+    });
+  } else {
+    // ── FURNITURE FOOTPRINTS (floor plan maps) ──
+    furniture.forEach(f => {
+      if (f.type==='floor'||f.type==='surface'||f.type==='wall') return;
+      const fp0 = mm(f.x1, f.z1), fp1 = mm(f.x2, f.z2);
+      sc.fillStyle = 'rgba(0,120,180,0.18)';
+      sc.strokeStyle = 'rgba(0,150,200,0.3)';
+      sc.lineWidth = 0.5;
+      sc.fillRect(fp0.x, fp0.y, fp1.x-fp0.x, fp1.y-fp0.y);
+      sc.strokeRect(fp0.x, fp0.y, fp1.x-fp0.x, fp1.y-fp0.y);
+    });
 
-  // ── GRID LINES (faint) ──
-  sc.strokeStyle = 'rgba(0,100,140,0.1)';
-  sc.lineWidth = 0.5;
-  for (let gx=0; gx<=GRID.W; gx+=4) {
-    const a=mm(gx,0), b=mm(gx,GRID.D);
-    sc.beginPath(); sc.moveTo(a.x,a.y); sc.lineTo(b.x,b.y); sc.stroke();
-  }
-  for (let gz=0; gz<=GRID.D; gz+=4) {
-    const a=mm(0,gz), b=mm(GRID.W,gz);
-    sc.beginPath(); sc.moveTo(a.x,a.y); sc.lineTo(b.x,b.y); sc.stroke();
+    // ── GRID LINES (faint) ──
+    sc.strokeStyle = 'rgba(0,100,140,0.1)';
+    sc.lineWidth = 0.5;
+    for (let gx=0; gx<=GRID.W; gx+=4) {
+      const a=mm(gx,0), b=mm(gx,GRID.D);
+      sc.beginPath(); sc.moveTo(a.x,a.y); sc.lineTo(b.x,b.y); sc.stroke();
+    }
+    for (let gz=0; gz<=GRID.D; gz+=4) {
+      const a=mm(0,gz), b=mm(GRID.W,gz);
+      sc.beginPath(); sc.moveTo(a.x,a.y); sc.lineTo(b.x,b.y); sc.stroke();
+    }
   }
 
   // ── SONAR SWEEP ──

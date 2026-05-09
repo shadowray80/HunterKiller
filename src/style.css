@@ -769,6 +769,14 @@ background: rgba(0,20,40,0.95);
 .rp-btn:active { background: rgba(0,229,255,0.2); }
 .rp-toggle { min-width: 32px; font-size: 8px; letter-spacing: 0.1em; }
 .rp-toggle.on { color: #00ff9d; border-color: #00ff9d; text-shadow: 0 0 6px #00ff9d; }
+.rp-color-pick {
+  width: 26px; height: 26px; padding: 1px;
+  border: 1px solid rgba(0,180,220,0.4);
+  border-radius: 3px; background: #000; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+}
+.rp-color-pick::-webkit-color-swatch-wrapper { padding: 0; }
+.rp-color-pick::-webkit-color-swatch { border: none; border-radius: 2px; }
 #peri-density-val {
 position: absolute;
 bottom: 208px;

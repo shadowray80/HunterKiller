@@ -3049,14 +3049,7 @@ function renderPeriscope() {
       if (item.kind === 'quad') {
         const c = item.c, d = item.depth;
         const distA = Math.max(0, 1 - d / 55);
-        // Contour-map colouring — same 10-band palette as the sonar minimap
-        const yFrac = item.yFrac || 0;
-        const numBands = 10;
-        const band = Math.floor(yFrac * numBands);
-        const shade = band / numBands;
-        const fg = Math.round(12 + shade * 168);
-        const fb = Math.round(22 + shade * 148);
-        ctx.fillStyle = `rgba(0,${fg},${fb},${0.13})`;
+        ctx.fillStyle = _hexToRgba(terrainFillColor, terrainFillOpacity);
         ctx.beginPath();
         ctx.moveTo(c[0], c[1]); ctx.lineTo(c[2], c[3]);
         ctx.lineTo(c[4], c[5]); ctx.lineTo(c[6], c[7]);
@@ -3968,6 +3961,27 @@ document.getElementById('peri-line-thick').addEventListener('click', () => {
 });
 document.getElementById('peri-line-thin').addEventListener('click', () => {
   wireframeScale = Math.max(0.25, wireframeScale - 0.25);
+});
+
+// ── TERRAIN FILL CONTROLS ──
+let terrainFillColor = '#000000';
+let terrainFillOpacity = 0.15;
+function _hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+document.getElementById('terrain-color-pick').addEventListener('input', e => {
+  terrainFillColor = e.target.value;
+});
+document.getElementById('terrain-fill-up').addEventListener('click', () => {
+  terrainFillOpacity = Math.min(1, Math.round((terrainFillOpacity + 0.05) * 100) / 100);
+  document.getElementById('terrain-fill-val').textContent = Math.round(terrainFillOpacity * 100) + '%';
+});
+document.getElementById('terrain-fill-down').addEventListener('click', () => {
+  terrainFillOpacity = Math.max(0, Math.round((terrainFillOpacity - 0.05) * 100) / 100);
+  document.getElementById('terrain-fill-val').textContent = Math.round(terrainFillOpacity * 100) + '%';
 });
 
 const periFireBtn = document.getElementById('peri-btn-fire');

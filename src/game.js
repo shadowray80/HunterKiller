@@ -809,9 +809,8 @@ function drawSonar() {
   sc.lineWidth = 1;
   sc.strokeRect(r0.x, r0.y, r1.x-r0.x, r1.y-r0.y);
 
-  // ── TERRAIN HEIGHTMAP (canyon / heightfield battleground) ──
+  // ── TERRAIN CONTOUR MAP (canyon / heightfield battleground) ──
   if (window._isHeightfield && window._canyonHeightGrid) {
-    // Build a smooth pixel image once per map load, then reuse it
     if (!_sonarTerrainCache) {
       const hg = window._canyonHeightGrid;
       const oc = document.createElement('canvas');
@@ -819,31 +818,54 @@ function drawSonar() {
       const ox = oc.getContext('2d');
       const img = ox.createImageData(sw, sh);
       const d = img.data;
+      const numBands = 10; // contour intervals
+
+      // Pass 1: compute bilinear heights into a float buffer
+      const hbuf = new Float32Array(sw * sh);
       for (let py = 0; py < sh; py++) {
         for (let px = 0; px < sw; px++) {
-          // pixel → world coords (inverse of mm())
           const wx = (px - offX) / scale;
           const wz = (py - offZ) / scale;
           const gx = Math.floor(wx), gz = Math.floor(wz);
-          const idx = (py * sw + px) * 4;
           if (gx < 0 || gx >= GRID.W || gz < 0 || gz >= GRID.D || !hg[gz]) {
-            d[idx + 3] = 0; continue;
+            hbuf[py * sw + px] = -1; continue;
           }
-          // Bilinear interpolation for smooth blending between cells
           const fx = wx - gx, fz = wz - gz;
-          const gx1 = Math.min(gx + 1, GRID.W - 1);
-          const gz1 = Math.min(gz + 1, GRID.D - 1);
+          const gx1 = Math.min(gx + 1, GRID.W - 1), gz1 = Math.min(gz + 1, GRID.D - 1);
           const h00 = (hg[gz][gx]   || 0) / 255;
           const h10 = (hg[gz][gx1]  || 0) / 255;
           const h01 = (hg[gz1] ? (hg[gz1][gx]  || 0) : 0) / 255;
           const h11 = (hg[gz1] ? (hg[gz1][gx1] || 0) : 0) / 255;
-          const h = h00*(1-fx)*(1-fz) + h10*fx*(1-fz) + h01*(1-fx)*fz + h11*fx*fz;
-          if (h < 0.015) { d[idx + 3] = 0; continue; }
-          // Colour ramp: deep black-blue → mid teal → bright green-cyan at peaks
-          d[idx]     = 0;
-          d[idx + 1] = Math.round(18 + h * 237);
-          d[idx + 2] = Math.round(35 + h * 165);
-          d[idx + 3] = Math.round((0.28 + h * 0.68) * 255);
+          hbuf[py * sw + px] = h00*(1-fx)*(1-fz) + h10*fx*(1-fz) + h01*(1-fx)*fz + h11*fx*fz;
+        }
+      }
+
+      // Pass 2: colour each pixel by height band; mark band edges as contour lines
+      for (let py = 0; py < sh; py++) {
+        for (let px = 0; px < sw; px++) {
+          const h = hbuf[py * sw + px];
+          const idx = (py * sw + px) * 4;
+          if (h < 0.02) { d[idx + 3] = 0; continue; }
+
+          const band = Math.floor(h * numBands);
+          const hR   = px < sw - 1 ? hbuf[py * sw + px + 1] : h;
+          const hD   = py < sh - 1 ? hbuf[(py + 1) * sw + px] : h;
+          const isContour = (hR >= 0 && Math.floor(hR * numBands) !== band) ||
+                            (hD >= 0 && Math.floor(hD * numBands) !== band);
+
+          if (isContour) {
+            // Bright contour line — brighter at higher elevations
+            const cl = Math.round(160 + h * 95);
+            d[idx] = 0; d[idx+1] = cl; d[idx+2] = Math.round(cl * 0.8);
+            d[idx+3] = 230;
+          } else {
+            // Band fill: dark blue-black at seabed → deep teal at peaks
+            const shade = band / numBands;
+            d[idx]     = 0;
+            d[idx + 1] = Math.round(8  + shade * 80);
+            d[idx + 2] = Math.round(15 + shade * 70);
+            d[idx + 3] = Math.round((0.55 + shade * 0.35) * 255);
+          }
         }
       }
       ox.putImageData(img, 0, 0);

@@ -2986,7 +2986,8 @@ function renderPeriscope() {
   // ── POINT CLOUD — drawn after terrain fills so dots sit on the surface ──
   if (state.showDots) cloudPoints.forEach(p => {
     const dx = state.player.x - p.x, dy = state.player.y - p.y, dz = state.player.z - p.z;
-    if (p.nx*dx + p.ny*dy + p.nz*dz <= 0) return;
+    // Skip back-face culling for terrain-surface dots — they must be visible from any angle
+    if (p.type !== 'terrain' && p.nx*dx + p.ny*dy + p.nz*dz <= 0) return;
     const pp = projectPeriscope(p.x, p.y, p.z);
     if (!pp || pp.depth < 0.1 || pp.depth > 72) return;
     if (pp.sx < -80 || pp.sx > W+80 || pp.sy < -80 || pp.sy > H+80) return;

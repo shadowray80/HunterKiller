@@ -3966,7 +3966,7 @@ document.getElementById('peri-line-thin').addEventListener('click', () => {
 
 // ── TERRAIN FILL CONTROLS ──
 let terrainFillColor = '#000000';
-let terrainFillOpacity = 0.15;
+let terrainFillOpacity = 1.0;
 function _hexToRgba(hex, alpha) {
   const r = parseInt(hex.slice(1,3), 16);
   const g = parseInt(hex.slice(3,5), 16);

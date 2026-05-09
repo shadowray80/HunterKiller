@@ -5672,8 +5672,8 @@ function updateDepthCharges() {
   state.depthCharges = state.depthCharges.filter(dc => {
     if (dc.exploded) return false;
 
-    // Fall toward seabed
-    dc.vy += 0.015;
+    // Fall toward seabed (slow, weighted-barrel descent ~6-8 seconds)
+    dc.vy = Math.min(0.035, dc.vy + 0.001);
     dc.y = Math.max(0, dc.y - dc.vy);
     if (!dc.armed && dc.y < GRID.H - 1) dc.armed = true;
 

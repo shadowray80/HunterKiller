@@ -2379,13 +2379,14 @@ function setTacticalSonar(on) {
   wrap.querySelector('div:first-child').style.display = 'none';
   document.getElementById('sonar-readout').style.display = 'none';
   // Position wrapper exactly over the forward drag zone, no border
+  // pointer-events: none so touches pass through to the fwd-wrap handler beneath
   Object.assign(wrap.style, {
     display: 'block', position: 'fixed',
     left: fwd.left + 'px', top: fwd.top + 'px',
     width: fwd.width + 'px', height: fwd.height + 'px',
     bottom: 'auto', margin: '0', padding: '0',
     background: 'none', border: 'none',
-    zIndex: '20',
+    zIndex: '20', pointerEvents: 'none',
   });
 }
 document.getElementById('peri-btn-tactical').addEventListener('click', () => setTacticalSonar(!_tacticalOn));

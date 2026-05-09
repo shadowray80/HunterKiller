@@ -782,6 +782,7 @@ function ptColor(type, alpha, yFrac) {
 const sonarCtx = document.getElementById('sonar-canvas').getContext('2d');
 let sonarAngle = 0;
 const sonarPings = [];
+let _sonarTerrainCache = null; // pre-rendered heightmap image, rebuilt on map load
 
 function drawSonar() {
   const sc = sonarCtx;
@@ -810,43 +811,45 @@ function drawSonar() {
 
   // ── TERRAIN HEIGHTMAP (canyon / heightfield battleground) ──
   if (window._isHeightfield && window._canyonHeightGrid) {
-    const hg = window._canyonHeightGrid;
-    for (let gz = 0; gz < GRID.D; gz++) {
-      for (let gx = 0; gx < GRID.W; gx++) {
-        const raw = (hg[gz] && hg[gz][gx] !== undefined) ? hg[gz][gx] : 0;
-        const h = raw / 255; // 0=seabed, 1=peak
-        if (h < 0.01) continue;
-        const p0 = mm(gx, gz), p1 = mm(gx + 1, gz + 1);
-        const cw = Math.max(1, p1.x - p0.x), ch = Math.max(1, p1.y - p0.y);
-        // Colour: dark navy (deep) → teal (mid) → bright green-teal (peak)
-        const green = Math.round(30 + h * 225);
-        const blue  = Math.round(50 + h * 130);
-        const alpha = 0.35 + h * 0.55;
-        sc.fillStyle = `rgba(0,${green},${blue},${alpha})`;
-        sc.fillRect(p0.x, p0.y, cw, ch);
-      }
-    }
-    // Contour lines at 25% / 50% / 75% height
-    [0.25, 0.5, 0.75].forEach(thresh => {
-      sc.strokeStyle = `rgba(0,255,180,${0.08 + thresh * 0.08})`;
-      sc.lineWidth = 0.4;
-      for (let gz = 0; gz < GRID.D - 1; gz++) {
-        for (let gx = 0; gx < GRID.W - 1; gx++) {
-          const h0 = ((hg[gz]   && hg[gz][gx]     !== undefined) ? hg[gz][gx]     : 0) / 255;
-          const h1 = ((hg[gz]   && hg[gz][gx+1]   !== undefined) ? hg[gz][gx+1]   : 0) / 255;
-          const h2 = ((hg[gz+1] && hg[gz+1][gx]   !== undefined) ? hg[gz+1][gx]   : 0) / 255;
-          // Draw edge if threshold crosses between neighbours
-          if ((h0 < thresh) !== (h1 < thresh)) {
-            const a = mm(gx+1, gz), b = mm(gx+1, gz+1);
-            sc.beginPath(); sc.moveTo(a.x,a.y); sc.lineTo(b.x,b.y); sc.stroke();
+    // Build a smooth pixel image once per map load, then reuse it
+    if (!_sonarTerrainCache) {
+      const hg = window._canyonHeightGrid;
+      const oc = document.createElement('canvas');
+      oc.width = sw; oc.height = sh;
+      const ox = oc.getContext('2d');
+      const img = ox.createImageData(sw, sh);
+      const d = img.data;
+      for (let py = 0; py < sh; py++) {
+        for (let px = 0; px < sw; px++) {
+          // pixel → world coords (inverse of mm())
+          const wx = (px - offX) / scale;
+          const wz = (py - offZ) / scale;
+          const gx = Math.floor(wx), gz = Math.floor(wz);
+          const idx = (py * sw + px) * 4;
+          if (gx < 0 || gx >= GRID.W || gz < 0 || gz >= GRID.D || !hg[gz]) {
+            d[idx + 3] = 0; continue;
           }
-          if ((h0 < thresh) !== (h2 < thresh)) {
-            const a = mm(gx, gz+1), b = mm(gx+1, gz+1);
-            sc.beginPath(); sc.moveTo(a.x,a.y); sc.lineTo(b.x,b.y); sc.stroke();
-          }
+          // Bilinear interpolation for smooth blending between cells
+          const fx = wx - gx, fz = wz - gz;
+          const gx1 = Math.min(gx + 1, GRID.W - 1);
+          const gz1 = Math.min(gz + 1, GRID.D - 1);
+          const h00 = (hg[gz][gx]   || 0) / 255;
+          const h10 = (hg[gz][gx1]  || 0) / 255;
+          const h01 = (hg[gz1] ? (hg[gz1][gx]  || 0) : 0) / 255;
+          const h11 = (hg[gz1] ? (hg[gz1][gx1] || 0) : 0) / 255;
+          const h = h00*(1-fx)*(1-fz) + h10*fx*(1-fz) + h01*(1-fx)*fz + h11*fx*fz;
+          if (h < 0.015) { d[idx + 3] = 0; continue; }
+          // Colour ramp: deep black-blue → mid teal → bright green-cyan at peaks
+          d[idx]     = 0;
+          d[idx + 1] = Math.round(18 + h * 237);
+          d[idx + 2] = Math.round(35 + h * 165);
+          d[idx + 3] = Math.round((0.28 + h * 0.68) * 255);
         }
       }
-    });
+      ox.putImageData(img, 0, 0);
+      _sonarTerrainCache = oc;
+    }
+    sc.drawImage(_sonarTerrainCache, 0, 0);
   } else {
     // ── FURNITURE FOOTPRINTS (floor plan maps) ──
     furniture.forEach(f => {
@@ -4833,6 +4836,7 @@ var BATTLEGROUNDS = [
 
 // Launch with current grid
 function launchGame(planGrid) {
+  _sonarTerrainCache = null; // rebuild sonar heightmap for new map
   // Heightfield maps use GRID.H = 32 for canyon depth; standard maps use 6
   GRID.H = window._isHeightfield ? 32 : 6;
 

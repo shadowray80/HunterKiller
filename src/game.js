@@ -2036,8 +2036,8 @@ function centreOnPlayer() {
 }
 function camDragEnd() { camDragActive = false; camDragMoved = false; }
 
-// Pinch-to-zoom state
-let _pinchDist0 = 0;
+// Two-finger pan+zoom state
+let _pinchDist0 = 0, _pinchMidX = 0, _pinchMidY = 0;
 
 canvas.addEventListener('touchstart', e => {
   if (e.touches.length === 1) {
@@ -2045,6 +2045,8 @@ canvas.addEventListener('touchstart', e => {
   } else if (e.touches.length === 2 && state.viewMode === 'command') {
     const t = e.touches;
     _pinchDist0 = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+    _pinchMidX = (t[0].clientX + t[1].clientX) / 2;
+    _pinchMidY = (t[0].clientY + t[1].clientY) / 2;
     camDragEnd();
   }
   e.preventDefault();
@@ -2057,9 +2059,16 @@ canvas.addEventListener('touchmove', e => {
   } else if (e.touches.length === 2 && state.viewMode === 'command' && _pinchDist0 > 0) {
     const t = e.touches;
     const d = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+    const midX = (t[0].clientX + t[1].clientX) / 2;
+    const midY = (t[0].clientY + t[1].clientY) / 2;
+    // Pan: shift camera offset by midpoint delta
+    cx += midX - _pinchMidX;
+    cy += midY - _pinchMidY;
+    // Zoom: scale by distance ratio
     ISO_SCALE = Math.max(ISO_MIN, Math.min(ISO_MAX, ISO_SCALE * d / _pinchDist0));
     _pinchDist0 = d;
-    centreOnPlayer();
+    _pinchMidX = midX;
+    _pinchMidY = midY;
   }
 }, {passive:false});
 
@@ -3518,7 +3527,7 @@ let periStrafeAccumX = 0, periStrafeAccumZ = 0;
     while (accumFwd <= -STEP_PX) { movePeriDir(-1); accumFwd += STEP_PX; }
 
     // Horizontal drag = strafe (perpendicular to facing)
-    accumStrafe += dx;
+    accumStrafe -= dx;
     while (accumStrafe >= STEP_PX)  { movePeriStrafe( 1); accumStrafe -= STEP_PX; }
     while (accumStrafe <= -STEP_PX) { movePeriStrafe(-1); accumStrafe += STEP_PX; }
   }
@@ -4249,6 +4258,7 @@ function loop(now) {
       if (!ship.alive && !ship.sinking) return;
       drawShipPoints(ctx, ship, ship.sinking ? ship.sinkY : GRID.H, project);
     });
+    drawPeriFwdSlider();
   }
   drawWaypoints();
   drawSonar();

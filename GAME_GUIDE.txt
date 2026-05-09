@@ -1,0 +1,174 @@
+OPERATION HUNTER KILLER — HOW THE GAME WORKS
+================================================
+Written for Tim, so we always mean the same thing.
+Also useful for Claude AI to read at the start of a session.
+
+
+THE BASIC IDEA
+--------------
+You control a submarine hunting an enemy submarine through a 3D version
+of your home. The rooms, walls and furniture of your house become the
+battlefield. Surface ships patrol above the water and drop depth charges
+on you. You fire torpedoes, use sonar, and try to survive.
+
+The game runs in a web browser. It is deployed at hunter-killer.vercel.app
+
+
+THE TWO MAIN VIEWS
+------------------
+
+THE COMMAND VIEW
+  What you see: A bird's-eye view of the whole battlefield, slightly
+  angled like looking at a model from above. You can see walls, rooms,
+  both submarines, and the terrain. You can rotate and zoom this view.
+  Tim calls it: "the command view", "the map", "top-down"
+  Code calls it: viewMode = 'command'
+
+THE PERISCOPE VIEW (the main game view)
+  What you see: First-person view from inside the water, looking around
+  at eye level. You can drag left/right to look around, up/down to look
+  above or below you. The terrain walls and floor glow around you.
+  This is where you actually play the game — navigate, fire torpedoes,
+  and dodge depth charges.
+  Tim calls it: "the underwater view", "the periscope view"
+  Code calls it: viewMode = 'periscope'
+
+These two views are the important ones. There are two more that happen
+automatically when you reach the surface:
+
+THE SURFACE VIEW
+  Happens automatically when your sub rises near the top of the water.
+  You see the sky and clouds, the water surface below you, and ships
+  on the horizon as silhouettes. You can rotate the view horizontally.
+  Tim calls it: "the surface view", "the view with the clouds",
+               "where you can see the ships"
+  Code calls it: viewMode = 'surface'
+
+THE SURFACED VIEW
+  Happens when your sub fully breaks the surface. You see a submarine
+  deck image. You are now sitting on top of the water.
+  Code calls it: viewMode = 'surfaced'
+
+
+THE WORLD
+---------
+The game world is a big 3D box. Think of it like a fish tank:
+
+  TOP = the water surface. Ships float here. This is where Y = GRID.H.
+  BOTTOM = the seabed. Terrain mountains sit on this. This is Y = 0.
+  Your submarine moves up and down between the seabed and the surface.
+
+For a normal house map, the box is quite shallow (like a room, 3 metres tall).
+For the canyon/terrain map, the box is very deep (like an underwater canyon).
+
+
+THE TERRAIN TYPES
+-----------------
+There are two kinds of battleground:
+
+HOUSE / FLOOR PLAN MAPS
+  Built from a photo or drawing of a floor plan. You see rooms, walls,
+  corridors and furniture. The world is relatively shallow.
+  Examples: your house maps.
+
+CANYON / TERRAIN MAP
+  Built from a grayscale image where bright = tall mountain, dark = deep
+  valley. You get an underwater canyon landscape with peaks and ravines.
+  Example: "THE CANYON" battleground.
+
+
+THE SONAR (the small circle map, bottom left of screen)
+-------------------------------------------------------
+Always visible no matter which view you are in. Shows a top-down map of
+the battlefield. Updates every frame.
+
+On house maps: shows room outlines and furniture as faint rectangles.
+On canyon map: shows a topographic contour map — dark colours at the
+  deep seabed, bright teal at the mountain peaks, with contour lines
+  between the height bands (like an old-fashioned map).
+
+Also shows: your position (green dot), enemy position (red, only when
+revealed), torpedoes (orange streaks), ships (gold diamonds).
+
+
+THE SHIPS
+---------
+Surface ships (battleships) patrol the top of the water. They:
+  - Are visible in the SURFACE VIEW as full battleship silhouettes on
+    the horizon (with gun turrets, bridge, funnels, masts)
+  - Are shown in the COMMAND VIEW from above as a top-down ship shape
+  - Are NOT visible in the underwater periscope view (too distracting)
+  - Show as gold diamond blips on the sonar
+  - Drop DEPTH CHARGES when you are in Battle Stations mode (red alert)
+
+
+DEPTH CHARGES
+-------------
+Dropped by ships when you press RED ALERT and a ship is above you.
+They fall slowly through the water (about 7 seconds to reach the bottom),
+look like small barrels, leave an orange dot trail behind them, and
+glow red when they are close to your depth. They explode and damage
+your hull if they get close.
+
+
+THE BUTTONS / CONTROLS
+----------------------
+COMMAND VIEW controls (bottom of screen):
+  PING = send out a sonar ping to reveal the enemy
+  HIDE ENEMY / SHOW ENEMY = toggle enemy visibility
+  PERISCOPE = switch to the periscope view
+  TORPEDO = arm a torpedo
+  FIRE = launch the torpedo
+  VIEW = reset the camera angle
+  RESPAWN = move your sub back to the start
+
+PERISCOPE VIEW controls (on-screen zones):
+  Left drag zone = move your sub and aim
+  Right drag zone = rise or dive
+  FIRE button = launch torpedo
+  COMMAND button = go back to the command view
+  PING button = sonar ping
+  RED ALERT = battle stations (ships start dropping depth charges)
+
+
+THE DOT CLOUD
+-------------
+The game world is covered in thousands of tiny glowing dots on every
+surface. This gives the game its "sonar scan" look. The dots are
+coloured by what surface they sit on:
+  Terrain/mountains = teal to bright cyan (darker at seabed, brighter
+    at peaks) — same colours as the sonar contour map
+  Walls = blue
+  Furniture = warm amber/gold
+
+You can make the dots bigger or smaller with the circle +/- buttons.
+
+
+KNOWN ISSUES TO FIX
+-------------------
+These are things that are still not quite right as of the last session:
+
+1. The contour map terrain colours in the periscope view may still not
+   look exactly like the sonar map. The palette was unified but has not
+   been confirmed working correctly.
+
+2. Tim's idea: use the periscope view as the ONLY main UI, and have the
+   command view accessible as a mode switch within the same screen,
+   rather than being a completely separate interface.
+
+
+DEPLOYMENT
+----------
+The game is live at: hunter-killer.vercel.app
+To deploy new changes: open a terminal in the project folder and run
+  git push
+or
+  npx vercel --prod
+
+
+FILE LOCATIONS
+--------------
+The game code is almost entirely in one file:
+  src/game.js  (this is where almost everything lives, about 6700 lines)
+  index.html   (the page layout and buttons)
+  src/style.css  (colours and styling)

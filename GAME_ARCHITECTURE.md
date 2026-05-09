@@ -1,4 +1,4 @@
-# OPERATION PRINTER SCANNER — Game Architecture Guide
+# OPERATION HUNTER KILLER — Game Architecture Guide
 
 *For Tim (plain English) and for Claude AI (precise technical reference)*
 

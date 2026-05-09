@@ -3049,12 +3049,13 @@ function renderPeriscope() {
       if (item.kind === 'quad') {
         const c = item.c, d = item.depth;
         const distA = Math.max(0, 1 - d / 55);
+        const shade = Math.floor((item.yFrac || 0) * 10) / 10;
         ctx.fillStyle = _hexToRgba(terrainFillColor, terrainFillOpacity);
         ctx.beginPath();
         ctx.moveTo(c[0], c[1]); ctx.lineTo(c[2], c[3]);
         ctx.lineTo(c[4], c[5]); ctx.lineTo(c[6], c[7]);
         ctx.closePath(); ctx.fill();
-        // Contour edge — always draw a subtle line so band boundaries are visible
+        // Contour edge — teal palette so height bands remain visible
         if (distA > 0.02) {
           const edgeG = Math.round(60 + shade * 160);
           const edgeA = distA * (state.showWireframe ? 0.9 : 0.25);

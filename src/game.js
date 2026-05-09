@@ -752,9 +752,12 @@ function project(wx, wy, wz) {
 function ptColor(type, alpha, yFrac) {
   switch(type) {
     case 'terrain': {
+      // Same 10-band contour palette as sonar minimap and periscope quads
       const f = yFrac !== undefined ? yFrac : 0.5;
-      const r = Math.round(f * 20), g2 = Math.round(120 + f*110), b = Math.round(160 + f*80);
-      return `rgba(${r},${g2},${b},${alpha*0.92})`;
+      const band = Math.floor(f * 10) / 10;
+      const g2 = Math.round(12 + band * 168);
+      const b2 = Math.round(22 + band * 148);
+      return `rgba(0,${g2},${b2},${alpha*0.92})`;
     }
     case 'floor':   return `rgba(0,120,160,${alpha*0.45})`;
     case 'surface': return `rgba(0,200,255,${alpha*0.65})`;
@@ -3016,9 +3019,9 @@ function renderPeriscope() {
         const numBands = 10;
         const band = Math.floor(yFrac * numBands);
         const shade = band / numBands;
-        const fg = Math.round(8  + shade * 80);
-        const fb = Math.round(15 + shade * 70);
-        ctx.fillStyle = `rgba(0,${fg},${fb},${0.88})`;
+        const fg = Math.round(12 + shade * 168);
+        const fb = Math.round(22 + shade * 148);
+        ctx.fillStyle = `rgba(0,${fg},${fb},${0.90})`;
         ctx.beginPath();
         ctx.moveTo(c[0], c[1]); ctx.lineTo(c[2], c[3]);
         ctx.lineTo(c[4], c[5]); ctx.lineTo(c[6], c[7]);

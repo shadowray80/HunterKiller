@@ -1897,6 +1897,7 @@ function movePlayer(dx,dy,dz) {
       const returnTo = state.preSurfaceView || 'periscope';
       state.preSurfaceView = null;
       state.viewMode = returnTo;
+      scopeMaskCanvas.style.display = returnTo === 'periscope' ? '' : 'none';
       setAmbientMode('underwater');
       playDiveSignal();
       addEvent(returnTo === 'command' ? '▸ COMMAND MAP — DIVING' : '▸ PERISCOPE — DIVING', false);
@@ -1981,7 +1982,9 @@ const CAM_DRAG_THRESHOLD = 6;
 
 function getControlsTop() {
   const wrap = document.getElementById('controls-wrap');
-  return wrap ? wrap.getBoundingClientRect().top : window.innerHeight;
+  if (!wrap || wrap.style.display === 'none') return window.innerHeight;
+  const rect = wrap.getBoundingClientRect();
+  return rect.height > 0 ? rect.top : window.innerHeight;
 }
 
 function camDragStart(x, y) {
@@ -2026,26 +2029,27 @@ function centreOnPlayer() {
 }
 function camDragEnd() { camDragActive = false; camDragMoved = false; }
 
-canvas.addEventListener('touchstart', e => {
-  if (e.touches.length === 1) {
+// Drag events on the periscope overlay (always on top of canvas)
+const _dragTarget = document.getElementById('periscope-overlay');
+function _isBtn(e) { return e.target.closest('button, canvas[id^="peri-"], #peri-actions, #peri-info-left, #peri-info-right, #peri-compass'); }
+_dragTarget.addEventListener('touchstart', e => {
+  if (e.touches.length === 1 && !_isBtn(e)) {
     camDragStart(e.touches[0].clientX, e.touches[0].clientY);
-    e.preventDefault();
   }
-}, {passive:false});
+}, {passive:true});
 
-canvas.addEventListener('touchmove', e => {
+_dragTarget.addEventListener('touchmove', e => {
   if (e.touches.length === 1) {
     camDragMove(e.touches[0].clientX, e.touches[0].clientY);
-    e.preventDefault();
   }
-}, {passive:false});
+}, {passive:true});
 
-canvas.addEventListener('touchend', e => { camDragEnd(); }, {passive:false});
+_dragTarget.addEventListener('touchend', e => { camDragEnd(); }, {passive:true});
 
-// Mouse: left-drag on canvas for rotate+zoom on desktop
-canvas.addEventListener('mousedown', e => { if(e.button===0) camDragStart(e.clientX, e.clientY); });
-canvas.addEventListener('mousemove', e => { if(e.buttons & 1) camDragMove(e.clientX, e.clientY); });
-canvas.addEventListener('mouseup',   e => { if(e.button===0) camDragEnd(); });
+// Mouse: left-drag for rotate+zoom on desktop
+_dragTarget.addEventListener('mousedown', e => { if(e.button===0 && !_isBtn(e)) camDragStart(e.clientX, e.clientY); });
+_dragTarget.addEventListener('mousemove', e => { if(e.buttons & 1) camDragMove(e.clientX, e.clientY); });
+_dragTarget.addEventListener('mouseup',   e => { if(e.button===0) camDragEnd(); });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 // ── KEYBOARD: DOOM-STYLE CONTROLS ──
@@ -3320,8 +3324,7 @@ function setupPeriDrag() {
 
   function start(x, y, e) {
     if (isInteractive(e)) return;
-    const wrap = document.getElementById('controls-wrap');
-    if (wrap && y >= wrap.getBoundingClientRect().top) return;
+    if (y >= getControlsTop()) return;
     active = true; lastX = x; lastY = y;
   }
   function move(x, y) {
@@ -3337,25 +3340,27 @@ function setupPeriDrag() {
   }
   function end() { active = false; }
 
+  // Events on the overlay (always on top), gated to non-command modes
   const isNonCommand = () => state.viewMode !== 'command';
-  canvas.addEventListener('touchstart', e => {
+  const periOv = document.getElementById('periscope-overlay');
+  periOv.addEventListener('touchstart', e => {
     if (isNonCommand() && e.touches.length===1)
       start(e.touches[0].clientX, e.touches[0].clientY, e);
   }, {passive:true});
-  canvas.addEventListener('touchmove', e => {
+  periOv.addEventListener('touchmove', e => {
     if (isNonCommand() && e.touches.length===1 && active) {
       move(e.touches[0].clientX, e.touches[0].clientY);
       e.preventDefault();
     }
   }, {passive:false});
-  canvas.addEventListener('touchend', () => end());
-  canvas.addEventListener('mousedown', e => {
+  periOv.addEventListener('touchend', () => end());
+  periOv.addEventListener('mousedown', e => {
     if (isNonCommand() && e.button===0) start(e.clientX, e.clientY, e);
   });
-  canvas.addEventListener('mousemove', e => {
+  periOv.addEventListener('mousemove', e => {
     if (isNonCommand() && (e.buttons&1)) move(e.clientX, e.clientY);
   });
-  canvas.addEventListener('mouseup', () => end());
+  periOv.addEventListener('mouseup', () => end());
 }
 setupPeriDrag();
 
@@ -3371,6 +3376,8 @@ function goToCommand() {
   setAmbientMode('off');
   // Keep periscope overlay active — only the main canvas content changes
   document.getElementById('peri-btn-back').textContent = '⊙ PERISCOPE';
+  // Hide circular vignette — it only belongs in periscope view
+  scopeMaskCanvas.style.display = 'none';
   const flash = document.getElementById('view-transition');
   flash.classList.add('flash');
   setTimeout(() => flash.classList.remove('flash'), 200);
@@ -3382,6 +3389,8 @@ function goToPeriscope() {
   state.viewMode = 'periscope';
   setAmbientMode('underwater');
   document.getElementById('peri-btn-back').textContent = '◈ COMMAND';
+  // Restore circular vignette for periscope view
+  scopeMaskCanvas.style.display = '';
   const flash = document.getElementById('view-transition');
   flash.classList.add('flash');
   setTimeout(() => flash.classList.remove('flash'), 200);

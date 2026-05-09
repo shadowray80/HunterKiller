@@ -691,20 +691,48 @@ min-width: 48px;
 }
 .peri-density-btn:active { background: rgba(0,229,255,0.2); border-color: var(--teal); }
 
+/* SIGNAL toggle button */
+#peri-btn-signal {
+position: absolute;
+top: calc(env(safe-area-inset-top) + 52px);
+left: 0;
+width: 70px;
+height: 44px;
+font-family: var(--mono);
+font-size: 8px;
+letter-spacing: 0.18em;
+background: rgba(0,4,12,0.92);
+border: none;
+border-right: 1px solid rgba(0,180,220,0.25);
+border-bottom: 1px solid rgba(0,180,220,0.4);
+color: var(--teal-dim);
+cursor: pointer;
+pointer-events: all;
+z-index: 12;
+-webkit-tap-highlight-color: transparent;
+}
+#peri-btn-signal.open {
+color: var(--teal);
+text-shadow: 0 0 6px var(--teal);
+background: rgba(0,20,40,0.95);
+}
+#peri-btn-signal:active { background: rgba(0,229,255,0.12); }
+
 /* Render controls panel */
 #render-panel {
   position: absolute;
-  top: 94px;
-  left: 4px;
+  top: calc(env(safe-area-inset-top) + 96px);
+  left: 0;
   pointer-events: all;
   z-index: 10;
-  background: rgba(0,8,20,0.88);
+  background: rgba(0,8,20,0.92);
   border: 1px solid rgba(0,160,200,0.35);
-  padding: 5px 4px;
+  border-top: none;
+  padding: 6px 5px;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  min-width: 88px;
+  min-width: 70px;
 }
 .rp-label {
   font-family: var(--mono);

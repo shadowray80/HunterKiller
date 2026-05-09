@@ -3783,6 +3783,14 @@ document.getElementById('peri-size-down').addEventListener('click', () => {
 
 let wireframeScale = 2.5; // line thickness multiplier
 
+document.getElementById('peri-btn-signal').addEventListener('click', () => {
+  const panel = document.getElementById('render-panel');
+  const btn = document.getElementById('peri-btn-signal');
+  const open = panel.style.display === 'none' || panel.style.display === '';
+  panel.style.display = open ? 'flex' : 'none';
+  btn.classList.toggle('open', open);
+});
+
 document.getElementById('peri-wireframe-btn').addEventListener('click', () => {
   state.showWireframe = !state.showWireframe;
   const btn = document.getElementById('peri-wireframe-btn');

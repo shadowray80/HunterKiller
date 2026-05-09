@@ -1782,28 +1782,39 @@ function movePlayer(dx,dy,dz) {
     // Depth → viewMode transitions
     // Waterline is exactly GRID.H: above = surfaced (deck visible), below = periscope up or underwater
     if (ny >= GRID.H && state.viewMode !== 'surfaced') {
+      state.preSurfaceView = (state.viewMode === 'command') ? 'command' : 'periscope';
       state.viewMode = 'surfaced';
       surfaceBearing = -state.periAngleH;
       setAmbientMode('surface');
       addEvent('▸ SURFACED — HULL RECHARGING', false);
       setTimeout(()=>addEvent('⚠ EXPOSED — ENEMY SHIPS ALERTED', true), 800);
     } else if (ny >= GRID.H - 1 && ny < GRID.H && state.viewMode === 'periscope') {
+      state.preSurfaceView = 'periscope';
       state.viewMode = 'surface';
       surfaceBearing = -state.periAngleH;
       setAmbientMode('surface');
       addEvent('▸ PERISCOPE UP — SURFACE SCAN', false);
       setTimeout(()=>addEvent('▸ SHIPS ON SURFACE — PICK YOUR TARGET', true), 1000);
-    } else if (ny >= GRID.H - 1 && ny < GRID.H && state.viewMode === 'surfaced') {
+    } else if (ny >= GRID.H - 1 && ny < GRID.H && state.viewMode === 'surfaced' && state.preSurfaceView !== 'command') {
       state.viewMode = 'surface';
       setAmbientMode('surface');
       addEvent('▸ DIVING — PERISCOPE DEPTH', false);
     }
-    // Auto exit surface/surfaced when diving deep
+    // Auto exit surface/surfaced when diving deep — return to the view we came from
     if (ny < GRID.H - 1 && (state.viewMode === 'surface' || state.viewMode === 'surfaced')) {
-      state.viewMode = 'periscope';
+      const returnTo = state.preSurfaceView || 'periscope';
+      state.preSurfaceView = null;
+      state.viewMode = returnTo;
       setAmbientMode('underwater');
       playDiveSignal();
-      addEvent('▸ PERISCOPE DOWN — DIVING', false);
+      if (returnTo === 'command') {
+        document.getElementById('periscope-overlay').classList.remove('active');
+        document.getElementById('actions').style.display = '';
+        document.getElementById('rotate-hint').style.display = '';
+        addEvent('▸ DIVING — COMMAND VIEW', false);
+      } else {
+        addEvent('▸ PERISCOPE DOWN — DIVING', false);
+      }
     }
   } else {
     if (!isOccupied(nx, state.player.y, state.player.z)) state.player.x=nx;

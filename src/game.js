@@ -3055,12 +3055,10 @@ function renderPeriscope() {
         ctx.moveTo(c[0], c[1]); ctx.lineTo(c[2], c[3]);
         ctx.lineTo(c[4], c[5]); ctx.lineTo(c[6], c[7]);
         ctx.closePath(); ctx.fill();
-        // Contour edge — teal palette so height bands remain visible
-        if (distA > 0.02) {
-          const edgeG = Math.round(60 + shade * 160);
-          const edgeA = distA * (state.showWireframe ? 0.9 : 0.25);
-          ctx.strokeStyle = `rgba(0,${edgeG},${Math.round(edgeG*0.85)},${edgeA})`;
-          ctx.lineWidth = state.showWireframe ? 0.8 : 0.3;
+        // Contour edge
+        if (distA > 0.02 && lineOpacity > 0) {
+          ctx.strokeStyle = _hexToRgba(lineColor, distA * lineOpacity);
+          ctx.lineWidth = (state.showWireframe ? 0.8 : 0.3) * wireframeScale;
           ctx.stroke();
           ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(c[4], c[5]); ctx.stroke();
         }
@@ -3962,6 +3960,21 @@ document.getElementById('peri-line-thick').addEventListener('click', () => {
 });
 document.getElementById('peri-line-thin').addEventListener('click', () => {
   wireframeScale = Math.max(0.25, wireframeScale - 0.25);
+});
+
+// ── LINE COLOUR CONTROLS ──
+let lineColor = '#00e5ff';
+let lineOpacity = 0.25;
+document.getElementById('line-color-pick').addEventListener('input', e => {
+  lineColor = e.target.value;
+});
+document.getElementById('line-opacity-up').addEventListener('click', () => {
+  lineOpacity = Math.min(1, Math.round((lineOpacity + 0.05) * 100) / 100);
+  document.getElementById('line-opacity-val').textContent = Math.round(lineOpacity * 100) + '%';
+});
+document.getElementById('line-opacity-down').addEventListener('click', () => {
+  lineOpacity = Math.max(0, Math.round((lineOpacity - 0.05) * 100) / 100);
+  document.getElementById('line-opacity-val').textContent = Math.round(lineOpacity * 100) + '%';
 });
 
 // ── TERRAIN FILL CONTROLS ──

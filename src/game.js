@@ -2827,52 +2827,29 @@ function renderPeriscope() {
       }
     }
 
-    // ── SURFACE SHIPS (above the line) ──
-    const ships = [
-      { wx: 4,  wz: 2,  speed: 0.002, label: 'DESTROYER 01' },
-      { wx: 12, wz: 1,  speed: 0.0015, label: 'FRIGATE 02' },
-      { wx: 8,  wz: 11, speed: 0.0025, label: 'DESTROYER 03' },
-    ];
-    ships.forEach(ship => {
-      // Ships float at ceiling level (y = GRID.H)
-      const shipX = ship.wx + Math.sin(state.time * ship.speed) * 2;
-      const sp = projectPeriscope(shipX, GRID.H + 0.5, ship.wz);
+    // ── SURFACE SHIPS (from state.ships, above waterline) ──
+    if (state.ships) state.ships.forEach(function(ship) {
+      if (!ship.alive && !ship.sinking) return;
+      var wy = ship.sinking ? ship.sinkY : GRID.H;
+      if (ship.sinking && wy < GRID.H * 0.5) return; // fully submerged — in draw queue
+      var sp = projectPeriscope(ship.x, wy + 0.4, ship.z);
       if (!sp) return;
-      if (sp.sy > sy0 + 5) return; // below surface line
-      const shipScale = Math.max(0.3, Math.min(2.5, 60 / sp.depth));
-      const alpha = Math.min(1, (sy0 - sp.sy) / 40);
-      if (alpha < 0.05) return;
-
-      ctx.save();
-      ctx.translate(sp.sx, sp.sy);
-      ctx.globalAlpha = alpha * 0.9;
-
-      // Ship hull silhouette
-      ctx.fillStyle = '#001830';
-      ctx.strokeStyle = `rgba(0,180,255,${alpha * 0.8})`;
-      ctx.lineWidth = 1;
-      ctx.shadowBlur = 8; ctx.shadowColor = '#0066aa';
-      ctx.beginPath();
-      ctx.moveTo(-35 * shipScale, 4 * shipScale);
-      ctx.lineTo(-30 * shipScale, 0);
-      ctx.lineTo(30 * shipScale, 0);
-      ctx.lineTo(38 * shipScale, 4 * shipScale);
-      ctx.closePath();
-      ctx.fill(); ctx.stroke();
-      // Superstructure
-      ctx.beginPath();
-      ctx.rect(-8 * shipScale, -10 * shipScale, 16 * shipScale, 10 * shipScale);
-      ctx.fill(); ctx.stroke();
-      ctx.beginPath();
-      ctx.rect(-3 * shipScale, -16 * shipScale, 6 * shipScale, 6 * shipScale);
-      ctx.fill(); ctx.stroke();
-      // Label
-      ctx.shadowBlur = 0;
-      ctx.font = `${Math.round(7 * shipScale)}px Share Tech Mono`;
-      ctx.fillStyle = `rgba(0,200,255,${alpha * 0.7})`;
-      ctx.textAlign = 'center';
-      ctx.fillText(ship.label, 0, -20 * shipScale);
-      ctx.restore();
+      if (sp.sy > sy0 + 14) return;
+      var bowP = projectPeriscope(ship.x + Math.sin(ship.heading) * ship.length * 0.5, wy + 0.4, ship.z + Math.cos(ship.heading) * ship.length * 0.5);
+      var sternP = projectPeriscope(ship.x - Math.sin(ship.heading) * ship.length * 0.5, wy + 0.4, ship.z - Math.cos(ship.heading) * ship.length * 0.5);
+      if (!bowP || !sternP) return;
+      var sdx = bowP.sx - sternP.sx, sdy = bowP.sy - sternP.sy;
+      var screenLen = Math.sqrt(sdx * sdx + sdy * sdy);
+      if (screenLen < 5) return;
+      var screenAngle = Math.atan2(sdy, sdx);
+      var halfLen = screenLen * 0.5;
+      var halfBeam = halfLen / ship.length * ship.beam * 3.5;
+      var sc = Math.max(0.3, Math.min(3, 8 / sp.depth));
+      var distAlpha = Math.min(1, (sy0 + 18 - sp.sy) / 50);
+      var sinkAlpha = ship.sinking ? Math.max(0.15, ship.sinkY / GRID.H) : 1;
+      var alpha = distAlpha * sinkAlpha;
+      if (alpha < 0.04) return;
+      _drawShipSideProfile(ctx, ship, sp.sx, sp.sy, halfLen, halfBeam, sc, screenAngle, ship.sinking ? ship.tilt : 0, alpha, false);
     });
   }
 
@@ -2930,6 +2907,18 @@ function renderPeriscope() {
       drawQueue.push({ depth: pp.depth, kind: 'squid', s });
     });
 
+    // Ships — sinking (underwater portion) and wrecks on seabed
+    if (state.ships) state.ships.forEach(function(ship) {
+      var isSinking = ship.sinking;
+      var isSunken = !ship.alive && !ship.sinking;
+      if (!isSinking && !isSunken) return;
+      var wy = isSinking ? ship.sinkY : 0;
+      if (isSinking && wy > GRID.H * 0.5) return; // upper half drawn in surface section
+      var pp = projectPeriscope(ship.x, wy, ship.z);
+      if (!pp || pp.depth < 0.1 || pp.depth > 65) return;
+      drawQueue.push({ depth: pp.depth, kind: 'ship', ship: ship, wy: wy });
+    });
+
     // Sort farthest first
     drawQueue.sort(function(a, b) { return b.depth - a.depth; });
 
@@ -2976,6 +2965,8 @@ function renderPeriscope() {
         drawMegalodonPeri(item.m);
       } else if (item.kind === 'squid') {
         drawSquidPeri(item.s);
+      } else if (item.kind === 'ship') {
+        _drawShipPeriQueue(item.ship, item.wy);
       }
     }
     ctx.restore();
@@ -5338,6 +5329,115 @@ function drawSquidPeri(sq) {
   ctx.restore();
 }
 
+// ── SHIP SIDE PROFILE RENDERER (periscope view) ──
+// Draws a proper ship silhouette from the side — used for surface, sinking, and wreck states.
+function _drawShipSideProfile(c, ship, cx, cy, halfLen, halfBeam, sc, screenAngle, tilt, alpha, isSunken) {
+  if (halfLen < 5) return;
+  var hl = halfLen, hb = Math.max(3, halfBeam);
+  var strokeC = isSunken ? `rgba(55,90,110,${alpha * 0.85})` : `rgba(0,190,255,${alpha * 0.9})`;
+  var fillC = isSunken ? 'rgba(8,14,22,0.97)' : 'rgba(0,8,22,0.96)';
+
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(screenAngle);
+  c.rotate(tilt);
+  c.globalAlpha = alpha;
+  c.shadowBlur = isSunken ? 0 : 8;
+  c.shadowColor = '#002244';
+
+  // Hull (side profile — bow to the right, stern to the left)
+  c.strokeStyle = strokeC; c.fillStyle = fillC; c.lineWidth = 1.2;
+  c.beginPath();
+  c.moveTo(-hl,       hb * 0.22);    // stern keel
+  c.lineTo(-hl,      -hb * 0.35);    // stern transom
+  c.lineTo(-hl*0.88, -hb * 0.45);   // stern deck corner
+  c.lineTo( hl*0.65, -hb * 0.42);   // main deck toward bow
+  c.lineTo( hl,      -hb * 0.14);   // bow flare
+  c.lineTo( hl*1.06,  0);            // bow tip at waterline
+  c.lineTo( hl,       hb * 0.32);   // bow keel
+  c.lineTo(-hl*0.9,   hb * 0.36);   // keel to stern
+  c.closePath();
+  c.fill(); c.stroke();
+
+  if (!isSunken) {
+    // Waterline stripe
+    c.strokeStyle = `rgba(0,200,255,${alpha * 0.3})`; c.lineWidth = 0.7;
+    c.setLineDash([3, 2]);
+    c.beginPath(); c.moveTo(-hl*0.9, 0); c.lineTo(hl, 0); c.stroke();
+    c.setLineDash([]);
+
+    // Main deckhouse
+    var dhL = hl * 0.56, dhH = hb * 0.88, dhX = -hl * 0.1;
+    c.strokeStyle = strokeC; c.fillStyle = fillC; c.lineWidth = 1;
+    c.beginPath(); c.rect(dhX - dhL*0.5, -hb*0.42 - dhH, dhL, dhH); c.fill(); c.stroke();
+
+    // Bridge (on top of deckhouse, slightly forward)
+    var brW = dhL * 0.55, brH = hb * 0.62, brX = dhX + dhL * 0.06;
+    c.beginPath(); c.rect(brX - brW*0.5, -hb*0.42 - dhH - brH, brW, brH); c.fill(); c.stroke();
+
+    // Bridge windows
+    c.fillStyle = `rgba(0,220,255,${alpha * 0.5})`; c.shadowBlur = 3; c.shadowColor = '#00aaff';
+    var nw = Math.max(2, Math.floor(brW / 8));
+    for (var wi = 0; wi < nw; wi++) {
+      var wx = brX - brW*0.38 + wi * (brW*0.76) / Math.max(1, nw - 1);
+      c.fillRect(wx - 2, -hb*0.42 - dhH - brH*0.72, 4, brH*0.28);
+    }
+
+    // Funnel
+    c.shadowBlur = 6; c.shadowColor = '#002244';
+    c.strokeStyle = strokeC; c.fillStyle = 'rgba(6,8,18,0.97)'; c.lineWidth = 1;
+    var fnX = dhX + dhL*0.12, fnW = dhL*0.09, fnH = hb * 0.78;
+    c.beginPath(); c.rect(fnX - fnW, -hb*0.42 - dhH - fnH, fnW*2, fnH); c.fill(); c.stroke();
+    c.beginPath(); c.rect(fnX - fnW*1.8, -hb*0.42 - dhH - fnH - 2, fnW*3.6, 2); c.fill(); c.stroke();
+
+    // Bow mast
+    c.strokeStyle = `rgba(0,180,255,${alpha * 0.65})`; c.lineWidth = 0.8;
+    var mx = hl*0.56, mTop = -hb*0.42 - hb*2.0;
+    c.beginPath(); c.moveTo(mx, -hb*0.42); c.lineTo(mx, mTop); c.stroke();
+    c.beginPath(); c.moveTo(mx - hb*0.8, mTop + hb*0.38); c.lineTo(mx + hb*0.5, mTop + hb*0.38); c.stroke();
+
+    // Label
+    c.shadowBlur = 0;
+    c.rotate(-screenAngle - tilt);
+    c.font = Math.round(Math.max(7, 7*sc)) + 'px Share Tech Mono';
+    c.fillStyle = `rgba(0,205,255,${alpha * 0.88})`; c.textAlign = 'center';
+    c.fillText(ship.label, 0, mTop - 6);
+  } else {
+    // Wreck: broken mast stub, collapsed superstructure
+    c.strokeStyle = `rgba(50,82,102,${alpha * 0.75})`; c.lineWidth = 0.8;
+    c.beginPath(); c.moveTo(hl*0.45, -hb*0.4); c.lineTo(hl*0.72, -hb*0.95); c.lineTo(hl*0.22, -hb*0.55); c.stroke();
+    c.beginPath(); c.rect(-hl*0.2, -hb*0.42 - hb*0.38, hl*0.42, hb*0.38); c.strokeStyle = `rgba(55,88,108,${alpha*0.55})`; c.stroke();
+    c.shadowBlur = 0;
+    c.rotate(-screenAngle - tilt);
+    c.font = Math.round(Math.max(5, 6*sc)) + 'px Share Tech Mono';
+    c.fillStyle = `rgba(55,105,135,${alpha * 0.75})`; c.textAlign = 'center';
+    c.fillText(ship.label + ' WRECK', 0, -hb * 2);
+  }
+
+  c.shadowBlur = 0;
+  c.restore();
+}
+
+function _drawShipPeriQueue(ship, wy) {
+  var pp = projectPeriscope(ship.x, wy, ship.z);
+  if (!pp || pp.depth < 0.1 || pp.depth > 65) return;
+  var bowP = projectPeriscope(ship.x + Math.sin(ship.heading)*ship.length*0.5, wy, ship.z + Math.cos(ship.heading)*ship.length*0.5);
+  var sternP = projectPeriscope(ship.x - Math.sin(ship.heading)*ship.length*0.5, wy, ship.z - Math.cos(ship.heading)*ship.length*0.5);
+  if (!bowP || !sternP) return;
+  var sdx = bowP.sx - sternP.sx, sdy = bowP.sy - sternP.sy;
+  var screenLen = Math.sqrt(sdx*sdx + sdy*sdy);
+  if (screenLen < 4) return;
+  var screenAngle = Math.atan2(sdy, sdx);
+  var halfLen = screenLen * 0.5;
+  var sc = Math.max(0.2, 7 / pp.depth);
+  var halfBeam = halfLen / ship.length * ship.beam * 3.5;
+  var isSunken = !ship.alive && !ship.sinking;
+  var alpha = Math.max(0.12, 1 - pp.depth / 55) * (isSunken ? 0.65 : 1.0);
+  if (alpha < 0.04) return;
+  var tilt = ship.sinking ? ship.tilt * 0.85 : (isSunken ? ship.tilt : 0);
+  _drawShipSideProfile(ctx, ship, pp.sx, pp.sy, halfLen, halfBeam, sc, screenAngle, tilt, alpha, isSunken);
+}
+
 // ── SURFACE SHIPS ──
 function initShips() {
   state.ships = [
@@ -5461,12 +5561,12 @@ function spawnShip(ship) {
 function updateShips() {
   state.ships.forEach(ship => {
     if (ship.sinking) {
-      // Dramatic slow sink with increasing tilt
-      ship.sinkVel += 0.0008;
+      // Sink with accelerating velocity and dramatic list
+      ship.sinkVel += 0.0006;
       ship.sinkY = Math.max(0, ship.sinkY - ship.sinkVel);
-      ship.tilt += 0.003 + ship.sinkVel * 0.5; // accelerating tilt
-      // Occasional bubbles/debris explosions while sinking
-      if (Math.random() < 0.005 && ship.sinkY > 0.5) {
+      ship.tilt = Math.min(Math.PI * 0.42, ship.tilt + 0.004 + ship.sinkVel * 0.05);
+      // Bubbles and debris at the surface above the sinking ship
+      if (Math.random() < 0.015 && ship.sinkY > 0.5) {
         spawnExplosion(
           ship.x + (Math.random()-0.5)*ship.length*0.5,
           GRID.H,
@@ -5576,47 +5676,51 @@ function drawShipPoints(ctx2d, ship, yLevel, projectFn) {
   ctx2d.strokeStyle = col;
   ctx2d.lineWidth = 1.5;
 
-  // ── HULL — teardrop bezier (same as sub) ──
-  const hw = beamScale;      // half beam on screen
-  const hl = screenLen;      // half length on screen
+  // ── HULL — proper ship shape (top-down view) ──
+  const hw = beamScale;
+  const hl = screenLen;
   ctx2d.beginPath();
-  ctx2d.moveTo(-hl, 0);
-  ctx2d.bezierCurveTo(-hl, -hw*0.8, -hw, -hw*1.1, 0, -hw);
-  ctx2d.bezierCurveTo( hw, -hw*1.1, hl*0.8, -hw*0.6, hl, 0);
-  ctx2d.bezierCurveTo( hl*0.8, hw*0.6, hw, hw*1.1, 0, hw);
-  ctx2d.bezierCurveTo(-hw, hw*1.1, -hl, hw*0.8, -hl, 0);
+  ctx2d.moveTo(hl, 0);                                        // bow tip
+  ctx2d.bezierCurveTo(hl*0.7, -hw*0.9, hl*0.1, -hw*1.1, -hl*0.3, -hw);
+  ctx2d.lineTo(-hl*0.85, -hw*0.6);
+  ctx2d.lineTo(-hl,      -hw*0.35);
+  ctx2d.lineTo(-hl,       hw*0.35);
+  ctx2d.lineTo(-hl*0.85,  hw*0.6);
+  ctx2d.lineTo(-hl*0.3,   hw);
+  ctx2d.bezierCurveTo(hl*0.1, hw*1.1, hl*0.7, hw*0.9, hl, 0);
   ctx2d.closePath();
   ctx2d.fillStyle = colFill;
   ctx2d.fill();
   ctx2d.stroke();
 
-  // ── SUPERSTRUCTURE ──
-  const superW = hw * 0.5, superH = hl * 0.35;
+  // ── SUPERSTRUCTURE (raised deck, aft of center) ──
+  const ssL = hl * 0.65, ssW = hw * 0.52, ssX = -hl * 0.12;
+  ctx2d.lineWidth = 1;
   ctx2d.beginPath();
-  ctx2d.moveTo(-superH, -superW);
-  ctx2d.lineTo(-superH, -superW * 1.4);
-  ctx2d.bezierCurveTo(-superH * 0.5, -superW * 1.6, superH * 0.5, -superW * 1.6, superH, -superW * 1.4);
-  ctx2d.lineTo(superH, -superW);
-  ctx2d.closePath();
+  ctx2d.rect(ssX - ssL*0.5, -ssW*0.5, ssL, ssW);
   ctx2d.fillStyle = colFill;
-  ctx2d.fill();
-  ctx2d.stroke();
+  ctx2d.fill(); ctx2d.stroke();
 
-  // ── MAST — gold dot ──
+  // ── FUNNEL (dark oval, aft of bridge) ──
   ctx2d.beginPath();
-  ctx2d.arc(0, -superW * 1.7, 2, 0, Math.PI * 2);
+  ctx2d.ellipse(ssX - ssL*0.15, 0, ssL*0.09, ssW*0.28, 0, 0, Math.PI*2);
+  ctx2d.fillStyle = 'rgba(0,0,10,0.85)';
+  ctx2d.fill(); ctx2d.stroke();
+
+  // ── BOW MAST — gold dot ──
+  ctx2d.beginPath();
+  ctx2d.arc(hl * 0.5, 0, 2.5, 0, Math.PI * 2);
   ctx2d.fillStyle = `rgba(255,220,80,${alpha})`;
-  ctx2d.shadowColor = '#ffdd00';
+  ctx2d.shadowColor = '#ffdd00'; ctx2d.shadowBlur = 6;
   ctx2d.fill();
 
   // ── LABEL ──
   ctx2d.shadowBlur = 0;
-  ctx2d.rotate(-(screenAngle + Math.PI / 2)); // un-rotate for text
-  ctx2d.translate(0, 0); // already at ship centre
+  ctx2d.rotate(-(screenAngle + Math.PI / 2));
   ctx2d.font = `${Math.max(7, Math.min(11, screenLen * 0.25))}px Share Tech Mono`;
   ctx2d.fillStyle = `rgba(0,200,255,${alpha * 0.8})`;
   ctx2d.textAlign = 'center';
-  ctx2d.fillText(ship.label, 0, -superW * 2.5 / scale * scale - 4);
+  ctx2d.fillText(ship.label, 0, -hw * 1.6 - 4);
 
   ctx2d.globalAlpha = 1;
   ctx2d.shadowBlur = 0;

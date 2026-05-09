@@ -668,6 +668,11 @@ cursor: pointer;
 text-shadow: 0 0 6px var(--teal);
 -webkit-tap-highlight-color: transparent;
 }
+.peri-top-btn.active-btn {
+background: rgba(0,229,255,0.12);
+color: #00fff0;
+text-shadow: 0 0 10px #00fff0;
+}
 .peri-top-btn:last-child { border-right: none; }
 .peri-top-btn:active { background: rgba(0,229,255,0.12); }
 

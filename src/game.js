@@ -632,7 +632,7 @@ function resize() {
   cx = W/2; cy = H * 0.38;
 }
 resize();
-window.addEventListener('resize', resize); let ISO_SCALE = 12;  // smaller for larger grid
+window.addEventListener('resize', () => { resize(); if (_tacticalOn) setTacticalSonar(true); }); let ISO_SCALE = 12;  // smaller for larger grid
 let cloudDensity = 0.35; // lower = denser cloud — 5x default
 const DENSITY_MIN = 0.3, DENSITY_MAX = 3.0;
 let periPointSize = 15; // periscope point size
@@ -2322,6 +2322,39 @@ document.getElementById('peri-btn-stats').addEventListener('click', () => {
   const p = document.getElementById('sys-panel');
   p.style.display = p.style.display === 'none' ? '' : 'none';
 });
+
+// ── TACTICAL SONAR OVERLAY ──
+let _tacticalOn = false;
+function setTacticalSonar(on) {
+  _tacticalOn = on;
+  document.getElementById('peri-btn-tactical').classList.toggle('active-btn', on);
+  const wrap = document.getElementById('sonar-wrap');
+  if (!on) { wrap.style.display = 'none'; return; }
+  const fwd = document.getElementById('peri-fwd-wrap').getBoundingClientRect();
+  const sc = document.getElementById('sonar-canvas');
+  // Resize canvas resolution to match drag zone
+  sc.width = Math.round(fwd.width);
+  sc.height = Math.round(fwd.height);
+  sc.style.width = '100%';
+  sc.style.height = '100%';
+  sc.style.boxShadow = 'none';
+  sc.style.border = 'none';
+  // Hide label and readout — canvas fills the whole wrapper
+  wrap.querySelector('div:first-child').style.display = 'none';
+  document.getElementById('sonar-readout').style.display = 'none';
+  // Position wrapper exactly over the forward drag zone
+  Object.assign(wrap.style, {
+    display: 'block', position: 'fixed',
+    left: fwd.left + 'px', top: fwd.top + 'px',
+    width: fwd.width + 'px', height: fwd.height + 'px',
+    bottom: 'auto', margin: '0', padding: '0',
+    background: 'rgba(0,8,18,0.82)',
+    border: '1px solid rgba(0,151,167,0.5)',
+    zIndex: '20',
+  });
+  _sonarTerrainCache = null; // rebuild at new canvas size
+}
+document.getElementById('peri-btn-tactical').addEventListener('click', () => setTacticalSonar(!_tacticalOn));
 
 // ── BFS PATHFINDING ──
 function bfsStep(sx, sz, tx, tz) {
@@ -4925,7 +4958,7 @@ function launchGame(planGrid) {
   document.getElementById('hud').style.display = '';
   document.getElementById('controls-wrap').style.display = 'none'; // permanently hidden
   document.getElementById('sys-panel').style.display = 'none';     // shown via STATUS button
-  document.getElementById('sonar-wrap').style.display = '';
+  document.getElementById('sonar-wrap').style.display = 'none'; // shown via TACTICAL button
   document.getElementById('canvas').style.display = '';
   // Always start in periscope view with periscope UI
   state.viewMode = 'periscope';

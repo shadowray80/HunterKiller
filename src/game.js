@@ -2004,12 +2004,19 @@ function camDragMove(x, y) {
     if (Math.abs(dx) < CAM_DRAG_THRESHOLD && Math.abs(dy) < CAM_DRAG_THRESHOLD) return;
     camDragMoved = true;
   }
+  // Horizontal → rotate camera
   camRotY += dx * 0.008;
-  ISO_SCALE = Math.max(ISO_MIN, Math.min(ISO_MAX, ISO_SCALE - dy * 0.15));
-
-  // Always recentre on player sub after any zoom/rotate
+  // Vertical → move sub in camera-forward direction (screen-up = forward)
+  if (dy !== 0) {
+    const speed = -dy / ISO_SCALE;
+    const nx = Math.max(0.6, Math.min(GRID.W-0.6, state.player.x + Math.sin(camRotY) * speed));
+    const nz = Math.max(0.6, Math.min(GRID.D-0.6, state.player.z + Math.cos(camRotY) * speed));
+    if (!isOccupied(nx, state.player.y, nz)) {
+      state.player.x = nx;
+      state.player.z = nz;
+    }
+  }
   centreOnPlayer();
-
   camDragLastX = x;
   camDragLastY = y;
 }
@@ -2023,7 +2030,7 @@ function centreOnPlayer() {
   const rx =  gx * Math.cos(camRotY) - gz * Math.sin(camRotY);
   const rz =  gx * Math.sin(camRotY) + gz * Math.cos(camRotY);
   const screenX = rx * ISO_SCALE;
-  const screenY = (-gy * 0.82 + rz * 0.55) * ISO_SCALE;
+  const screenY = (gy * 0.82 + rz * 0.55) * ISO_SCALE;
   cx = W/2 - screenX;
   cy = H*0.42 + screenY;
 }

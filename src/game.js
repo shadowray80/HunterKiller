@@ -2963,7 +2963,10 @@ function renderPeriscope() {
         if (p0.sx > W+60 && p1.sx > W+60 && p2.sx > W+60 && p3.sx > W+60) continue;
         if (p0.sy < -60 && p1.sy < -60 && p2.sy < -60 && p3.sy < -60) continue;
         if (p0.sy > H+60 && p1.sy > H+60 && p2.sy > H+60 && p3.sy > H+60) continue;
-        drawQueue.push({ depth: avgD, kind: 'quad', c: [p0.sx, p0.sy, p1.sx, p1.sy, p2.sx, p2.sy, p3.sx, p3.sy] });
+        // Average height fraction of the 4 corners (y values at indices +1,+4,+7,+10)
+        const avgY = (terrainQuads[i+1] + terrainQuads[i+4] + terrainQuads[i+7] + terrainQuads[i+10]) * 0.25;
+        const yFrac = avgY / GRID.H;
+        drawQueue.push({ depth: avgD, kind: 'quad', c: [p0.sx, p0.sy, p1.sx, p1.sy, p2.sx, p2.sy, p3.sx, p3.sy], yFrac });
       }
     }
 
@@ -3007,14 +3010,25 @@ function renderPeriscope() {
       const item = drawQueue[qi];
       if (item.kind === 'quad') {
         const c = item.c, d = item.depth;
-        const lineA = Math.max(0, 1 - d / 50) * 0.8;
-        ctx.fillStyle = 'rgb(2,8,20)';
+        const distA = Math.max(0, 1 - d / 55);
+        // Contour-map colouring — same 10-band palette as the sonar minimap
+        const yFrac = item.yFrac || 0;
+        const numBands = 10;
+        const band = Math.floor(yFrac * numBands);
+        const shade = band / numBands;
+        const fg = Math.round(8  + shade * 80);
+        const fb = Math.round(15 + shade * 70);
+        ctx.fillStyle = `rgba(0,${fg},${fb},${0.88})`;
         ctx.beginPath();
         ctx.moveTo(c[0], c[1]); ctx.lineTo(c[2], c[3]);
         ctx.lineTo(c[4], c[5]); ctx.lineTo(c[6], c[7]);
         ctx.closePath(); ctx.fill();
-        if (lineA > 0.02 && state.showWireframe) {
-          ctx.strokeStyle = `rgba(0,210,230,${lineA})`;
+        // Contour edge — always draw a subtle line so band boundaries are visible
+        if (distA > 0.02) {
+          const edgeG = Math.round(60 + shade * 160);
+          const edgeA = distA * (state.showWireframe ? 0.9 : 0.25);
+          ctx.strokeStyle = `rgba(0,${edgeG},${Math.round(edgeG*0.85)},${edgeA})`;
+          ctx.lineWidth = state.showWireframe ? 0.8 : 0.3;
           ctx.stroke();
           ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(c[4], c[5]); ctx.stroke();
         }

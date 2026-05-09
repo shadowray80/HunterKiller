@@ -1899,13 +1899,7 @@ function movePlayer(dx,dy,dz) {
       state.viewMode = returnTo;
       setAmbientMode('underwater');
       playDiveSignal();
-      // Periscope overlay always stays active; restore sub controls if returning to periscope
-      if (returnTo !== 'command') {
-        document.getElementById('peri-actions').style.display = '';
-        addEvent('▸ PERISCOPE — DIVING', false);
-      } else {
-        addEvent('▸ COMMAND MAP — DIVING', false);
-      }
+      addEvent(returnTo === 'command' ? '▸ COMMAND MAP — DIVING' : '▸ PERISCOPE — DIVING', false);
     }
   } else {
     if (!isOccupied(nx, state.player.y, state.player.z)) state.player.x=nx;
@@ -3377,9 +3371,6 @@ function goToCommand() {
   setAmbientMode('off');
   // Keep periscope overlay active — only the main canvas content changes
   document.getElementById('peri-btn-back').textContent = '⊙ PERISCOPE';
-  // Hide sub-control elements that don't apply to map viewing
-  document.getElementById('peri-actions').style.display = 'none';
-  document.getElementById('torpedo-aim-hint').style.display = 'none';
   const flash = document.getElementById('view-transition');
   flash.classList.add('flash');
   setTimeout(() => flash.classList.remove('flash'), 200);
@@ -3391,9 +3382,6 @@ function goToPeriscope() {
   state.viewMode = 'periscope';
   setAmbientMode('underwater');
   document.getElementById('peri-btn-back').textContent = '◈ COMMAND';
-  // Restore sub-control elements
-  document.getElementById('peri-actions').style.display = '';
-  document.getElementById('torpedo-aim-hint').style.display = '';
   const flash = document.getElementById('view-transition');
   flash.classList.add('flash');
   setTimeout(() => flash.classList.remove('flash'), 200);
@@ -4938,8 +4926,7 @@ function launchGame(planGrid) {
   setAmbientMode('underwater');
   document.getElementById('periscope-overlay').classList.add('active');
   document.getElementById('peri-btn-back').textContent = '◈ COMMAND';
-  document.getElementById('peri-actions').style.display = '';
-  document.getElementById('torpedo-aim-hint').style.display = 'none'; // hidden until in torpedo mode
+  document.getElementById('torpedo-aim-hint').style.display = 'none'; // shown only in torpedo aim mode
   addEvent('▸ SYSTEMS ONLINE — ALL UNITS SYNCED', false);
   // Sync render panel button states on launch
   const _db = document.getElementById('peri-dots-btn');

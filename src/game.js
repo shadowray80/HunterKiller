@@ -1892,20 +1892,19 @@ function movePlayer(dx,dy,dz) {
       setAmbientMode('surface');
       addEvent('▸ DIVING — PERISCOPE DEPTH', false);
     }
-    // Auto exit surface/surfaced when diving deep — return to the view we came from
+    // Auto exit surface/surfaced when diving — return to the view we came from
     if (ny < GRID.H - 1 && (state.viewMode === 'surface' || state.viewMode === 'surfaced')) {
       const returnTo = state.preSurfaceView || 'periscope';
       state.preSurfaceView = null;
       state.viewMode = returnTo;
       setAmbientMode('underwater');
       playDiveSignal();
-      if (returnTo === 'command') {
-        document.getElementById('periscope-overlay').classList.remove('active');
-        document.getElementById('actions').style.display = '';
-        document.getElementById('rotate-hint').style.display = '';
-        addEvent('▸ DIVING — COMMAND VIEW', false);
+      // Periscope overlay always stays active; restore sub controls if returning to periscope
+      if (returnTo !== 'command') {
+        document.getElementById('peri-actions').style.display = '';
+        addEvent('▸ PERISCOPE — DIVING', false);
       } else {
-        addEvent('▸ PERISCOPE DOWN — DIVING', false);
+        addEvent('▸ COMMAND MAP — DIVING', false);
       }
     }
   } else {
@@ -2312,11 +2311,19 @@ document.getElementById('btn-density-down').addEventListener('click', () => {
   addEvent(`◎ DENSITY - (${cloudDensity.toFixed(1)} / peri ${periPointSize.toFixed(1)})`, false);
 });
 
-// Respawn — move both subs to new positions
-document.getElementById('btn-respawn').addEventListener('click', () => {
+// Respawn — move both subs to new positions (old command-bar btn + new periscope btn)
+function doRespawn() {
   spawnPlayer();
   spawnEnemy('FAMILY ROOM');
   addEvent('▸ REDEPLOYING — STAND BY', false);
+}
+document.getElementById('btn-respawn').addEventListener('click', doRespawn);
+document.getElementById('peri-btn-respawn').addEventListener('click', doRespawn);
+
+// Stats / system-status toggle
+document.getElementById('peri-btn-stats').addEventListener('click', () => {
+  const p = document.getElementById('sys-panel');
+  p.style.display = p.style.display === 'none' ? '' : 'none';
 });
 
 // ── BFS PATHFINDING ──
@@ -3359,53 +3366,47 @@ function setupPeriDrag() {
 setupPeriDrag();
 
 // ── PERISCOPE TOGGLE ──
+// btn-periscope lives in the hidden controls-wrap — route to the unified toggle
 document.getElementById('btn-periscope').addEventListener('click', () => {
-  state.viewMode = state.viewMode === 'periscope' ? 'command' : 'periscope';
-
-  // Flash transition
-  const flash = document.getElementById('view-transition');
-  flash.classList.add('flash');
-  setTimeout(() => flash.classList.remove('flash'), 200);
-
-  const overlay = document.getElementById('periscope-overlay');
-  const btn = document.getElementById('btn-periscope');
-
-  if (state.viewMode === 'periscope') {
-    overlay.classList.add('active');
-    btn.classList.add('active');
-    btn.textContent = '⊙ COMMAND';
-    state.periAngleH = camRotY;
-    document.getElementById('actions').style.display = 'none';
-    document.getElementById('rotate-hint').style.display = 'none';
-    setAmbientMode('underwater');
-    addEvent('▸ PERISCOPE UP — SCANNING', false);
-  } else {
-    overlay.classList.remove('active');
-    btn.classList.remove('active');
-    btn.textContent = '⊙ PERISCOPE';
-    document.getElementById('actions').style.display = '';
-    document.getElementById('rotate-hint').style.display = '';
-    setAmbientMode('off');
-    addEvent('▸ PERISCOPE DOWN', false);
-  }
+  if (state.viewMode === 'command') goToPeriscope(); else goToCommand();
 });
 
-// Periscope: back to command
+// Switch to command viewport (map) — periscope UI stays visible
 function goToCommand() {
   state.viewMode = 'command';
   setAmbientMode('off');
-  document.getElementById('periscope-overlay').classList.remove('active');
-  document.getElementById('btn-periscope').classList.remove('active');
-  document.getElementById('btn-periscope').textContent = '⊙ PERISCOPE';
-  document.getElementById('actions').style.display = '';
-  document.getElementById('rotate-hint').style.display = '';
+  // Keep periscope overlay active — only the main canvas content changes
+  document.getElementById('peri-btn-back').textContent = '⊙ PERISCOPE';
+  // Hide sub-control elements that don't apply to map viewing
+  document.getElementById('peri-actions').style.display = 'none';
+  document.getElementById('torpedo-aim-hint').style.display = 'none';
   const flash = document.getElementById('view-transition');
   flash.classList.add('flash');
   setTimeout(() => flash.classList.remove('flash'), 200);
-  addEvent('▸ PERISCOPE DOWN — COMMAND MODE', false);
+  addEvent('▸ COMMAND MAP', false);
 }
-document.getElementById('peri-btn-back').addEventListener('click',      goToCommand);
-document.getElementById('peri-btn-back').addEventListener('pointerup',  goToCommand);
+
+// Switch back to periscope underwater view
+function goToPeriscope() {
+  state.viewMode = 'periscope';
+  setAmbientMode('underwater');
+  document.getElementById('peri-btn-back').textContent = '◈ COMMAND';
+  // Restore sub-control elements
+  document.getElementById('peri-actions').style.display = '';
+  document.getElementById('torpedo-aim-hint').style.display = '';
+  const flash = document.getElementById('view-transition');
+  flash.classList.add('flash');
+  setTimeout(() => flash.classList.remove('flash'), 200);
+  addEvent('▸ PERISCOPE — SCANNING', false);
+}
+
+// COMMAND / PERISCOPE toggle button
+document.getElementById('peri-btn-back').addEventListener('click', () => {
+  if (state.viewMode === 'command') goToPeriscope(); else goToCommand();
+});
+document.getElementById('peri-btn-back').addEventListener('pointerup', () => {
+  // pointerup fires after click on touch; guard against double-fire
+});
 
 // ── PERISCOPE SLIDERS & FIRE ──
 
@@ -4928,15 +4929,17 @@ function launchGame(planGrid) {
   document.getElementById('battleground-screen').style.display = 'none';
   // Restore game UI in case we're returning from game over
   document.getElementById('hud').style.display = '';
-  document.getElementById('controls-wrap').style.display = '';
+  document.getElementById('controls-wrap').style.display = 'none'; // permanently hidden
+  document.getElementById('sys-panel').style.display = 'none';     // shown via STATUS button
   document.getElementById('sonar-wrap').style.display = '';
   document.getElementById('canvas').style.display = '';
-  // Start in periscope view
+  // Always start in periscope view with periscope UI
   state.viewMode = 'periscope';
   setAmbientMode('underwater');
   document.getElementById('periscope-overlay').classList.add('active');
-  document.getElementById('actions').style.display = 'none';
-  document.getElementById('rotate-hint').style.display = 'none';
+  document.getElementById('peri-btn-back').textContent = '◈ COMMAND';
+  document.getElementById('peri-actions').style.display = '';
+  document.getElementById('torpedo-aim-hint').style.display = 'none'; // hidden until in torpedo mode
   addEvent('▸ SYSTEMS ONLINE — ALL UNITS SYNCED', false);
   // Sync render panel button states on launch
   const _db = document.getElementById('peri-dots-btn');

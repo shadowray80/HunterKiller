@@ -3056,7 +3056,7 @@ function renderPeriscope() {
         const shade = band / numBands;
         const fg = Math.round(12 + shade * 168);
         const fb = Math.round(22 + shade * 148);
-        ctx.fillStyle = `rgba(0,${fg},${fb},${0.90})`;
+        ctx.fillStyle = `rgba(0,${fg},${fb},${0.13})`;
         ctx.beginPath();
         ctx.moveTo(c[0], c[1]); ctx.lineTo(c[2], c[3]);
         ctx.lineTo(c[4], c[5]); ctx.lineTo(c[6], c[7]);
@@ -4970,6 +4970,12 @@ function launchGame(planGrid) {
   const _wb = document.getElementById('peri-wireframe-btn');
   if (_db) { _db.textContent = state.showDots ? 'ON' : 'OFF'; _db.classList.toggle('on', state.showDots); }
   if (_wb) { _wb.textContent = state.showWireframe ? 'ON' : 'OFF'; _wb.classList.toggle('on', state.showWireframe); }
+  // Auto-show tactical sonar on terrain/canyon maps
+  if (window._isHeightfield) {
+    setTimeout(() => setTacticalSonar(true), 50);
+  } else {
+    setTacticalSonar(false);
+  }
   loop();
 }
 

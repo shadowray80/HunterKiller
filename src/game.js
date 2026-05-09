@@ -2827,29 +2827,28 @@ function renderPeriscope() {
       }
     }
 
-    // ── SURFACE SHIPS (from state.ships, above waterline) ──
+    // ── SURFACE SHIPS — hull-bottom silhouette as seen from underwater ──
     if (state.ships) state.ships.forEach(function(ship) {
       if (!ship.alive && !ship.sinking) return;
       var wy = ship.sinking ? ship.sinkY : GRID.H;
       if (ship.sinking && wy < GRID.H * 0.5) return; // fully submerged — in draw queue
-      var sp = projectPeriscope(ship.x, wy + 0.4, ship.z);
+      var sp = projectPeriscope(ship.x, wy, ship.z);
       if (!sp) return;
-      if (sp.sy > sy0 + 14) return;
-      var bowP = projectPeriscope(ship.x + Math.sin(ship.heading) * ship.length * 0.5, wy + 0.4, ship.z + Math.cos(ship.heading) * ship.length * 0.5);
-      var sternP = projectPeriscope(ship.x - Math.sin(ship.heading) * ship.length * 0.5, wy + 0.4, ship.z - Math.cos(ship.heading) * ship.length * 0.5);
+      if (sp.sy > sy0 + 40) return;  // too deep below waterline on screen
+      var bowP   = projectPeriscope(ship.x + Math.sin(ship.heading)*ship.length*0.5, wy, ship.z + Math.cos(ship.heading)*ship.length*0.5);
+      var sternP = projectPeriscope(ship.x - Math.sin(ship.heading)*ship.length*0.5, wy, ship.z - Math.cos(ship.heading)*ship.length*0.5);
       if (!bowP || !sternP) return;
       var sdx = bowP.sx - sternP.sx, sdy = bowP.sy - sternP.sy;
-      var screenLen = Math.sqrt(sdx * sdx + sdy * sdy);
+      var screenLen = Math.sqrt(sdx*sdx + sdy*sdy);
       if (screenLen < 5) return;
       var screenAngle = Math.atan2(sdy, sdx);
-      var halfLen = screenLen * 0.5;
-      var halfBeam = halfLen / ship.length * ship.beam * 3.5;
+      var halfLen  = screenLen * 0.5;
+      var halfBeam = halfLen / ship.length * ship.beam * 1.1;   // true hull proportions
       var sc = Math.max(0.3, Math.min(3, 8 / sp.depth));
-      var distAlpha = Math.min(1, (sy0 + 18 - sp.sy) / 50);
-      var sinkAlpha = ship.sinking ? Math.max(0.15, ship.sinkY / GRID.H) : 1;
-      var alpha = distAlpha * sinkAlpha;
+      var alpha = Math.min(1, 1.0 - Math.max(0, sp.depth - 6) / 38);
+      if (ship.sinking) alpha *= Math.max(0.15, ship.sinkY / GRID.H);
       if (alpha < 0.04) return;
-      _drawShipSideProfile(ctx, ship, sp.sx, sp.sy, halfLen, halfBeam, sc, screenAngle, ship.sinking ? ship.tilt : 0, alpha, false);
+      _drawShipHull(ctx, ship, sp.sx, sp.sy, halfLen, halfBeam, sc, screenAngle, ship.sinking ? ship.tilt : 0, alpha, false);
     });
   }
 
@@ -5329,89 +5328,76 @@ function drawSquidPeri(sq) {
   ctx.restore();
 }
 
-// ── SHIP SIDE PROFILE RENDERER (periscope view) ──
-// Draws a proper ship silhouette from the side — used for surface, sinking, and wreck states.
-function _drawShipSideProfile(c, ship, cx, cy, halfLen, halfBeam, sc, screenAngle, tilt, alpha, isSunken) {
-  if (halfLen < 5) return;
-  var hl = halfLen, hb = Math.max(3, halfBeam);
-  var strokeC = isSunken ? `rgba(55,90,110,${alpha * 0.85})` : `rgba(0,190,255,${alpha * 0.9})`;
-  var fillC = isSunken ? 'rgba(8,14,22,0.97)' : 'rgba(0,8,22,0.96)';
+// ── SHIP HULL RENDERER (periscope / underwater view) ──
+// Draws the hull bottom as seen from below — what you'd actually see looking up from underwater.
+function _drawShipHull(c, ship, cx, cy, halfLen, halfBeam, sc, screenAngle, tilt, alpha, isSunken) {
+  if (halfLen < 4) return;
+  var hl = halfLen, hb = Math.max(2, halfBeam);
 
   c.save();
   c.translate(cx, cy);
   c.rotate(screenAngle);
   c.rotate(tilt);
   c.globalAlpha = alpha;
-  c.shadowBlur = isSunken ? 0 : 8;
-  c.shadowColor = '#002244';
 
-  // Hull (side profile — bow to the right, stern to the left)
-  c.strokeStyle = strokeC; c.fillStyle = fillC; c.lineWidth = 1.2;
+  var hullFill  = isSunken ? 'rgba(8,12,20,0.96)'  : 'rgba(2,5,16,0.97)';
+  var hullStroke = isSunken ? `rgba(38,65,82,${alpha*0.8})` : `rgba(0,155,205,${alpha*0.75})`;
+
+  c.shadowBlur = isSunken ? 0 : 10;
+  c.shadowColor = '#003355';
+
+  // Hull bottom silhouette — bow points +X, stern -X, viewed from below (keel faces camera)
+  c.strokeStyle = hullStroke; c.fillStyle = hullFill; c.lineWidth = 1.0;
   c.beginPath();
-  c.moveTo(-hl,       hb * 0.22);    // stern keel
-  c.lineTo(-hl,      -hb * 0.35);    // stern transom
-  c.lineTo(-hl*0.88, -hb * 0.45);   // stern deck corner
-  c.lineTo( hl*0.65, -hb * 0.42);   // main deck toward bow
-  c.lineTo( hl,      -hb * 0.14);   // bow flare
-  c.lineTo( hl*1.06,  0);            // bow tip at waterline
-  c.lineTo( hl,       hb * 0.32);   // bow keel
-  c.lineTo(-hl*0.9,   hb * 0.36);   // keel to stern
+  c.moveTo( hl,        0);
+  c.bezierCurveTo( hl*0.72, -hb*0.88,  hl*0.05, -hb*1.06, -hl*0.44, -hb*0.98);
+  c.lineTo(-hl*0.85, -hb*0.58);
+  c.lineTo(-hl,      -hb*0.26);   // stern port
+  c.lineTo(-hl,       hb*0.26);   // stern transom flat
+  c.lineTo(-hl*0.85,  hb*0.58);
+  c.lineTo(-hl*0.44,  hb*0.98);
+  c.bezierCurveTo( hl*0.05, hb*1.06,  hl*0.72, hb*0.88,  hl, 0);
   c.closePath();
-  c.fill(); c.stroke();
+  c.fill();
+
+  // Waterline glow outline
+  if (!isSunken) { c.shadowBlur = 14; c.shadowColor = '#007799'; }
+  c.stroke();
+  c.shadowBlur = 0;
 
   if (!isSunken) {
-    // Waterline stripe
-    c.strokeStyle = `rgba(0,200,255,${alpha * 0.3})`; c.lineWidth = 0.7;
-    c.setLineDash([3, 2]);
-    c.beginPath(); c.moveTo(-hl*0.9, 0); c.lineTo(hl, 0); c.stroke();
-    c.setLineDash([]);
+    // Keel line (centreline running bow–stern)
+    c.strokeStyle = `rgba(0,120,170,${alpha*0.32})`; c.lineWidth = 0.6;
+    c.beginPath(); c.moveTo(-hl*0.88, 0); c.lineTo(hl*0.92, 0); c.stroke();
 
-    // Main deckhouse
-    var dhL = hl * 0.56, dhH = hb * 0.88, dhX = -hl * 0.1;
-    c.strokeStyle = strokeC; c.fillStyle = fillC; c.lineWidth = 1;
-    c.beginPath(); c.rect(dhX - dhL*0.5, -hb*0.42 - dhH, dhL, dhH); c.fill(); c.stroke();
+    // Bilge keels — two faint parallel lines either side of keel
+    var bk = hb * 0.53;
+    c.strokeStyle = `rgba(0,100,150,${alpha*0.2})`; c.lineWidth = 0.5;
+    c.beginPath(); c.moveTo(-hl*0.68, -bk); c.lineTo(hl*0.52, -bk); c.stroke();
+    c.beginPath(); c.moveTo(-hl*0.68,  bk); c.lineTo(hl*0.52,  bk); c.stroke();
 
-    // Bridge (on top of deckhouse, slightly forward)
-    var brW = dhL * 0.55, brH = hb * 0.62, brX = dhX + dhL * 0.06;
-    c.beginPath(); c.rect(brX - brW*0.5, -hb*0.42 - dhH - brH, brW, brH); c.fill(); c.stroke();
-
-    // Bridge windows
-    c.fillStyle = `rgba(0,220,255,${alpha * 0.5})`; c.shadowBlur = 3; c.shadowColor = '#00aaff';
-    var nw = Math.max(2, Math.floor(brW / 8));
-    for (var wi = 0; wi < nw; wi++) {
-      var wx = brX - brW*0.38 + wi * (brW*0.76) / Math.max(1, nw - 1);
-      c.fillRect(wx - 2, -hb*0.42 - dhH - brH*0.72, 4, brH*0.28);
-    }
-
-    // Funnel
-    c.shadowBlur = 6; c.shadowColor = '#002244';
-    c.strokeStyle = strokeC; c.fillStyle = 'rgba(6,8,18,0.97)'; c.lineWidth = 1;
-    var fnX = dhX + dhL*0.12, fnW = dhL*0.09, fnH = hb * 0.78;
-    c.beginPath(); c.rect(fnX - fnW, -hb*0.42 - dhH - fnH, fnW*2, fnH); c.fill(); c.stroke();
-    c.beginPath(); c.rect(fnX - fnW*1.8, -hb*0.42 - dhH - fnH - 2, fnW*3.6, 2); c.fill(); c.stroke();
-
-    // Bow mast
-    c.strokeStyle = `rgba(0,180,255,${alpha * 0.65})`; c.lineWidth = 0.8;
-    var mx = hl*0.56, mTop = -hb*0.42 - hb*2.0;
-    c.beginPath(); c.moveTo(mx, -hb*0.42); c.lineTo(mx, mTop); c.stroke();
-    c.beginPath(); c.moveTo(mx - hb*0.8, mTop + hb*0.38); c.lineTo(mx + hb*0.5, mTop + hb*0.38); c.stroke();
+    // Sonar / bulbous bow dome
+    c.beginPath();
+    c.ellipse(hl*0.88, 0, hb*0.28, hb*0.2, 0, 0, Math.PI*2);
+    c.fillStyle = 'rgba(0,15,35,0.95)';
+    c.strokeStyle = `rgba(0,140,190,${alpha*0.45})`; c.lineWidth = 0.7;
+    c.fill(); c.stroke();
 
     // Label
     c.shadowBlur = 0;
     c.rotate(-screenAngle - tilt);
-    c.font = Math.round(Math.max(7, 7*sc)) + 'px Share Tech Mono';
-    c.fillStyle = `rgba(0,205,255,${alpha * 0.88})`; c.textAlign = 'center';
-    c.fillText(ship.label, 0, mTop - 6);
+    c.font = Math.round(Math.max(6, Math.min(9, hl*0.14))) + 'px Share Tech Mono';
+    c.fillStyle = `rgba(0,175,225,${alpha*0.72})`; c.textAlign = 'center';
+    c.fillText(ship.label, 0, -hb - 5);
   } else {
-    // Wreck: broken mast stub, collapsed superstructure
-    c.strokeStyle = `rgba(50,82,102,${alpha * 0.75})`; c.lineWidth = 0.8;
-    c.beginPath(); c.moveTo(hl*0.45, -hb*0.4); c.lineTo(hl*0.72, -hb*0.95); c.lineTo(hl*0.22, -hb*0.55); c.stroke();
-    c.beginPath(); c.rect(-hl*0.2, -hb*0.42 - hb*0.38, hl*0.42, hb*0.38); c.strokeStyle = `rgba(55,88,108,${alpha*0.55})`; c.stroke();
+    // Wreck — cracked hull, dimmer
+    c.strokeStyle = `rgba(35,58,72,${alpha*0.55})`; c.lineWidth = 0.5;
+    c.beginPath(); c.moveTo(-hl*0.15,-hb*0.7); c.lineTo(-hl*0.05,0); c.lineTo(-hl*0.2,hb*0.55); c.stroke();
     c.shadowBlur = 0;
     c.rotate(-screenAngle - tilt);
-    c.font = Math.round(Math.max(5, 6*sc)) + 'px Share Tech Mono';
-    c.fillStyle = `rgba(55,105,135,${alpha * 0.75})`; c.textAlign = 'center';
-    c.fillText(ship.label + ' WRECK', 0, -hb * 2);
+    c.font = Math.round(Math.max(5, Math.min(7, hl*0.1))) + 'px Share Tech Mono';
+    c.fillStyle = `rgba(38,78,98,${alpha*0.72})`; c.textAlign = 'center';
+    c.fillText(ship.label + ' WRECK', 0, -hb - 4);
   }
 
   c.shadowBlur = 0;
@@ -5421,21 +5407,21 @@ function _drawShipSideProfile(c, ship, cx, cy, halfLen, halfBeam, sc, screenAngl
 function _drawShipPeriQueue(ship, wy) {
   var pp = projectPeriscope(ship.x, wy, ship.z);
   if (!pp || pp.depth < 0.1 || pp.depth > 65) return;
-  var bowP = projectPeriscope(ship.x + Math.sin(ship.heading)*ship.length*0.5, wy, ship.z + Math.cos(ship.heading)*ship.length*0.5);
+  var bowP   = projectPeriscope(ship.x + Math.sin(ship.heading)*ship.length*0.5, wy, ship.z + Math.cos(ship.heading)*ship.length*0.5);
   var sternP = projectPeriscope(ship.x - Math.sin(ship.heading)*ship.length*0.5, wy, ship.z - Math.cos(ship.heading)*ship.length*0.5);
   if (!bowP || !sternP) return;
   var sdx = bowP.sx - sternP.sx, sdy = bowP.sy - sternP.sy;
   var screenLen = Math.sqrt(sdx*sdx + sdy*sdy);
   if (screenLen < 4) return;
   var screenAngle = Math.atan2(sdy, sdx);
-  var halfLen = screenLen * 0.5;
+  var halfLen  = screenLen * 0.5;
+  var halfBeam = halfLen / ship.length * ship.beam * 1.1;   // true hull proportions
   var sc = Math.max(0.2, 7 / pp.depth);
-  var halfBeam = halfLen / ship.length * ship.beam * 3.5;
   var isSunken = !ship.alive && !ship.sinking;
-  var alpha = Math.max(0.12, 1 - pp.depth / 55) * (isSunken ? 0.65 : 1.0);
+  var alpha = Math.max(0.12, 1 - pp.depth / 55) * (isSunken ? 0.6 : 1.0);
   if (alpha < 0.04) return;
   var tilt = ship.sinking ? ship.tilt * 0.85 : (isSunken ? ship.tilt : 0);
-  _drawShipSideProfile(ctx, ship, pp.sx, pp.sy, halfLen, halfBeam, sc, screenAngle, tilt, alpha, isSunken);
+  _drawShipHull(ctx, ship, pp.sx, pp.sy, halfLen, halfBeam, sc, screenAngle, tilt, alpha, isSunken);
 }
 
 // ── SURFACE SHIPS ──
@@ -5613,17 +5599,22 @@ function updateShips() {
         ship.sinkY = GRID.H;
         ship.sinkVel = 0;
         ship.tilt = 0;
-        // Dramatic explosion sequence
+        // Surface explosion cascade — visible from underwater
         playExplosionShip();
-        spawnExplosion(ship.x, GRID.H, ship.z, true);
-        // Second explosion after a moment
+        spawnExplosion(ship.x,                                    GRID.H, ship.z,                                    true);
+        spawnExplosion(ship.x + (Math.random()-0.5)*ship.length,  GRID.H, ship.z + (Math.random()-0.5)*ship.length,  true);
         setTimeout(() => {
           spawnExplosion(ship.x + (Math.random()-0.5)*3, GRID.H, ship.z + (Math.random()-0.5)*3, true);
+          spawnExplosion(ship.x + (Math.random()-0.5)*4, GRID.H, ship.z + (Math.random()-0.5)*4, true);
           playExplosionShip();
-        }, 400);
+        }, 300);
         setTimeout(() => {
           spawnExplosion(ship.x + (Math.random()-0.5)*2, GRID.H, ship.z + (Math.random()-0.5)*2, true);
-        }, 900);
+          spawnExplosion(ship.x + (Math.random()-0.5)*5, GRID.H, ship.z + (Math.random()-0.5)*5, false);
+        }, 750);
+        setTimeout(() => {
+          spawnExplosion(ship.x + (Math.random()-0.5)*3, GRID.H, ship.z + (Math.random()-0.5)*3, false);
+        }, 1300);
         addEvent(`⊛ ${ship.label} DIRECT HIT — SINKING`, false);
         setTimeout(() => addEvent(`▸ ${ship.label} IS GOING DOWN`, false), 2000);
         t.progress = 999; // remove torpedo

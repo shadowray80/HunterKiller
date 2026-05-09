@@ -2036,26 +2036,46 @@ function centreOnPlayer() {
 }
 function camDragEnd() { camDragActive = false; camDragMoved = false; }
 
+// Pinch-to-zoom state
+let _pinchDist0 = 0;
+
 canvas.addEventListener('touchstart', e => {
   if (e.touches.length === 1) {
     camDragStart(e.touches[0].clientX, e.touches[0].clientY);
-    e.preventDefault();
+  } else if (e.touches.length === 2 && state.viewMode === 'command') {
+    const t = e.touches;
+    _pinchDist0 = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+    camDragEnd();
   }
+  e.preventDefault();
 }, {passive:false});
 
 canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
   if (e.touches.length === 1) {
     camDragMove(e.touches[0].clientX, e.touches[0].clientY);
-    e.preventDefault();
+  } else if (e.touches.length === 2 && state.viewMode === 'command' && _pinchDist0 > 0) {
+    const t = e.touches;
+    const d = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+    ISO_SCALE = Math.max(ISO_MIN, Math.min(ISO_MAX, ISO_SCALE * d / _pinchDist0));
+    _pinchDist0 = d;
+    centreOnPlayer();
   }
 }, {passive:false});
 
-canvas.addEventListener('touchend', e => { camDragEnd(); }, {passive:false});
+canvas.addEventListener('touchend', e => { camDragEnd(); _pinchDist0 = 0; }, {passive:false});
 
-// Mouse: left-drag on canvas for rotate+zoom on desktop
+// Mouse: left-drag to rotate+move, scroll wheel to zoom
 canvas.addEventListener('mousedown', e => { if(e.button===0) camDragStart(e.clientX, e.clientY); });
 canvas.addEventListener('mousemove', e => { if(e.buttons & 1) camDragMove(e.clientX, e.clientY); });
 canvas.addEventListener('mouseup',   e => { if(e.button===0) camDragEnd(); });
+canvas.addEventListener('wheel', e => {
+  if (state.viewMode === 'command') {
+    ISO_SCALE = Math.max(ISO_MIN, Math.min(ISO_MAX, ISO_SCALE * (1 - e.deltaY * 0.001)));
+    centreOnPlayer();
+    e.preventDefault();
+  }
+}, {passive:false});
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 // ── KEYBOARD: DOOM-STYLE CONTROLS ──

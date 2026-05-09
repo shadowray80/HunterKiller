@@ -2630,12 +2630,12 @@ function drawDepthGauge() {
   dg.lineWidth = 1;
   dg.strokeRect(trackX, trackTop, trackW, trackH);
 
-  // Depth tick marks + labels (surface at top, deep at bottom)
+  // Depth tick marks + labels (surface at top, seabed at bottom)
   dg.font = '6px Share Tech Mono';
   dg.textAlign = 'right';
   for (let d = 0; d <= GRID.H; d += 2) {
-    const ypos = trackTop + (d / GRID.H) * trackH;
-    const depthLabel = -Math.round(d / GRID.H * 80);
+    const ypos = trackTop + (1 - d / GRID.H) * trackH;
+    const depthLabel = -Math.round((1 - d / GRID.H) * 80);
     dg.strokeStyle = 'rgba(0,150,200,0.3)';
     dg.lineWidth = 0.5;
     dg.beginPath();
@@ -2648,7 +2648,7 @@ function drawDepthGauge() {
     }
   }
 
-  // Surface label
+  // Surface / seabed labels
   dg.textAlign = 'left';
   dg.fillStyle = 'rgba(0,200,255,0.5)';
   dg.font = '5px Share Tech Mono';
@@ -2659,7 +2659,6 @@ function drawDepthGauge() {
   const showEnemyDepth = state.forceReveal || state.revealAlpha > 0;
   if (showEnemyDepth && state.enemy.alive) {
     const enemyDepthFrac = state.enemy.y / GRID.H;
-    // y=GRID.H is surface (top), y=0 is bottom
     const ey = trackTop + (1 - enemyDepthFrac) * trackH;
     const ea = state.forceReveal ? 1.0 : state.revealAlpha;
 

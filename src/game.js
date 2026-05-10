@@ -3527,8 +3527,9 @@ let periStrafeAccumX = 0, periStrafeAccumZ = 0;
     while (accumFwd >= STEP_PX)  { movePeriDir( 1); accumFwd -= STEP_PX; }
     while (accumFwd <= -STEP_PX) { movePeriDir(-1); accumFwd += STEP_PX; }
 
-    // Horizontal drag = strafe (perpendicular to facing)
-    accumStrafe -= dx;
+    // Horizontal drag = strafe
+    // Periscope projection negates screen-X, so the sign must flip vs command view
+    accumStrafe += (state.viewMode === 'command') ? -dx : dx;
     while (accumStrafe >= STEP_PX)  { movePeriStrafe( 1); accumStrafe -= STEP_PX; }
     while (accumStrafe <= -STEP_PX) { movePeriStrafe(-1); accumStrafe += STEP_PX; }
   }

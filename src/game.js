@@ -2991,31 +2991,18 @@ function renderPeriscope() {
       }
     }
 
-    // ── SURFACE SHIPS — only visible when player is near the surface ──
-    // surfaceFrac=1 → player at surface; surfaceFrac=0 → player at seabed.
-    // Ships fade out below 70% depth so they don't appear in the underwater view.
+    // ── WATER SURFACE GRID + 3D WIREFRAME SHIPS ──
     var depthVis = Math.max(0, (surfaceFrac - 0.70) / 0.30);
+    drawWaterGrid(surfaceFrac);
     if (depthVis > 0.02 && state.ships) state.ships.forEach(function(ship) {
       if (!ship.alive && !ship.sinking) return;
       var wy = ship.sinking ? ship.sinkY : GRID.H;
       var sp = projectPeriscope(ship.x, wy, ship.z);
-      if (!sp) return;
-      if (sp.depth > 55 || sp.depth < 0.1) return;
-      var bowP   = projectPeriscope(ship.x + Math.sin(ship.heading)*ship.length*0.5, wy, ship.z + Math.cos(ship.heading)*ship.length*0.5);
-      var sternP = projectPeriscope(ship.x - Math.sin(ship.heading)*ship.length*0.5, wy, ship.z - Math.cos(ship.heading)*ship.length*0.5);
-      if (!bowP || !sternP) return;
-      var sdx = bowP.sx - sternP.sx, sdy = bowP.sy - sternP.sy;
-      var screenLen = Math.sqrt(sdx*sdx + sdy*sdy);
-      if (screenLen < 5) return;
-      var screenAngle = Math.atan2(sdy, sdx);
-      var halfLen = screenLen * 0.5;
+      if (!sp || sp.depth > 55 || sp.depth < 0.1) return;
       var alpha = (1 - sp.depth / 55) * depthVis;
       if (ship.sinking) alpha *= Math.max(0.15, ship.sinkY / GRID.H);
       if (alpha < 0.04) return;
-      // Pin to waterline; sinking ships descend below it
-      var sinkFrac = ship.sinking ? (1 - ship.sinkY / GRID.H) : 0;
-      var shipCY = sy0 + sinkFrac * 240;
-      _drawShipProfile(ctx, ship, sp.sx, shipCY, halfLen, 1, screenAngle, ship.sinking ? ship.tilt : 0, alpha);
+      drawShipWireframe3D(ship, alpha);
     });
   }
 
@@ -5525,6 +5512,209 @@ function drawSquidPeri(sq) {
   ctx.font = Math.round(7*sc) + 'px Share Tech Mono';
   ctx.fillStyle = col; ctx.textAlign = 'center';
   ctx.fillText('GIANT SQUID', 0, -22*sc);
+  ctx.restore();
+}
+
+// ── WATER SURFACE GRID (Battlezone/Tron style) ──
+function drawWaterGrid(surfaceFrac) {
+  const sf = surfaceFrac !== undefined ? surfaceFrac : (state.player.y / GRID.H);
+  const baseA = Math.max(0, (sf - 0.55) / 0.45) * 0.55;
+  if (baseA < 0.01) return;
+  const px = state.player.x, pz = state.player.z;
+  const spacing = 2.0, range = 36;
+  const xMin = Math.floor((px - range) / spacing) * spacing;
+  const xMax = Math.ceil((px + range) / spacing) * spacing;
+  const zMin = Math.floor((pz - range) / spacing) * spacing;
+  const zMax = Math.ceil((pz + range) / spacing) * spacing;
+  ctx.save();
+  ctx.lineWidth = 0.8;
+  // X-direction lines (constant X, vary Z)
+  for (let wx = xMin; wx <= xMax; wx += spacing) {
+    const p1 = projectPeriscope(wx, GRID.H, pz - range);
+    const p2 = projectPeriscope(wx, GRID.H, pz + range);
+    if (!p1 || !p2) continue;
+    const distFade = Math.max(0, 1 - Math.min(p1.depth, p2.depth) / 40);
+    const a = baseA * distFade;
+    if (a < 0.01) continue;
+    ctx.strokeStyle = `rgba(0,200,230,${a.toFixed(3)})`;
+    ctx.beginPath(); ctx.moveTo(p1.sx, p1.sy); ctx.lineTo(p2.sx, p2.sy); ctx.stroke();
+  }
+  // Z-direction lines (constant Z, vary X)
+  for (let wz = zMin; wz <= zMax; wz += spacing) {
+    const p1 = projectPeriscope(px - range, GRID.H, wz);
+    const p2 = projectPeriscope(px + range, GRID.H, wz);
+    if (!p1 || !p2) continue;
+    const distFade = Math.max(0, 1 - Math.min(p1.depth, p2.depth) / 40);
+    const a = baseA * distFade;
+    if (a < 0.01) continue;
+    ctx.strokeStyle = `rgba(0,200,230,${a.toFixed(3)})`;
+    ctx.beginPath(); ctx.moveTo(p1.sx, p1.sy); ctx.lineTo(p2.sx, p2.sy); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ── 3D WIREFRAME SHIP (Battlezone-style) ──
+function drawShipWireframe3D(ship, alpha) {
+  const wy = ship.sinking ? ship.sinkY : GRID.H;
+  const H = ship.heading;
+  const cosH = Math.cos(H), sinH = Math.sin(H);
+  const L = ship.length || 8;
+  const B = (ship.beam || L * 0.18);
+
+  // Local-space → world → screen projection
+  // Local axes: +lz = bow, +lx = starboard, +ly = up
+  function tp(lx, ly, lz) {
+    const wx = ship.x + lx * cosH + lz * sinH;
+    const wz = ship.z - lx * sinH + lz * cosH;
+    return projectPeriscope(wx, wy + ly, wz);
+  }
+
+  // ── Hull vertices (local space, bow = +Z) ──
+  const hl = L * 0.5;       // half length
+  const hb = B * 0.5;       // half beam
+  const dk = L * 0.04;      // deck height above waterline
+  const kl = L * 0.06;      // keel depth below waterline
+  const bow = L * 0.38;     // bow taper starts here from centre
+
+  // Main hull box (8 corners): stern-to-bow along Z
+  // Deck corners (ly = dk)
+  const dFL = tp(-hb, dk,  bow);   // deck fore-left
+  const dFR = tp( hb, dk,  bow);   // deck fore-right
+  const dAL = tp(-hb, dk, -hl);    // deck aft-left
+  const dAR = tp( hb, dk, -hl);    // deck aft-right
+  // Keel corners (ly = -kl)
+  const kFL = tp(-hb, -kl,  bow);
+  const kFR = tp( hb, -kl,  bow);
+  const kAL = tp(-hb, -kl, -hl);
+  const kAR = tp( hb, -kl, -hl);
+  // Bow tip (ly = dk/2 for a mid-height point)
+  const bowTip = tp(0, dk * 0.3, hl);
+
+  // Superstructure
+  const ss0z = -hl * 0.05;  // superstructure centre Z (slightly aft of midship)
+  const ssH  = L * 0.10;    // superstructure height
+  const ssHB = hb * 0.55;   // superstructure half-beam
+  const ssHLf = hl * 0.22;  // superstructure half-length fore
+  const ssHLa = hl * 0.28;  // superstructure half-length aft
+  const ssFL = tp(-ssHB, dk + ssH, ss0z + ssHLf);
+  const ssFR = tp( ssHB, dk + ssH, ss0z + ssHLf);
+  const ssAL = tp(-ssHB, dk + ssH, ss0z - ssHLa);
+  const ssAR = tp( ssHB, dk + ssH, ss0z - ssHLa);
+  const ssBL = tp(-ssHB, dk,       ss0z - ssHLa);
+  const ssBR = tp( ssHB, dk,       ss0z - ssHLa);
+  const ssTFL = tp(-ssHB, dk,      ss0z + ssHLf);
+  const ssTFR = tp( ssHB, dk,      ss0z + ssHLf);
+
+  // Bridge top (narrow box above superstructure)
+  const brH  = L * 0.06;
+  const brHB = hb * 0.30;
+  const brHL = hl * 0.10;
+  const brFL = tp(-brHB, dk + ssH + brH, ss0z + brHL);
+  const brFR = tp( brHB, dk + ssH + brH, ss0z + brHL);
+  const brAL = tp(-brHB, dk + ssH + brH, ss0z - brHL);
+  const brAR = tp( brHB, dk + ssH + brH, ss0z - brHL);
+
+  // Mast (single pole at bridge top centre, used for label)
+  const mastTop = tp(0, dk + ssH + brH + L * 0.14, ss0z);
+  const mastBot = tp(0, dk + ssH + brH,             ss0z);
+
+  // Gun turrets (fore and aft)
+  const gtSz = B * 0.32;
+  const turrFore = tp(0, dk + gtSz * 0.4, hl * 0.52);
+  const turrForeL = tp(-gtSz * 0.5, dk, hl * 0.52);
+  const turrForeR = tp( gtSz * 0.5, dk, hl * 0.52);
+  const turrAft = tp(0, dk + gtSz * 0.4, -hl * 0.65);
+  const turrAftL = tp(-gtSz * 0.5, dk, -hl * 0.65);
+  const turrAftR = tp( gtSz * 0.5, dk, -hl * 0.65);
+  // Gun barrels (fore points forward +Z, aft points backward -Z)
+  const gunFore = tp(0, dk + gtSz * 0.5, hl * 0.52 + L * 0.14);
+  const gunAft  = tp(0, dk + gtSz * 0.5, -hl * 0.65 - L * 0.12);
+
+  // Funnel (smokestack mid-ship)
+  const fnZ = ss0z + hl * 0.08;
+  const fnBot = tp(0, dk + ssH,          fnZ);
+  const fnTop = tp(0, dk + ssH + L*0.07, fnZ);
+
+  // ── Draw helpers ──
+  const col = ship.col || '#00e8ff';
+  // Parse colour to rgb for rgba usage
+  let cr = 0, cg = 232, cb = 255;
+  if (col.startsWith('#') && col.length === 7) {
+    cr = parseInt(col.slice(1,3),16);
+    cg = parseInt(col.slice(3,5),16);
+    cb = parseInt(col.slice(5,7),16);
+  }
+
+  function line(a, b, a2) {
+    if (!a || !b) return;
+    const fa = (a2 !== undefined ? a2 : alpha);
+    ctx.strokeStyle = `rgba(${cr},${cg},${cb},${fa.toFixed(3)})`;
+    ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.lineWidth = 1.2;
+  ctx.shadowBlur = 6;
+  ctx.shadowColor = col;
+
+  // Hull deck outline
+  line(dAL, dAR); line(dFL, dFR);
+  line(dAL, dFL); line(dAR, dFR);
+  // Bow rakes to tip
+  line(dFL, bowTip); line(dFR, bowTip);
+  line(kFL, bowTip); line(kFR, bowTip);
+  // Keel outline
+  line(kAL, kAR); line(kFL, kFR);
+  line(kAL, kFL); line(kAR, kFR);
+  // Sides (deck to keel)
+  line(dAL, kAL, alpha * 0.6); line(dAR, kAR, alpha * 0.6);
+  line(dFL, kFL, alpha * 0.5); line(dFR, kFR, alpha * 0.5);
+  // Stern transom
+  line(dAL, dAR); line(kAL, kAR);
+  line(dAL, kAL, alpha * 0.7); line(dAR, kAR, alpha * 0.7);
+
+  // Superstructure
+  ctx.lineWidth = 1.0;
+  line(ssFL, ssFR); line(ssAL, ssAR);
+  line(ssFL, ssAL); line(ssFR, ssAR);
+  line(ssFL, ssTFL, alpha*0.5); line(ssFR, ssTFR, alpha*0.5);
+  line(ssAL, ssBL, alpha*0.5);  line(ssAR, ssBR, alpha*0.5);
+
+  // Bridge
+  ctx.lineWidth = 0.9;
+  line(brFL, brFR); line(brAL, brAR);
+  line(brFL, brAL); line(brFR, brAR);
+  line(ssFL, brFL, alpha*0.6); line(ssFR, brFR, alpha*0.6);
+  line(ssAL, brAL, alpha*0.5); line(ssAR, brAR, alpha*0.5);
+
+  // Mast
+  ctx.lineWidth = 0.7;
+  line(mastBot, mastTop, alpha * 0.9);
+
+  // Funnel
+  line(fnBot, fnTop, alpha * 0.8);
+
+  // Gun turrets
+  ctx.lineWidth = 0.8;
+  line(turrForeL, turrForeR, alpha*0.7);
+  line(turrForeL, turrFore,  alpha*0.7);
+  line(turrForeR, turrFore,  alpha*0.7);
+  line(turrFore,  gunFore,   alpha*0.85);
+  line(turrAftL,  turrAftR,  alpha*0.7);
+  line(turrAftL,  turrAft,   alpha*0.7);
+  line(turrAftR,  turrAft,   alpha*0.7);
+  line(turrAft,   gunAft,    alpha*0.85);
+
+  // Ship label at mast top
+  if (mastTop && ship.label) {
+    ctx.font = '10px Share Tech Mono';
+    ctx.fillStyle = `rgba(${cr},${cg},${cb},${(alpha*0.9).toFixed(3)})`;
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 4;
+    ctx.fillText(ship.label, mastTop.sx, mastTop.sy - 5);
+  }
+
+  ctx.shadowBlur = 0;
   ctx.restore();
 }
 

@@ -5554,7 +5554,9 @@ function drawWaterGrid(surfaceFrac) {
 }
 
 // ── 3D WIREFRAME SHIP (Battlezone-style) ──
-function drawShipWireframe3D(ship, alpha) {
+// projFn defaults to projectPeriscope; pass projectSurface for the surface view.
+function drawShipWireframe3D(ship, alpha, projFn) {
+  projFn = projFn || projectPeriscope;
   const wy = ship.sinking ? ship.sinkY : GRID.H;
   const H = ship.heading;
   const cosH = Math.cos(H), sinH = Math.sin(H);
@@ -5566,7 +5568,7 @@ function drawShipWireframe3D(ship, alpha) {
   function tp(lx, ly, lz) {
     const wx = ship.x + lx * cosH + lz * sinH;
     const wz = ship.z - lx * sinH + lz * cosH;
-    return projectPeriscope(wx, wy + ly, wz);
+    return projFn(wx, wy + ly, wz);
   }
 
   // ── Hull vertices (local space, bow = +Z) ──
@@ -6432,92 +6434,16 @@ function renderSurfacePeriscope() {
     ctx.fillStyle = `rgba(0,100,180,${ga})`; ctx.fill();
   }
 
-  // ── SHIPS — side-on silhouettes above the waterline ──
+  // ── SHIPS — 3D wireframe models ──
   state.ships.forEach(ship => {
     if (!ship.alive && !ship.sinking) return;
-    const sp = projectSurface(ship.x, GRID.H, ship.z);
+    const wy2 = ship.sinking ? ship.sinkY : GRID.H;
+    const sp = projectSurface(ship.x, wy2, ship.z);
     if (!sp || sp.depth < 0.5 || sp.depth > 80) return;
-
     const sinkFrac = ship.sinking ? Math.max(0, ship.sinkY / GRID.H) : 1.0;
     const alpha = Math.min(1, (1 - sp.depth / 80) * 1.6) * sinkFrac;
     if (alpha < 0.02) return;
-
-    // Scale by distance — cap so close ships don't blow up
-    const sc = Math.min(8, 120 / sp.depth);
-    const sLen = ship.length * sc;
-    const hullH  = sc * 1.4;          // hull above waterline
-    const superH = sc * 2.2;          // superstructure height
-    const superW = sLen * 0.28;       // superstructure width
-    const mastH  = superH * 0.9;      // mast above superstructure
-
-    const wx = sp.sx;
-    const wy = horizonY - (ship.sinking ? (1 - sinkFrac) * hullH * 4 : 0); // sink down
-
-    ctx.save();
-    ctx.translate(wx, wy);
-    ctx.globalAlpha = alpha;
-    ctx.shadowBlur = 6; ctx.shadowColor = 'rgba(0,180,255,0.5)';
-
-    // ── Hull body (above waterline) ──
-    ctx.beginPath();
-    ctx.moveTo(-sLen * 0.48, 0);                      // stern waterline
-    ctx.lineTo(-sLen * 0.48, -hullH);                 // stern wall
-    ctx.lineTo(-sLen * 0.35, -hullH * 1.3);           // stern deck step
-    ctx.lineTo( sLen * 0.38, -hullH * 1.3);           // main deck
-    ctx.lineTo( sLen * 0.50, -hullH * 0.5);           // bow slope
-    ctx.lineTo( sLen * 0.50,  0);                      // bow waterline
-    ctx.closePath();
-    ctx.fillStyle = '#010c1a';
-    ctx.fill();
-    ctx.strokeStyle = `rgba(0,200,255,${0.8 * alpha})`;
-    ctx.lineWidth = 1.0;
-    ctx.stroke();
-
-    // Waterline stripe
-    ctx.beginPath();
-    ctx.moveTo(-sLen * 0.48, 0); ctx.lineTo(sLen * 0.50, 0);
-    ctx.strokeStyle = `rgba(0,180,255,${0.4 * alpha})`;
-    ctx.lineWidth = 0.7; ctx.stroke();
-
-    // ── Superstructure ──
-    ctx.beginPath();
-    ctx.rect(-superW * 0.5, -hullH * 1.3 - superH, superW, superH);
-    ctx.fillStyle = '#010e1e';
-    ctx.fill();
-    ctx.strokeStyle = `rgba(0,220,255,${0.85 * alpha})`;
-    ctx.lineWidth = 1.0;
-    ctx.stroke();
-
-    // Deck line on superstructure
-    ctx.beginPath();
-    ctx.moveTo(-superW * 0.5, -hullH * 1.3 - superH * 0.5);
-    ctx.lineTo( superW * 0.5, -hullH * 1.3 - superH * 0.5);
-    ctx.strokeStyle = `rgba(0,160,220,${0.25 * alpha})`; ctx.lineWidth = 0.5; ctx.stroke();
-
-    // ── Mast ──
-    const mastBase = -hullH * 1.3 - superH;
-    ctx.beginPath();
-    ctx.moveTo(0, mastBase); ctx.lineTo(0, mastBase - mastH);
-    ctx.strokeStyle = `rgba(0,210,255,${0.7 * alpha})`; ctx.lineWidth = 0.9;
-    ctx.stroke();
-
-    // Navigation light
-    ctx.shadowBlur = 8; ctx.shadowColor = '#ffcc00';
-    ctx.beginPath(); ctx.arc(0, mastBase - mastH, Math.max(1.2, sc * 0.15), 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255,210,60,${alpha})`; ctx.fill();
-    ctx.shadowBlur = 0;
-
-    ctx.globalAlpha = 1;
-    ctx.restore();
-
-    // Label above mast
-    const labelY = wy - hullH * 1.3 - superH - mastH - 6;
-    ctx.font = `${Math.min(9, Math.max(6, 120 / sp.depth))}px Share Tech Mono`;
-    ctx.fillStyle = `rgba(0,200,255,${Math.min(1, 20 / sp.depth)})`;
-    ctx.textAlign = 'center';
-    ctx.shadowBlur = 4; ctx.shadowColor = 'rgba(0,200,255,0.4)';
-    ctx.fillText(ship.label, wx, labelY);
-    ctx.shadowBlur = 0;
+    drawShipWireframe3D(ship, alpha, projectSurface);
   });
 
   // ── TORPEDO TRAIL — red dots from sub toward target, fading behind ──

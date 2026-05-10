@@ -1466,15 +1466,17 @@ function spawnExplosion(wx, wy, wz, isEnemy, customCol) {
   });
 }
 
-function drawExplosions() {
+function drawExplosions(projFn) {
   state.explosions = state.explosions.filter(ex => ex.age < ex.duration);
   state.explosions.forEach(ex => {
     ex.age++;
-    // Use correct projection for current view
-    const sp = state.viewMode === 'periscope'
-      ? projectPeriscope(ex.wx, ex.wy, ex.wz)
-      : project(ex.wx, ex.wy, ex.wz);
-    if (!sp) return; // behind camera in periscope
+    // Use passed projection fn, or fall back to view-mode default
+    const sp = projFn
+      ? projFn(ex.wx, ex.wy, ex.wz)
+      : (state.viewMode === 'periscope'
+          ? projectPeriscope(ex.wx, ex.wy, ex.wz)
+          : project(ex.wx, ex.wy, ex.wz));
+    if (!sp) return; // behind camera
     const t = ex.age / ex.duration;
     const baseCol = ex.col === '#ff4444' ? '255,68,68' : ex.col === '#00ff66' ? '0,255,102' : '0,229,255';
 
@@ -6444,6 +6446,35 @@ function renderSurfacePeriscope() {
     const alpha = Math.min(1, (1 - sp.depth / 80) * 1.6) * sinkFrac;
     if (alpha < 0.02) return;
     drawShipWireframe3D(ship, alpha, projectSurface);
+  });
+
+  // ── SURFACE EXPLOSIONS ──
+  // Rings + flash projected via projectSurface
+  drawExplosions(projectSurface);
+  // Rising smoke column for surface-level hits (wy === GRID.H)
+  state.explosions.forEach(ex => {
+    if (ex.wy < GRID.H - 0.5) return; // only surface explosions
+    const sp2 = projectSurface(ex.wx, GRID.H, ex.wz);
+    if (!sp2 || sp2.depth < 0.5 || sp2.depth > 60) return;
+    const t = ex.age / ex.duration;
+    const distFade = Math.max(0, 1 - sp2.depth / 60);
+    const colStr = ex.col === '#ff4444' ? '255,68,68' : '0,229,255';
+    // Draw 5 billowing smoke puffs rising above the horizon
+    for (let i = 0; i < 5; i++) {
+      const pufft = (t + i * 0.18) % 1;
+      const rise = pufft * 80 * (1 - sp2.depth / 60 * 0.5);
+      const spread = i * 5 * distFade;
+      const r = (8 + i * 6) * distFade * (1 - pufft * 0.4);
+      const a = (1 - pufft) * (1 - t * 0.6) * distFade * 0.7;
+      if (a < 0.01 || r < 1) continue;
+      ctx.beginPath();
+      ctx.arc(sp2.sx + spread, sp2.sy - rise, r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${colStr},${a.toFixed(3)})`;
+      ctx.shadowBlur = r * 0.8;
+      ctx.shadowColor = ex.col;
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
   });
 
   // ── TORPEDO TRAIL — red dots from sub toward target, fading behind ──

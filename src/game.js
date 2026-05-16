@@ -258,6 +258,8 @@ const state = {
   enemyTrail: [],      // recent enemy positions
   pingCooldown: 0,
   forceReveal: true,
+  silentRunning: false,
+  silentPings: [],
   firingSolution: null,
   lastEnemyPos: null,
   lastEnemyPosTime: 0,
@@ -1797,6 +1799,15 @@ function update() {
   // Ping cooldown
   if (state.pingCooldown > 0) state.pingCooldown--;
 
+  // Advance silent running ping reveal rings
+  if (state.silentPings.length) {
+    state.silentPings = state.silentPings.filter(p => {
+      p.r += 0.18;
+      p.alpha = Math.max(0, p.alpha - 0.005);
+      return p.alpha > 0.01 && p.r < 36;
+    });
+  }
+
   // Update HUD - y=GRID.H is surface (0m), y=0 is seabed (deepest)
   const depthM = ((GRID.H - state.player.y) * VOXEL_Y).toFixed(1);
   document.getElementById('depth-display').textContent = `-${depthM}m`;
@@ -2160,6 +2171,7 @@ function doPing() {
   }
   playPing();
   state.sonarPings.push({r:0});
+  if (state.silentRunning) state.silentPings.push({ r: 0, alpha: 1.0 });
   state.pingLastFired = Date.now();
 
   // Visual cooldown on button
@@ -3014,6 +3026,23 @@ function projectPeriscope(wx, wy, wz) {
   return { sx, sy, depth: ffz };
 }
 
+// Returns 0-1 reveal factor at world-space point (wx, wz) based on active silent ping rings.
+// A ring sweeps outward from the player; points glow on the wavefront and trail fades behind it.
+function silentRevealAlpha(wx, wz) {
+  if (!state.silentPings.length) return 0;
+  const dx = wx - state.player.x, dz = wz - state.player.z;
+  const dist = Math.sqrt(dx*dx + dz*dz);
+  let best = 0;
+  for (const ping of state.silentPings) {
+    const diff = ping.r - dist; // positive = ring has passed this point
+    if (diff >= -0.4 && diff <= 4.5) {
+      const t = diff < 0 ? Math.max(0, 1 + diff * 2.5) : Math.max(0, 1 - diff / 4.5);
+      best = Math.max(best, t * ping.alpha);
+    }
+  }
+  return Math.min(1, best);
+}
+
 function renderPeriscope() {
   // Use fixed screen centre for periscope — independent of command view pan
   const pcx = W/2, pcy = H * 0.44;
@@ -3108,7 +3137,7 @@ function renderPeriscope() {
     }
 
     // Enemy sub
-    const showEnemyP = state.forceReveal || state.revealAlpha > 0;
+    const showEnemyP = state.silentRunning || state.forceReveal || state.revealAlpha > 0;
     if (state.enemy.alive && showEnemyP) {
       const ep = projectPeriscope(state.enemy.x, state.enemy.y, state.enemy.z);
       if (ep && ep.depth > 0.2) drawQueue.push({ depth: ep.depth, kind: 'enemy', ep });
@@ -3164,7 +3193,9 @@ function renderPeriscope() {
       } else if (item.kind === 'enemy') {
         const ep = item.ep;
         const eScale = Math.max(0.4, Math.min(2, 8 / ep.depth));
-        const eAlpha = state.forceReveal ? 1 : state.revealAlpha;
+        const eAlpha = state.silentRunning
+          ? silentRevealAlpha(state.enemy.x, state.enemy.z)
+          : (state.forceReveal ? 1 : state.revealAlpha);
         ctx.save();
         ctx.translate(ep.sx, ep.sy);
         ctx.globalAlpha = eAlpha;
@@ -3207,8 +3238,9 @@ function renderPeriscope() {
     ctx.fillRect(pp.sx - s * 0.5, pp.sy - s * 0.5, s, s);
   });
 
-  // ── WIREFRAME OVERLAY (toggleable with ◈ LINES button) ──
-  if (state.showWireframe) {
+  // ── WIREFRAME OVERLAY (toggleable with ◈ LINES button, or revealed by silent ping) ──
+  const _doWireframe = state.showWireframe || (state.silentRunning && state.silentPings.length > 0);
+  if (_doWireframe) {
     ctx.save();
     ctx.lineCap = 'round';
     wallEdges.forEach(e => {
@@ -3219,7 +3251,11 @@ function renderPeriscope() {
       const maxD = Math.max(pa.depth, pb.depth);
       if (maxD > 55) return;
       const minD = Math.min(pa.depth, pb.depth);
-      const a = Math.max(0, 1 - maxD / 50) * (minD < 8 ? 0.75 : 0.45);
+      let a = Math.max(0, 1 - maxD / 50) * (minD < 8 ? 0.75 : 0.45);
+      if (state.silentRunning) {
+        const midX = (e.ax + e.bx) * 0.5, midZ = (e.az + e.bz) * 0.5;
+        a *= silentRevealAlpha(midX, midZ);
+      }
       if (a < 0.02) return;
       ctx.lineWidth = (minD < 8 ? Math.max(0.6, 1.8 / minD) : 0.5) * wireframeScale;
       ctx.strokeStyle = `rgba(0,200,255,${a})`;
@@ -3628,8 +3664,9 @@ let periStrafeAccumX = 0, periStrafeAccumZ = 0;
 // OR: just test empirically — the user says fwd/back works. Don't touch movement.
 // Just fix the arrow to match whatever the actual look direction is.
 function movePeriDir(dir) {
-  const fwdX = -Math.sin(state.periAngleH) * -dir;
-  const fwdZ =  Math.cos(state.periAngleH) * -dir;
+  const speedMult = state.silentRunning ? 0.5 : 1.0;
+  const fwdX = -Math.sin(state.periAngleH) * -dir * speedMult;
+  const fwdZ =  Math.cos(state.periAngleH) * -dir * speedMult;
   periMoveAccumX += fwdX;
   periMoveAccumZ += fwdZ;
   const stepX = Math.trunc(periMoveAccumX);
@@ -3644,8 +3681,9 @@ function movePeriDir(dir) {
 // Strafe perpendicular to periscope heading (drag right = move right relative to view)
 // Strafe right = 90° clockwise from forward
 function movePeriStrafe(dir) {
-  const strafeX =  Math.cos(state.periAngleH) * -dir;
-  const strafeZ =  Math.sin(state.periAngleH) * -dir;
+  const speedMult = state.silentRunning ? 0.5 : 1.0;
+  const strafeX =  Math.cos(state.periAngleH) * -dir * speedMult;
+  const strafeZ =  Math.sin(state.periAngleH) * -dir * speedMult;
   periStrafeAccumX += strafeX;
   periStrafeAccumZ += strafeZ;
   const stepX = Math.trunc(periStrafeAccumX);
@@ -4073,16 +4111,39 @@ function periFireTorpedo() {
 document.getElementById('peri-btn-ping-peri').addEventListener('click', doPing);
 document.getElementById('peri-btn-ping-peri').addEventListener('pointerup', doPing);
 
-// Periscope reveal button
+// ── SILENT RUNNING TOGGLE ──
+let _silentPreset = null;
 document.getElementById('peri-btn-reveal-peri').addEventListener('click', () => {
-  state.forceReveal = !state.forceReveal;
   const btn = document.getElementById('peri-btn-reveal-peri');
-  btn.textContent = state.forceReveal ? '👁 HIDE' : '👁 ENEMY';
-  // Sync main button
-  const mainBtn = document.getElementById('btn-reveal');
-  if (mainBtn) {
-    mainBtn.textContent = state.forceReveal ? '👁 HIDE ENEMY' : '👁 SHOW ENEMY';
-    state.forceReveal ? mainBtn.classList.add('active') : mainBtn.classList.remove('active');
+  if (!state.silentRunning) {
+    // Engage silent running
+    state.silentRunning = true;
+    state.silentPings = [];
+    state.forceReveal = false;
+    // Save and apply preset: dense points, lines off, black fill
+    _silentPreset = { cloudDensity, showWireframe: state.showWireframe, terrainFillOpacity };
+    cloudDensity = DENSITY_MIN;
+    state.showWireframe = false;
+    terrainFillOpacity = 1.0;
+    debouncedGenerateCloud();
+    btn.textContent = '◎ SILENT';
+    btn.classList.add('silent-active');
+    addEvent('◎ SILENT RUNNING — ENGAGED', false);
+  } else {
+    // Disengage silent running — enemy position revealed
+    state.silentRunning = false;
+    state.silentPings = [];
+    state.forceReveal = true;
+    if (_silentPreset) {
+      cloudDensity = _silentPreset.cloudDensity;
+      state.showWireframe = _silentPreset.showWireframe;
+      terrainFillOpacity = _silentPreset.terrainFillOpacity;
+      debouncedGenerateCloud();
+      _silentPreset = null;
+    }
+    btn.textContent = '👁 ENEMY';
+    btn.classList.remove('silent-active');
+    addEvent('◎ SILENT RUNNING — DISENGAGED', false);
   }
 });
 

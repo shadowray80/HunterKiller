@@ -784,6 +784,13 @@ background: rgba(0,229,255,0.12);
 color: #00fff0;
 text-shadow: 0 0 10px #00fff0;
 }
+.peri-top-btn.silent-active {
+background: rgba(160,20,20,0.45);
+border-color: rgba(255,50,50,0.7);
+color: #ff4444;
+text-shadow: 0 0 8px rgba(255,68,68,0.9);
+box-shadow: 0 0 10px rgba(200,0,0,0.35) inset;
+}
 .peri-top-btn:last-child { border-right: none; }
 .peri-top-btn:active { background: rgba(0,229,255,0.12); }
 

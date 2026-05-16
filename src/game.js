@@ -980,10 +980,11 @@ function drawSonar() {
 
   // ── PLAYER SUB (always at correct world position) ──
   const pp = mm(state.player.x, state.player.z);
-  // Heading indicator (which direction player is facing based on cam angle)
+  // Heading indicator: command view uses camera rotation; other views use sub heading
+  const _sonarHeading = (state.viewMode === 'command') ? camRotY : state.periAngleH + Math.PI;
   sc.save();
   sc.translate(pp.x, pp.y);
-  sc.rotate(camRotY);
+  sc.rotate(_sonarHeading);
   sc.beginPath(); sc.moveTo(0,-7); sc.lineTo(3,4); sc.lineTo(0,2); sc.lineTo(-3,4); sc.closePath();
   sc.fillStyle='rgba(0,229,255,0.4)'; sc.strokeStyle='#00e5ff'; sc.lineWidth=0.8;
   sc.fill(); sc.stroke();

@@ -260,6 +260,7 @@ const state = {
   forceReveal: true,
   silentRunning: false,
   silentPings: [],
+  enemySilentAlpha: 0,
   firingSolution: null,
   lastEnemyPos: null,
   lastEnemyPosTime: 0,
@@ -1808,6 +1809,18 @@ function update() {
     });
   }
 
+  // Linger the enemy contact after a silent ping sweeps past
+  if (state.silentRunning && state.enemy.alive) {
+    const pingHit = silentRevealAlpha(state.enemy.x, state.enemy.z);
+    if (pingHit > state.enemySilentAlpha) {
+      state.enemySilentAlpha = pingHit;
+    } else {
+      state.enemySilentAlpha = Math.max(0, state.enemySilentAlpha - 0.004);
+    }
+  } else {
+    state.enemySilentAlpha = 0;
+  }
+
   // Update HUD - y=GRID.H is surface (0m), y=0 is seabed (deepest)
   const depthM = ((GRID.H - state.player.y) * VOXEL_Y).toFixed(1);
   document.getElementById('depth-display').textContent = `-${depthM}m`;
@@ -3132,7 +3145,9 @@ function renderPeriscope() {
         // Average height fraction of the 4 corners (y values at indices +1,+4,+7,+10)
         const avgY = (terrainQuads[i+1] + terrainQuads[i+4] + terrainQuads[i+7] + terrainQuads[i+10]) * 0.25;
         const yFrac = avgY / GRID.H;
-        drawQueue.push({ depth: avgD, kind: 'quad', c: [p0.sx, p0.sy, p1.sx, p1.sy, p2.sx, p2.sy, p3.sx, p3.sy], yFrac });
+        const qwx = (terrainQuads[i] + terrainQuads[i+3] + terrainQuads[i+6] + terrainQuads[i+9]) * 0.25;
+        const qwz = (terrainQuads[i+2] + terrainQuads[i+5] + terrainQuads[i+8] + terrainQuads[i+11]) * 0.25;
+        drawQueue.push({ depth: avgD, kind: 'quad', c: [p0.sx, p0.sy, p1.sx, p1.sy, p2.sx, p2.sy, p3.sx, p3.sy], yFrac, wx: qwx, wz: qwz });
       }
     }
 
@@ -3183,18 +3198,26 @@ function renderPeriscope() {
         ctx.moveTo(c[0], c[1]); ctx.lineTo(c[2], c[3]);
         ctx.lineTo(c[4], c[5]); ctx.lineTo(c[6], c[7]);
         ctx.closePath(); ctx.fill();
-        // Contour edge
-        if (distA > 0.02 && lineOpacity > 0) {
-          ctx.strokeStyle = _hexToRgba(lineColor, distA * lineOpacity);
-          ctx.lineWidth = (state.showWireframe ? 0.8 : 0.3) * wireframeScale;
-          ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(c[4], c[5]); ctx.stroke();
+        // Contour edge — in silent mode use ping-reveal alpha instead of lineOpacity
+        if (distA > 0.02) {
+          let lineA = 0;
+          if (state.silentRunning && state.silentPings.length > 0) {
+            lineA = distA * silentRevealAlpha(item.wx, item.wz);
+          } else if (lineOpacity > 0) {
+            lineA = distA * lineOpacity;
+          }
+          if (lineA > 0.01) {
+            ctx.strokeStyle = _hexToRgba(lineColor, lineA);
+            ctx.lineWidth = (state.showWireframe ? 0.8 : 0.3) * wireframeScale;
+            ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(c[4], c[5]); ctx.stroke();
+          }
         }
       } else if (item.kind === 'enemy') {
         const ep = item.ep;
         const eScale = Math.max(0.4, Math.min(2, 8 / ep.depth));
         const eAlpha = state.silentRunning
-          ? silentRevealAlpha(state.enemy.x, state.enemy.z)
+          ? state.enemySilentAlpha
           : (state.forceReveal ? 1 : state.revealAlpha);
         ctx.save();
         ctx.translate(ep.sx, ep.sy);
@@ -4121,10 +4144,11 @@ document.getElementById('peri-btn-reveal-peri').addEventListener('click', () => 
     state.silentPings = [];
     state.forceReveal = false;
     // Save and apply preset: dense points, lines off, black fill
-    _silentPreset = { cloudDensity, showWireframe: state.showWireframe, terrainFillOpacity };
+    _silentPreset = { cloudDensity, showWireframe: state.showWireframe, terrainFillOpacity, lineOpacity };
     cloudDensity = DENSITY_MIN;
     state.showWireframe = false;
     terrainFillOpacity = 1.0;
+    lineOpacity = 0;
     debouncedGenerateCloud();
     btn.textContent = '◎ SILENT';
     btn.classList.add('silent-active');
@@ -4138,6 +4162,7 @@ document.getElementById('peri-btn-reveal-peri').addEventListener('click', () => 
       cloudDensity = _silentPreset.cloudDensity;
       state.showWireframe = _silentPreset.showWireframe;
       terrainFillOpacity = _silentPreset.terrainFillOpacity;
+      lineOpacity = _silentPreset.lineOpacity;
       debouncedGenerateCloud();
       _silentPreset = null;
     }

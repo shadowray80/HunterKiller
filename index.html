@@ -81,6 +81,7 @@
     <div><span class="stat-label">DEPTH &nbsp;</span><span class="stat-val" id="depth-display">-0.0m</span></div>
     <div><span class="stat-label">SPEED &nbsp;</span><span class="stat-val" id="speed-display">0.0 kts</span></div>
     <div><span class="stat-label">HEADING &nbsp;</span><span class="stat-val" id="heading-display">000°</span></div>
+    <div><span class="stat-label">SCORE &nbsp;</span><span class="stat-val" id="hud-score">0</span></div>
     <div><span class="stat-label">TORPS &nbsp;</span><span class="stat-val" id="torp-count">∞</span></div>
     <div id="hud-lives">
       <span class="life-icon" id="hud-life-p1"></span>
@@ -164,6 +165,7 @@
       <div><span id="peri-contact">NO CONTACT</span></div>
       <div><span style="color:var(--teal-dim)">TORPS </span><span id="peri-torps">∞</span></div>
       <div><span style="color:var(--teal-dim)">HULL  </span><span id="peri-hull">100%</span></div>
+      <div><span style="color:var(--teal-dim)">SCORE </span><span id="peri-score">0</span></div>
     </div>
     <div id="peri-info-right">
       <div id="peri-lives-row">
@@ -202,6 +204,7 @@
 
   <div id="scoreboard" style="display:none">
     <div class="sb-title">◉ MISSION LOG</div>
+    <div class="sb-row"><span class="sb-label">SCORE</span><span class="sb-val" id="sb-score">0</span></div>
     <div class="sb-row"><span class="sb-label">KILLS</span><span class="sb-val" id="sb-kills">0</span></div>
     <div class="sb-row"><span class="sb-label">DETECTED</span><span class="sb-val" id="sb-detected">0</span></div>
     <div class="sb-row"><span class="sb-label">TORPS FIRED</span><span class="sb-val" id="sb-torps">0</span></div>

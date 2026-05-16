@@ -190,6 +190,9 @@ function spawnEnemy(avoidRoom) {
   state.enemy.y = ey;
   state.enemy.z = ez;
   state.enemy.alive = true;
+  state.enemy.hits = 0;
+  state.enemy.bubbling = false;
+  state.enemy.bubbleTimer = 0;
   state.enemy.heading = Math.random() * Math.PI * 2;
   if (window._isHeightfield) {
     addEvent('▸ ENEMY CONTACT — CANYON SECTOR', true);
@@ -239,10 +242,12 @@ const state = {
   mode: 'navigate',
   player: { x: 4, y: 3, z: 40, heading: 0 },
   enemy:  { x: 44, y: 3, z: 2, heading: 180, alive: true,
-            aiState: 'hunt', aiTarget: null, aiTimer: 0, flankDir: 1 },
+            aiState: 'hunt', aiTarget: null, aiTimer: 0, flankDir: 1,
+            hits: 0, bubbling: false, bubbleTimer: 0 },
   torpedoes: [],
   aimCursor: null,
   torpCount: Infinity,
+  score: 0,
   kills: 0,
   torpsFired: 0,
   torpsHit: 0,
@@ -1452,6 +1457,47 @@ function spawnExplosion(wx, wy, wz, isEnemy, customCol) {
   });
 }
 
+// ── SCORE HELPERS ──
+function addScore(amount) {
+  state.score += amount;
+  const s = state.score;
+  const el1 = document.getElementById('hud-score');
+  const el2 = document.getElementById('peri-score');
+  const el3 = document.getElementById('sb-score');
+  if (el1) el1.textContent = s;
+  if (el2) el2.textContent = s;
+  if (el3) el3.textContent = s;
+}
+
+function _mkPuff(wx, wy, wz, col, maxR, rings, debrisN) {
+  state.explosions.push({
+    wx, wy, wz, col, age: 0, duration: 70,
+    rings,
+    debris: (function(){
+      var _a = [];
+      for (var _i = 0; _i < debrisN; _i++) _a.push({
+        angle: Math.random() * Math.PI * 2,
+        speed: 0.6 + Math.random() * 1.2,
+        dist: 0, size: 0.5 + Math.random() * 1.0,
+        velocity: { x: 0, y: 0, z: 0 }
+      });
+      return _a;
+    })()
+  });
+}
+function spawnFirePuff(wx, wy, wz) {
+  _mkPuff(wx, wy, wz, '#ff6600',
+    30, [{ delay:0, speed:0.35, maxR:28 },{ delay:5, speed:0.25, maxR:18 }], 6);
+}
+function spawnBloodPuff(wx, wy, wz) {
+  _mkPuff(wx, wy, wz, '#cc1111',
+    20, [{ delay:0, speed:0.3, maxR:22 },{ delay:4, speed:0.2, maxR:14 }], 5);
+}
+function spawnBubblePuff(wx, wy, wz) {
+  _mkPuff(wx, wy, wz, '#88ccdd',
+    18, [{ delay:0, speed:0.25, maxR:16 },{ delay:3, speed:0.18, maxR:10 }], 4);
+}
+
 function drawExplosions(projFn) {
   state.explosions = state.explosions.filter(ex => ex.age < ex.duration);
   state.explosions.forEach(ex => {
@@ -1668,15 +1714,26 @@ function update() {
         Math.abs(t.x-state.enemy.x)<0.5 &&
         Math.abs(t.y-state.enemy.y)<0.5 &&
         Math.abs(t.z-state.enemy.z)<0.5) {
-      state.enemy.alive = false;
-      state.kills++;
+      state.enemy.hits++;
       state.torpsHit++;
-      playExplosion(true);
-      spawnExplosion(t.x, t.y, t.z, true);
-      document.getElementById('kill-count').textContent = state.kills;
-      document.getElementById('enemy-status').textContent = 'DESTROYED';
-      addEvent('⊛ DIRECT HIT — ENEMY DESTROYED', false);
-      setTimeout(()=>respawnEnemy(),5000);
+      addScore(10);
+      spawnBubblePuff(t.x, t.y, t.z);
+      state.enemy.bubbling = true;
+      if (state.enemy.hits >= 3) {
+        state.enemy.alive = false;
+        state.enemy.hits = 0;
+        state.kills++;
+        addScore(30);
+        playExplosion(true);
+        spawnExplosion(t.x, t.y, t.z, true);
+        document.getElementById('kill-count').textContent = state.kills;
+        document.getElementById('enemy-status').textContent = 'DESTROYED';
+        addEvent('⊛ DIRECT HIT — BRAVO DESTROYED (+30)', false);
+        setTimeout(()=>respawnEnemy(),5000);
+      } else {
+        playExplosion(false);
+        addEvent(`⊛ BRAVO HIT ${state.enemy.hits}/3 — LEAKING BUBBLES (+10)`, false);
+      }
       return false;
     }
 
@@ -1688,9 +1745,10 @@ function update() {
         if (Math.abs(t.x-_wh.x)<1.5 && Math.abs(t.y-_wh.y)<1.8 && Math.abs(t.z-_wh.z)<1.5) {
           _wh.alive = false;
           if (_wh.audio) { try { _wh.audio.pause(); _wh.audio.currentTime = 0; } catch(e){} }
+          addScore(-10);
           playExplosion(false);
           spawnExplosion(t.x, t.y, t.z, false, '#00ff66');
-          addEvent('⚠ YOU JUST BLEW UP A WHALE!', true);
+          addEvent('⚠ YOU JUST BLEW UP A WHALE! (-10)', true);
           setTimeout(function(){ addEvent('⚠ WHAT THE HELL — THAT WAS A WHALE!', true); }, 1200);
           return false;
         }
@@ -1703,11 +1761,21 @@ function update() {
         var _meg = state.megalodons[_mi];
         if (!_meg.alive) continue;
         if (Math.abs(t.x-_meg.x)<2.0 && Math.abs(t.y-_meg.y)<2.0 && Math.abs(t.z-_meg.z)<2.0) {
-          _meg.alive = false;
-          playExplosion(false);
-          spawnExplosion(t.x, t.y, t.z, false, '#6688aa');
-          addEvent('⊛ MEGALODON TERMINATED', false);
-          setTimeout(function(){ addEvent('▸ MEGALODON EXTINCT — WHALES SAFE', false); }, 1500);
+          _meg.hits++;
+          addScore(10);
+          spawnBloodPuff(t.x, t.y, t.z);
+          _meg.bleeding = true;
+          if (_meg.hits >= _meg.maxHits) {
+            _meg.alive = false;
+            addScore(20);
+            playExplosion(false);
+            spawnExplosion(t.x, t.y, t.z, false, '#6688aa');
+            addEvent('⊛ MEGALODON TERMINATED (+20)', false);
+            setTimeout(function(){ addEvent('▸ MEGALODON EXTINCT — WHALES SAFE', false); }, 1500);
+          } else {
+            playExplosion(false);
+            addEvent('⊛ MEGALODON HIT — BLEEDING (+10)', false);
+          }
           return false;
         }
       }
@@ -1799,6 +1867,12 @@ function update() {
 
   // Ping cooldown
   if (state.pingCooldown > 0) state.pingCooldown--;
+
+  // Bubble trail on damaged Bravo
+  if (state.enemy.alive && state.enemy.bubbling) {
+    state.enemy.bubbleTimer = (state.enemy.bubbleTimer || 0) + 1;
+    if (state.enemy.bubbleTimer % 50 === 0) spawnBubblePuff(state.enemy.x, state.enemy.y, state.enemy.z);
+  }
 
   // Advance silent running ping reveal rings
   if (state.silentPings.length) {
@@ -2399,6 +2473,7 @@ document.getElementById('peri-btn-respawn').addEventListener('click', doRespawn)
 // ── SCOREBOARD OVERLAY ──
 let _scoreboardOn = false;
 function updateScoreboard() {
+  document.getElementById('sb-score').textContent = state.score;
   document.getElementById('sb-kills').textContent = state.kills;
   document.getElementById('sb-detected').textContent = state.timesDetected;
   document.getElementById('sb-torps').textContent = state.torpsFired;
@@ -5509,7 +5584,8 @@ function spawnMegalodon() {
     alive: true,
     turnTimer: 0,
     turnInterval: 120 + Math.floor(Math.random() * 180),
-    biteTimer: 0
+    biteTimer: 0,
+    hits: 0, maxHits: 2, bleeding: false, bleedTimer: 0
   };
   state.megalodons.push(meg);
   addEvent('▸ APEX PREDATOR — MEGALODON DETECTED', true);
@@ -5578,6 +5654,12 @@ function updateMegalodons() {
     if (meg.z < 2 || meg.z > GRID.D - 2) {
       meg.heading = -meg.heading;
       meg.z = Math.max(2, Math.min(GRID.D - 2, meg.z));
+    }
+
+    // Blood trail on wounded meg
+    if (meg.bleeding) {
+      meg.bleedTimer = (meg.bleedTimer || 0) + 1;
+      if (meg.bleedTimer % 60 === 0) spawnBloodPuff(meg.x, meg.y, meg.z);
     }
 
     // Bite player sub
@@ -6222,7 +6304,8 @@ function initShips() {
       length: 7, beam: 1.5,
       alive: true, sinking: false, sinkY: GRID.H,
       sinkVel: 0, tilt: 0,
-      col: '#00ccff'
+      col: '#00ccff',
+      hits: 0, onFire: false, fireTimer: 0
     },
     {
       label: 'FRIGATE 02', type: 'frigate',
@@ -6232,7 +6315,8 @@ function initShips() {
       length: 5, beam: 1.2,
       alive: true, sinking: false, sinkY: GRID.H,
       sinkVel: 0, tilt: 0,
-      col: '#00aaee'
+      col: '#00aaee',
+      hits: 0, onFire: false, fireTimer: 0
     },
     {
       label: 'PATROL 03', type: 'patrol',
@@ -6242,7 +6326,8 @@ function initShips() {
       length: 4, beam: 1.0,
       alive: true, sinking: false, sinkY: GRID.H,
       sinkVel: 0, tilt: 0,
-      col: '#0088cc'
+      col: '#0088cc',
+      hits: 0, onFire: false, fireTimer: 0
     },
   ];
 }
@@ -6410,6 +6495,9 @@ function spawnShip(ship) {
   ship.sinkY = GRID.H;
   ship.sinkVel = 0;
   ship.tilt = 0;
+  ship.hits = 0;
+  ship.onFire = false;
+  ship.fireTimer = 0;
   addEvent(`▸ NEW CONTACT — ${ship.label} DETECTED`, true);
 }
 
@@ -6456,6 +6544,12 @@ function updateShips() {
       ship.z = Math.max(margin, Math.min(GRID.D - margin, ship.z));
     }
 
+    // Fire puffs on damaged ships
+    if (ship.onFire) {
+      ship.fireTimer = (ship.fireTimer || 0) + 1;
+      if (ship.fireTimer % 75 === 0) spawnFirePuff(ship.x, GRID.H, ship.z);
+    }
+
     // Check torpedo hits
     state.torpedoes.forEach(t => {
       if (!ship.alive || ship.sinking) return;
@@ -6465,28 +6559,42 @@ function updateShips() {
       const dx = t.x - ship.x, dz = t.z - ship.z;
       const dist2d = Math.sqrt(dx*dx + dz*dz);
       if (!t.isMine && !t.isEnemy && t.y >= GRID.H - 1.5 && dist2d < ship.length/2 + 1.5) {
-        ship.sinking = true;
-        ship.sinkY = GRID.H;
-        ship.sinkVel = 0;
-        ship.tilt = 0;
-        // Surface explosion cascade — visible from underwater
-        playExplosionShip();
-        spawnExplosion(ship.x,                                    GRID.H, ship.z,                                    true);
-        spawnExplosion(ship.x + (Math.random()-0.5)*ship.length,  GRID.H, ship.z + (Math.random()-0.5)*ship.length,  true);
-        setTimeout(() => {
-          spawnExplosion(ship.x + (Math.random()-0.5)*3, GRID.H, ship.z + (Math.random()-0.5)*3, true);
-          spawnExplosion(ship.x + (Math.random()-0.5)*4, GRID.H, ship.z + (Math.random()-0.5)*4, true);
+        const maxHits = ship.type === 'destroyer' ? 3 : 2;
+        const killBonus = ship.type === 'destroyer' ? 30 : 20;
+        ship.hits++;
+        addScore(10);
+        if (ship.hits >= maxHits) {
+          // ── KILL ──
+          addScore(killBonus);
+          ship.sinking = true;
+          ship.sinkY = GRID.H;
+          ship.sinkVel = 0;
+          ship.tilt = 0;
+          ship.onFire = false;
           playExplosionShip();
-        }, 300);
-        setTimeout(() => {
-          spawnExplosion(ship.x + (Math.random()-0.5)*2, GRID.H, ship.z + (Math.random()-0.5)*2, true);
-          spawnExplosion(ship.x + (Math.random()-0.5)*5, GRID.H, ship.z + (Math.random()-0.5)*5, false);
-        }, 750);
-        setTimeout(() => {
-          spawnExplosion(ship.x + (Math.random()-0.5)*3, GRID.H, ship.z + (Math.random()-0.5)*3, false);
-        }, 1300);
-        addEvent(`⊛ ${ship.label} DIRECT HIT — SINKING`, false);
-        setTimeout(() => addEvent(`▸ ${ship.label} IS GOING DOWN`, false), 2000);
+          spawnExplosion(ship.x,                                    GRID.H, ship.z,                                    true);
+          spawnExplosion(ship.x + (Math.random()-0.5)*ship.length,  GRID.H, ship.z + (Math.random()-0.5)*ship.length,  true);
+          setTimeout(() => {
+            spawnExplosion(ship.x + (Math.random()-0.5)*3, GRID.H, ship.z + (Math.random()-0.5)*3, true);
+            spawnExplosion(ship.x + (Math.random()-0.5)*4, GRID.H, ship.z + (Math.random()-0.5)*4, true);
+            playExplosionShip();
+          }, 300);
+          setTimeout(() => {
+            spawnExplosion(ship.x + (Math.random()-0.5)*2, GRID.H, ship.z + (Math.random()-0.5)*2, true);
+            spawnExplosion(ship.x + (Math.random()-0.5)*5, GRID.H, ship.z + (Math.random()-0.5)*5, false);
+          }, 750);
+          setTimeout(() => {
+            spawnExplosion(ship.x + (Math.random()-0.5)*3, GRID.H, ship.z + (Math.random()-0.5)*3, false);
+          }, 1300);
+          addEvent(`⊛ ${ship.label} DESTROYED (+${killBonus})`, false);
+          setTimeout(() => addEvent(`▸ ${ship.label} IS GOING DOWN`, false), 2000);
+        } else {
+          // ── HIT — catches fire ──
+          ship.onFire = true;
+          spawnFirePuff(ship.x, GRID.H, ship.z);
+          playExplosion(true);
+          addEvent(`⊛ ${ship.label} HIT ${ship.hits}/${maxHits} — ON FIRE (+10)`, false);
+        }
         t.progress = 999; // remove torpedo
       }
     });

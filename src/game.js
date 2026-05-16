@@ -6234,11 +6234,10 @@ function updateShips() {
       if (!ship.alive || ship.sinking) return;
       const travelDist = Math.sqrt((t.x-t.ox)*(t.x-t.ox)+(t.y-t.oy)*(t.y-t.oy)+(t.z-t.oz)*(t.z-t.oz));
       if (travelDist < 3) return; // arming distance
-      // 2D distance check — torpedo just needs to be near the ship in XZ
+      // Must be a player torpedo near the surface to hit a ship (mines handled separately)
       const dx = t.x - ship.x, dz = t.z - ship.z;
       const dist2d = Math.sqrt(dx*dx + dz*dz);
-      // Hit if within ship footprint (any depth — torpedo can be at surface or just below)
-      if (dist2d < ship.length/2 + 1.5) {
+      if (!t.isMine && !t.isEnemy && t.y >= GRID.H - 1.5 && dist2d < ship.length/2 + 1.5) {
         ship.sinking = true;
         ship.sinkY = GRID.H;
         ship.sinkVel = 0;

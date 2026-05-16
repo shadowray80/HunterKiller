@@ -4517,9 +4517,27 @@ function buildGridFromColour(imageData, iw, ih) {
       if (!total) continue;
       const wF=wC/total;
       const yF=yC/total;
-      // Walls + door headers only
-      if (wF>0.2) { grid[gz][gx]=1; typeGrid[gz][gx]='wall'; }
-      else if (yF>0.2) { grid[gz][gx]=1; typeGrid[gz][gx]='door'; }
+      // Yellow (door openings) checked FIRST — always navigable even if wall pixels bleed in
+      if (yF > 0.08) { grid[gz][gx]=0; typeGrid[gz][gx]='door'; }
+      else if (wF > 0.2) { grid[gz][gx]=1; typeGrid[gz][gx]='wall'; }
+    }
+  }
+
+  // Widen door openings: any wall cell adjacent to a door cell gets cleared
+  // so single-pixel doors in the image don't stay blocked by neighbouring wall cells
+  for (let gz=1;gz<GD-1;gz++) for (let gx=1;gx<GW-1;gx++) {
+    if (typeGrid[gz][gx] !== 'door') continue;
+    const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+    for (const [dz,dx] of dirs) {
+      const nz=gz+dz, nx=gx+dx;
+      if (nz<1||nz>=GD-1||nx<1||nx>=GW-1) continue;
+      if (grid[nz][nx]===1 && typeGrid[nz][nx]==='wall') {
+        // Only clear if the cell beyond it is open (confirms this is a wall-gap, not a corner)
+        const nz2=gz+dz*2, nx2=gx+dx*2;
+        if (nz2>=0&&nz2<GD&&nx2>=0&&nx2<GW && grid[nz2][nx2]===0) {
+          grid[nz][nx]=0; typeGrid[nz][nx]='door';
+        }
+      }
     }
   }
 

@@ -3858,7 +3858,7 @@ function drawPeriFwdSlider() {
     });
     if (state.enemy.alive) {
       const ep=mm(state.enemy.x,state.enemy.z);
-      const ea=state.forceReveal?1:state.revealAlpha;
+      const ea=state.forceReveal?1:Math.max(0.7,state.revealAlpha);
       // Bearing line
       const playerPt=mm(state.player.x,state.player.z);
       c.beginPath();c.moveTo(playerPt.x,playerPt.y);c.lineTo(ep.x,ep.y);
@@ -3868,6 +3868,42 @@ function drawPeriFwdSlider() {
       c.fillStyle=`rgba(255,68,68,${ea})`;c.shadowBlur=8;c.shadowColor='#ff4444';c.fill();c.shadowBlur=0;
     }
   }
+
+  // ── WHALE BLIPS ──
+  if (state.whales) state.whales.forEach(function(whale) {
+    if (!whale.alive) return;
+    const wp2=mm(whale.x,whale.z);
+    c.beginPath();c.arc(wp2.x,wp2.y,3.5,0,Math.PI*2);
+    c.fillStyle='#00ff66';c.shadowBlur=8;c.shadowColor='#00ff66';c.fill();c.shadowBlur=0;
+    c.font='6px Share Tech Mono';c.textAlign='center';c.textBaseline='alphabetic';
+    c.fillStyle='rgba(0,240,100,0.65)';c.fillText('WHL',wp2.x,wp2.y-5);
+  });
+
+  // ── MEGALODON BLIPS ──
+  if (state.megalodons) state.megalodons.forEach(function(meg) {
+    if (!meg.alive) return;
+    const mp2=mm(meg.x,meg.z);
+    c.beginPath();c.arc(mp2.x,mp2.y,4.5,0,Math.PI*2);
+    c.fillStyle='#6688aa';c.shadowBlur=10;c.shadowColor='#6688aa';c.fill();c.shadowBlur=0;
+    c.font='6px Share Tech Mono';c.textAlign='center';c.textBaseline='alphabetic';
+    c.fillStyle='rgba(100,140,180,0.75)';c.fillText('MEG',mp2.x,mp2.y-6);
+  });
+
+  // ── SURFACE SHIP CONTACTS ──
+  if (state.ships) state.ships.forEach(function(ship) {
+    if (!ship.alive && !ship.sinking) return;
+    const sp3=mm(ship.x,ship.z);
+    const hx2=sp3.x+Math.sin(ship.heading)*7, hz2=sp3.y+Math.cos(ship.heading)*7;
+    c.beginPath();c.moveTo(sp3.x,sp3.y);c.lineTo(hx2,hz2);
+    c.strokeStyle='rgba(255,230,80,0.55)';c.lineWidth=1;c.stroke();
+    c.save();c.translate(sp3.x,sp3.y);c.rotate(Math.PI/4);
+    c.beginPath();c.rect(-3,-3,6,6);
+    const sA=ship.sinking?Math.max(0.3,ship.sinkY/GRID.H):1.0;
+    c.fillStyle=`rgba(255,220,60,${sA})`;c.shadowBlur=8;c.shadowColor='#ffdd00';c.fill();c.shadowBlur=0;
+    c.restore();
+    c.font='6px Share Tech Mono';c.textAlign='center';c.textBaseline='alphabetic';
+    c.fillStyle=`rgba(255,220,60,${sA*0.8})`;c.fillText(ship.label.split(' ')[0],sp3.x,sp3.y-6);
+  });
 
   // FWD arrow above map
   c.fillStyle = 'rgba(0,220,150,0.7)';

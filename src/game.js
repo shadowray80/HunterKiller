@@ -275,6 +275,7 @@ const state = {
   ships: [],
   depthCharges: [],
   whales: [],
+  weaponMode: 'torpedo',  // 'torpedo' or 'mine'
   periAngleH: 0,         // periscope horizontal bearing (radians)
   periAngleV: 0.1,       // periscope vertical tilt (radians, 0=horizon)
   periDragActive: false,
@@ -1737,6 +1738,30 @@ function update() {
       return false;
     }
 
+    // Torpedo mine — hits surface and detonates against ships above
+    if (t.isMine && t.y >= GRID.H) {
+      let hitShip = false;
+      if (state.ships) {
+        state.ships.forEach(ship => {
+          if (!ship.alive || ship.sinking) return;
+          const mdx = t.x - ship.x, mdz = t.z - ship.z;
+          if (Math.sqrt(mdx*mdx + mdz*mdz) < (ship.length || 8) * 0.5 + 3) {
+            ship.sinking = true; ship.sinkY = GRID.H; ship.sinkVel = 0; ship.tilt = 0;
+            playExplosionShip();
+            spawnExplosion(ship.x, GRID.H, ship.z, true);
+            spawnExplosion(ship.x + (Math.random()-0.5)*3, GRID.H, ship.z + (Math.random()-0.5)*3, true);
+            state.kills++; state.torpsHit++;
+            document.getElementById('kill-count').textContent = state.kills;
+            addEvent('⊛ TORPEDO MINE — SHIP SUNK', false);
+            hitShip = true;
+          }
+        });
+      }
+      spawnExplosion(t.x, GRID.H, t.z, hitShip);
+      if (!hitShip) { playExplosion(false); addEvent('▸ MINE DETONATED — NO TARGET', false); }
+      return false;
+    }
+
     // Out of bounds or hit furniture — grace period of 4 units so torpedo clears the firer
     const atSurfaceLevel = t.y >= GRID.H - 1;
     const hitFurniture = !atSurfaceLevel && travelDist > 4.0 && inFurniture(t.x, t.y, t.z);
@@ -2380,6 +2405,21 @@ function setScoreboard(on) {
   });
 }
 document.getElementById('peri-btn-stats').addEventListener('click', () => setScoreboard(!_scoreboardOn));
+
+// ── WEAPON SELECT ──
+document.getElementById('peri-btn-weapon').addEventListener('click', () => {
+  state.weaponMode = state.weaponMode === 'torpedo' ? 'mine' : 'torpedo';
+  const btn = document.getElementById('peri-btn-weapon');
+  if (state.weaponMode === 'mine') {
+    btn.innerHTML = '⬆<br><span class="peri-weapon-label">MINE</span>';
+    btn.classList.add('mine-mode');
+    addEvent('⬆ WEAPON: TORPEDO MINE', false);
+  } else {
+    btn.innerHTML = '━━▶<br><span class="peri-weapon-label">TORP</span>';
+    btn.classList.remove('mine-mode');
+    addEvent('▶ WEAPON: TORPEDO', false);
+  }
+});
 
 // ── TACTICAL SONAR OVERLAY ──
 let _tacticalOn = false;
@@ -3197,7 +3237,19 @@ function renderPeriscope() {
 
       ctx.beginPath();
       ctx.arc(tp.sx, tp.sy, dotR, 0, Math.PI*2);
-      if (i === 0) {
+      if (t.isMine) {
+        // Cyan rising trail for mines
+        if (i === 0) {
+          ctx.fillStyle = `rgba(0,255,200,${fade})`;
+          ctx.shadowBlur = 20; ctx.shadowColor = '#00ffcc';
+        } else if (i < 5) {
+          ctx.fillStyle = `rgba(0,200,255,${fade * 0.9})`;
+          ctx.shadowBlur = 8; ctx.shadowColor = '#00c8ff';
+        } else {
+          ctx.fillStyle = `rgba(0,120,200,${fade * 0.6})`;
+          ctx.shadowBlur = 3; ctx.shadowColor = '#0080cc';
+        }
+      } else if (i === 0) {
         ctx.fillStyle = `rgba(255,240,80,${fade})`;
         ctx.shadowBlur = 20; ctx.shadowColor = '#ffdd00';
       } else if (i < 5) {
@@ -3888,6 +3940,24 @@ function drawPeriFwdSlider() {
 // ── PERISCOPE FIRE ──
 function periFireTorpedo() {
   if (!torpReady()) { addEvent('⚠ TORPEDO RELOADING — ' + torpSecsLeft() + 's', true); return; }
+
+  // ── TORPEDO MINE ──
+  if (state.weaponMode === 'mine') {
+    if (state.torpCount !== Infinity && state.torpCount <= 0) { addEvent('⚠ NO TORPEDOES', true); return; }
+    state.torpedoes.push({
+      ox: state.player.x, oy: state.player.y, oz: state.player.z,
+      x:  state.player.x, y:  state.player.y, z:  state.player.z,
+      dx: 0, dy: 1, dz: 0, speed: 0.15, progress: 0, isMine: true
+    });
+    if (state.torpCount !== Infinity) state.torpCount--;
+    state.torpsFired++;
+    state.torpLastFired = Date.now();
+    state.muzzleFlash = 8;
+    playTorpedoLaunch();
+    addEvent('⬆ TORPEDO MINE AWAY — RISING', false);
+    return;
+  }
+
   if (state.viewMode === 'surface' || state.viewMode === 'surfaced') {
     if (state.torpCount !== Infinity && state.torpCount <= 0) { addEvent('⚠ NO TORPEDOES', true); return; }
     const sndx = Math.sin(-surfaceBearing);

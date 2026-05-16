@@ -164,10 +164,13 @@
       <div><span id="peri-contact">NO CONTACT</span></div>
       <div><span style="color:var(--teal-dim)">TORPS </span><span id="peri-torps">∞</span></div>
       <div><span style="color:var(--teal-dim)">HULL  </span><span id="peri-hull">100%</span></div>
-      <div id="peri-lives">
-        <span class="life-icon" id="life-p1"></span>
-        <span class="life-icon" id="life-p2"></span>
-        <span class="life-icon" id="life-p3"></span>
+      <div id="peri-lives-row">
+        <button id="peri-btn-respawn" class="peri-respawn-btn">↺</button>
+        <div id="peri-lives">
+          <span class="life-icon" id="life-p1"></span>
+          <span class="life-icon" id="life-p2"></span>
+          <span class="life-icon" id="life-p3"></span>
+        </div>
       </div>
     </div>
 
@@ -177,7 +180,6 @@
       <button class="peri-top-btn" id="peri-btn-battlestations">🚨 RED ALERT</button>
       <button class="peri-top-btn" id="peri-btn-tactical">◎ TACTICAL</button>
       <button class="peri-top-btn" id="peri-btn-stats">◉ STATUS</button>
-      <button class="peri-top-btn" id="peri-btn-respawn">↺ RESPAWN</button>
     </div>
 
     <div id="peri-actions">
@@ -190,6 +192,7 @@
         <div class="peri-slider-label">DIVE</div>
       </div>
       <div id="peri-fire-zone">
+        <button id="peri-btn-weapon" class="peri-weapon-btn" title="Switch weapon">━━▶<br><span class="peri-weapon-label">TORP</span></button>
         <button id="peri-btn-fire" class="peri-fire-circle"><span>FIRE</span></button>
       </div>
     </div>

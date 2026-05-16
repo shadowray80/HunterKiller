@@ -1825,6 +1825,8 @@ function update() {
   const depthM = ((GRID.H - state.player.y) * VOXEL_Y).toFixed(1);
   document.getElementById('depth-display').textContent = `-${depthM}m`;
   document.getElementById('torp-count').textContent = state.torpCount === Infinity ? '∞' : state.torpCount;
+  const _hdgDeg = ((state.periAngleH * 180 / Math.PI + 180) % 360 + 360) % 360;
+  document.getElementById('heading-display').textContent = padL(_hdgDeg.toFixed(0), 3, '0') + '°';
 
   // Clock
   const t = Math.floor(state.time/60);
@@ -3443,7 +3445,7 @@ function renderPeriscope() {
   const cpW = periCompassCanvas.width;
   pc.fillStyle = 'rgba(0,5,15,0.9)';
   pc.fillRect(0, 0, cpW, 48);
-  const bearingDeg = ((state.periAngleH * 180 / Math.PI) % 360 + 360) % 360;
+  const bearingDeg = ((state.periAngleH * 180 / Math.PI + 180) % 360 + 360) % 360;
   const centreX = cpW / 2;
   pc.font = '7px Share Tech Mono';
   for (let d = -90; d <= 90; d += 5) {

@@ -4160,9 +4160,9 @@ function periFireTorpedo() {
     if (state.torpCount !== Infinity && state.torpCount <= 0) { addEvent('⚠ NO TORPEDOES', true); return; }
     const sndx = Math.sin(-surfaceBearing);
     const sndz = Math.cos(-surfaceBearing);
-    state.torpedoes.push({ ox:state.player.x, oy:GRID.H-2.0, oz:state.player.z,
-      x:state.player.x, y:GRID.H-2.0, z:state.player.z,
-      dx:sndx, dy:0, dz:sndz, speed:0.08, progress:0 });
+    state.torpedoes.push({ ox:state.player.x, oy:GRID.H, oz:state.player.z,
+      x:state.player.x, y:GRID.H, z:state.player.z,
+      dx:sndx, dy:0, dz:sndz, speed:0.3, progress:0 });
     if (state.torpCount !== Infinity) state.torpCount--;
     state.torpsFired++;
     state.torpLastFired = Date.now();

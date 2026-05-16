@@ -244,6 +244,10 @@ const state = {
   aimCursor: null,
   torpCount: Infinity,
   kills: 0,
+  torpsFired: 0,
+  torpsHit: 0,
+  timesDetected: 0,
+  maxDepth: 0,
   hull: 100,
   lives: 3,
   sonarPings: [],
@@ -1528,6 +1532,7 @@ function applyHullDamage(dmg, msg) {
   state.hull = Math.max(0, state.hull - dmg);
   document.getElementById('sys-hull').textContent = state.hull + '%';
   document.getElementById('peri-hull').textContent = state.hull + '%';
+  if (_scoreboardOn) updateScoreboard();
   if (msg) addEvent(msg, true);
   if (state.hull <= 0) triggerImplosion();
 }
@@ -1588,6 +1593,8 @@ function triggerImplosion() {
 function update() {
   state.animFrame++;
   state.time++;
+  const _depth = GRID.H - state.player.y;
+  if (_depth > state.maxDepth) state.maxDepth = _depth;
 
   // ── ENEMY AI — state machine (movement + firing) ──
   if (state.enemy.alive) updateEnemyAI();
@@ -1657,6 +1664,7 @@ function update() {
         Math.abs(t.z-state.enemy.z)<0.5) {
       state.enemy.alive = false;
       state.kills++;
+      state.torpsHit++;
       playExplosion(true);
       spawnExplosion(t.x, t.y, t.z, true);
       document.getElementById('kill-count').textContent = state.kills;
@@ -2268,6 +2276,7 @@ function doFire() {
   });
 
   if (state.torpCount !== Infinity) state.torpCount--;
+  state.torpsFired++;
   state.torpLastFired = Date.now();
   // Auto red alert on first torpedo
   if (!state.battleStations) document.getElementById('btn-battlestations').click();
@@ -2333,10 +2342,43 @@ document.getElementById('btn-respawn').addEventListener('click', doRespawn);
 document.getElementById('peri-btn-respawn').addEventListener('click', doRespawn);
 
 // Stats / system-status toggle
-document.getElementById('peri-btn-stats').addEventListener('click', () => {
-  const p = document.getElementById('sys-panel');
-  p.style.display = p.style.display === 'none' ? '' : 'none';
-});
+// ── SCOREBOARD OVERLAY ──
+let _scoreboardOn = false;
+function updateScoreboard() {
+  document.getElementById('sb-kills').textContent = state.kills;
+  document.getElementById('sb-detected').textContent = state.timesDetected;
+  document.getElementById('sb-torps').textContent = state.torpsFired;
+  const acc = state.torpsFired > 0
+    ? Math.round(state.torpsHit / state.torpsFired * 100) + '%'
+    : '—';
+  document.getElementById('sb-accuracy').textContent = acc;
+  const depthM = state.maxDepth > 0
+    ? (state.maxDepth * 0.5).toFixed(0) + 'm'
+    : '—';
+  document.getElementById('sb-maxdepth').textContent = depthM;
+  document.getElementById('sb-hull-stat').textContent = state.hull + '%';
+}
+function setScoreboard(on) {
+  _scoreboardOn = on;
+  document.getElementById('peri-btn-stats').classList.toggle('active-btn', on);
+  const sb = document.getElementById('scoreboard');
+  if (!on) { sb.style.display = 'none'; return; }
+  updateScoreboard();
+  const fwd = document.getElementById('peri-fwd-wrap').getBoundingClientRect();
+  Object.assign(sb.style, {
+    display: 'flex',
+    position: 'fixed',
+    left: fwd.left + 'px',
+    top: fwd.top + 'px',
+    width: fwd.width + 'px',
+    height: fwd.height + 'px',
+    bottom: 'auto',
+    margin: '0',
+    zIndex: '20',
+    pointerEvents: 'none',
+  });
+}
+document.getElementById('peri-btn-stats').addEventListener('click', () => setScoreboard(!_scoreboardOn));
 
 // ── TACTICAL SONAR OVERLAY ──
 let _tacticalOn = false;
@@ -2542,6 +2584,7 @@ function enemyFire() {
     speed: 0.09, progress: 0, isEnemy: true
   });
   state.enemyLastFired = Date.now();
+  state.timesDetected++;
   addEvent('⚠ TORPEDO IN THE WATER!', true);
 }
 
@@ -3852,6 +3895,7 @@ function periFireTorpedo() {
       x:state.player.x, y:GRID.H-2.0, z:state.player.z,
       dx:sndx, dy:0, dz:sndz, speed:0.08, progress:0 });
     if (state.torpCount !== Infinity) state.torpCount--;
+    state.torpsFired++;
     state.torpLastFired = Date.now();
     if (!state.battleStations) document.getElementById('btn-battlestations').click();
     state.muzzleFlash = 8;
@@ -3888,6 +3932,7 @@ function periFireTorpedo() {
   state.torpedoes.push({ ox, oy, oz, x:ox, y:oy, z:oz,
     dx:ndx/nlen, dy:ndy/nlen, dz:ndz/nlen, speed:0.3, progress:0 });
   if (state.torpCount !== Infinity) state.torpCount--;
+  state.torpsFired++;
   document.getElementById('torp-count').textContent = state.torpCount === Infinity ? '∞' : state.torpCount;
   state.muzzleFlash = 8;
   playTorpedoLaunch();

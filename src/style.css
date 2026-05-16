@@ -218,6 +218,42 @@ gap: 16px;
 margin-bottom: 3px;
 }
 
+/* ── SCOREBOARD OVERLAY ── */
+#scoreboard {
+flex-direction: column;
+justify-content: center;
+gap: 6px;
+padding: 12px;
+background: rgba(0,4,12,0.92);
+border: 1px solid var(--teal-dim);
+box-shadow: 0 0 18px rgba(0,229,255,0.15);
+}
+.sb-title {
+font-family: var(--ui);
+font-size: 9px;
+letter-spacing: 0.3em;
+color: var(--teal);
+text-shadow: 0 0 8px var(--teal);
+margin-bottom: 4px;
+text-align: center;
+}
+.sb-row {
+display: flex;
+justify-content: space-between;
+align-items: center;
+font-size: 9px;
+gap: 8px;
+}
+.sb-label {
+color: var(--teal-dim);
+letter-spacing: 0.12em;
+}
+.sb-val {
+color: var(--teal);
+font-size: 11px;
+text-shadow: 0 0 6px var(--teal);
+}
+
 /* ── CONTROLS AREA ── */
 #controls-wrap {
 overscroll-behavior: none;

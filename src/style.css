@@ -571,7 +571,7 @@ position: relative;
 /* Periscope info panels */
 #peri-info-left {
 position: absolute;
-top: 60px; left: 12px;
+top: calc(env(safe-area-inset-top) + 52px); left: 72px;
 font-size: 9px;
 letter-spacing: 0.12em;
 line-height: 1.8;

@@ -584,9 +584,9 @@ pointer-events: all;
 z-index: 8;
 }
 
-#peri-info-right {
+#peri-info-mid {
 position: absolute;
-top: 60px; right: 12px;
+top: calc(env(safe-area-inset-top) + 52px); left: 175px;
 font-size: 9px;
 letter-spacing: 0.12em;
 line-height: 1.8;
@@ -595,7 +595,16 @@ text-shadow: 0 0 6px var(--teal);
 background: rgba(0,8,18,0.6);
 padding: 6px 10px;
 border: 1px solid rgba(0,180,220,0.25);
-text-align: right;
+pointer-events: all;
+z-index: 8;
+}
+
+#peri-info-right {
+position: absolute;
+top: calc(env(safe-area-inset-top) + 52px); right: 12px;
+background: rgba(0,8,18,0.6);
+padding: 4px 8px;
+border: 1px solid rgba(0,180,220,0.25);
 pointer-events: all;
 z-index: 8;
 }

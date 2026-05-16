@@ -266,6 +266,12 @@ const state = {
   silentRunning: false,
   silentPings: [],
   enemySilentAlpha: 0,
+  enemyKnowsPlayer: true,
+  enemyKnowsTimer: 0,
+  enemyLastKnown: null,
+  enemyPings: [],
+  enemyPingTimer: 900,
+  playerNoise: 0,
   firingSolution: null,
   lastEnemyPos: null,
   lastEnemyPosTime: 0,
@@ -992,6 +998,17 @@ function drawSonar() {
       `<span style="color:#0097a7">BEARING — &nbsp;RANGE — &nbsp;DEPTH —</span>`;
   }
 
+  // ── ENEMY PING RINGS on minimap ──
+  state.enemyPings.forEach(p => {
+    const ep = mm(p.wx, p.wz);
+    const er = p.r * scale;
+    sc.beginPath();
+    sc.arc(ep.x, ep.y, er, 0, Math.PI * 2);
+    sc.strokeStyle = `rgba(255,80,80,${p.alpha * 0.85})`;
+    sc.lineWidth = 1.5;
+    sc.stroke();
+  });
+
   // ── PLAYER SUB (always at correct world position) ──
   const pp = mm(state.player.x, state.player.z);
   // Heading indicator: command view uses camera rotation; other views use sub heading
@@ -1180,6 +1197,18 @@ function render() {
     ctx.arc(pingPos.sx, pingPos.sy, ping.r * 2, 0, Math.PI*2);
     ctx.strokeStyle = `rgba(0,255,157,${Math.max(0,0.6-ping.r/60)})`;
     ctx.lineWidth = 1;
+    ctx.stroke();
+  });
+
+  // Enemy sonar ping rings (red, radiating from enemy position)
+  state.enemyPings.forEach(p => {
+    if (!state.enemy.alive) return;
+    const ep = project(p.wx, state.enemy.y, p.wz);
+    if (!ep) return;
+    ctx.beginPath();
+    ctx.arc(ep.sx, ep.sy, p.r * 2.2, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(255,60,60,${p.alpha * 0.55})`;
+    ctx.lineWidth = 1.2;
     ctx.stroke();
   });
 
@@ -1455,6 +1484,12 @@ function spawnExplosion(wx, wy, wz, isEnemy, customCol) {
     return _a;
   })()
   });
+}
+
+function revealPlayerToEnemy(frames) {
+  state.enemyKnowsPlayer = true;
+  state.enemyKnowsTimer = Math.max(state.enemyKnowsTimer, frames);
+  state.enemyLastKnown = {x: state.player.x, z: state.player.z};
 }
 
 // ── SCORE HELPERS ──
@@ -1893,6 +1928,44 @@ function update() {
     }
   } else {
     state.enemySilentAlpha = 0;
+  }
+
+  // ── ENEMY PINGS (silent running) ──
+  if (state.silentRunning && state.enemy.alive) {
+    state.enemyPingTimer--;
+    if (state.enemyPingTimer <= 0) {
+      state.enemyPingTimer = 720 + Math.floor(Math.random() * 720); // 12–24s between pings
+      state.enemyPings.push({wx: state.enemy.x, wz: state.enemy.z, r: 0, alpha: 1.0});
+      revealPlayerToEnemy(360);
+      // Briefly reveal enemy on 3D views
+      state.revealTimer = Math.max(state.revealTimer, 180);
+      state.revealAlpha = 1.0;
+      state.enemySilentAlpha = 1.0;
+      playPing();
+      addEvent('⚠ BRAVO PINGING — POSITION COMPROMISED', true);
+    }
+  }
+  if (state.enemyPings.length) {
+    state.enemyPings = state.enemyPings.filter(p => {
+      p.r += 0.22;
+      p.alpha = Math.max(0, p.alpha - 0.004);
+      return p.alpha > 0.01 && p.r < 68;
+    });
+  }
+
+  // ── ENEMY KNOWLEDGE DECAY (silent running) ──
+  if (state.silentRunning) {
+    if (state.enemyKnowsTimer > 0) {
+      state.enemyKnowsTimer--;
+      if (state.enemyKnowsTimer === 0) {
+        state.enemyKnowsPlayer = false;
+        addEvent('◎ CONTACT LOST — BRAVO IS BLIND', false);
+      }
+    }
+  } else {
+    // Standard steaming: enemy always knows player position
+    state.enemyKnowsPlayer = true;
+    state.enemyKnowsTimer = 0;
   }
 
   // Update HUD - y=GRID.H is surface (0m), y=0 is seabed (deepest)
@@ -2407,6 +2480,10 @@ function doFire() {
     speed:0.3, progress:0
   });
 
+  if (state.silentRunning) {
+    revealPlayerToEnemy(420);
+    addEvent('⚠ TORPEDO LAUNCH — POSITION COMPROMISED', true);
+  }
   if (state.torpCount !== Infinity) state.torpCount--;
   state.torpsFired++;
   state.torpLastFired = Date.now();
@@ -2758,7 +2835,8 @@ function updateEnemyAI() {
   var px = Math.round(state.player.x), pz = Math.round(state.player.z);
   var dist2d = Math.sqrt((en.x-state.player.x)*(en.x-state.player.x) + (en.z-state.player.z)*(en.z-state.player.z));
   var los = hasLineOfSight(ex, ez, px, pz);
-  var canFire = state.battleStations && (Date.now() - state.enemyLastFired >= TORP_CD_MS);
+  var silentBlind = state.silentRunning && !state.enemyKnowsPlayer;
+  var canFire = state.battleStations && (Date.now() - state.enemyLastFired >= TORP_CD_MS) && !silentBlind;
 
   // Update trail
   _enemyMoveTimer++;
@@ -2788,11 +2866,22 @@ function updateEnemyAI() {
       }
       return;
     }
-    // Move toward player every ~30 frames
+    // Move toward player (or last known position when silent-blind) every ~30 frames
     if (_enemyMoveTimer % 30 === 0) {
-      var tx = px, tz = pz;
-      // If very close, back off slightly
-      if (dist2d < 5) { tx = ex + (ex-px)*2; tz = ez + (ez-pz)*2; }
+      var tx, tz;
+      if (silentBlind) {
+        if (state.enemyLastKnown) {
+          tx = Math.round(state.enemyLastKnown.x);
+          tz = Math.round(state.enemyLastKnown.z);
+        } else {
+          tx = Math.max(1, Math.min(GRID.W-2, ex + Math.round((Math.random()-0.5)*10)));
+          tz = Math.max(1, Math.min(GRID.D-2, ez + Math.round((Math.random()-0.5)*10)));
+        }
+      } else {
+        tx = px; tz = pz;
+        // If very close, back off slightly
+        if (dist2d < 5) { tx = ex + (ex-px)*2; tz = ez + (ez-pz)*2; }
+      }
       var tx2 = Math.max(1, Math.min(GRID.W-2, tx));
       var tz2 = Math.max(1, Math.min(GRID.D-2, tz));
       var next = bfsStep(ex, ez, tx2, tz2);
@@ -4163,6 +4252,7 @@ function periFireTorpedo() {
     state.torpedoes.push({ ox:state.player.x, oy:GRID.H, oz:state.player.z,
       x:state.player.x, y:GRID.H, z:state.player.z,
       dx:sndx, dy:0, dz:sndz, speed:0.3, progress:0 });
+    if (state.silentRunning) revealPlayerToEnemy(420);
     if (state.torpCount !== Infinity) state.torpCount--;
     state.torpsFired++;
     state.torpLastFired = Date.now();
@@ -4224,6 +4314,12 @@ document.getElementById('peri-btn-reveal-peri').addEventListener('click', () => 
     state.silentRunning = true;
     state.silentPings = [];
     state.forceReveal = false;
+    // Enemy briefly retains last known position before losing contact
+    state.enemyKnowsPlayer = true;
+    state.enemyKnowsTimer = 240;
+    state.enemyLastKnown = {x: state.player.x, z: state.player.z};
+    state.enemyPingTimer = 720 + Math.floor(Math.random() * 480); // 12-20s until first enemy ping
+    state.playerNoise = 0;
     // Save and apply preset: dense points, lines off, black fill
     _silentPreset = { cloudDensity, showWireframe: state.showWireframe, terrainFillOpacity, lineOpacity };
     cloudDensity = DENSITY_MIN;
@@ -4235,9 +4331,13 @@ document.getElementById('peri-btn-reveal-peri').addEventListener('click', () => 
     btn.classList.add('silent-active');
     addEvent('◎ SILENT RUNNING — ENGAGED', false);
   } else {
-    // Disengage silent running — enemy position revealed
+    // Disengage silent running — back to standard steaming
     state.silentRunning = false;
     state.silentPings = [];
+    state.enemyPings = [];
+    state.enemyKnowsPlayer = true;
+    state.enemyKnowsTimer = 0;
+    state.playerNoise = 0;
     state.forceReveal = true;
     if (_silentPreset) {
       cloudDensity = _silentPreset.cloudDensity;
@@ -4247,7 +4347,7 @@ document.getElementById('peri-btn-reveal-peri').addEventListener('click', () => 
       debouncedGenerateCloud();
       _silentPreset = null;
     }
-    btn.textContent = '👁 ENEMY';
+    btn.innerHTML = 'STANDARD<br>STEAMING';
     btn.classList.remove('silent-active');
     addEvent('◎ SILENT RUNNING — DISENGAGED', false);
   }

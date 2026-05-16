@@ -1595,6 +1595,7 @@ function update() {
   state.time++;
   const _depth = GRID.H - state.player.y;
   if (_depth > state.maxDepth) state.maxDepth = _depth;
+  if (_scoreboardOn && state.animFrame % 20 === 0) updateScoreboard();
 
   // ── ENEMY AI — state machine (movement + firing) ──
   if (state.enemy.alive) updateEnemyAI();

@@ -2391,11 +2391,12 @@ function doFire() {
   const target = state.firingSolution || state.aimCursor;
   if (!target) return;
 
-  // Clamp launch Y to waterline — in surface/surfaced mode player.y >= GRID.H
-  // which puts the torpedo above the grid and the bounds check kills it immediately.
-  const fireY = Math.min(state.player.y, GRID.H);
+  // Clamp launch and target Y to waterline — in surface/surfaced mode player.y >= GRID.H,
+  // which puts both origin and aim cursor above the grid bounds, causing instant removal.
+  const fireY   = Math.min(state.player.y, GRID.H);
+  const targetY = Math.min(target.y, GRID.H);
   const dx = target.x - state.player.x;
-  const dy = target.y - fireY;
+  const dy = targetY - fireY;
   const dz = target.z - state.player.z;
   const len = Math.sqrt(dx*dx+dy*dy+dz*dz) || 1;
 

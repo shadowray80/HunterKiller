@@ -2387,7 +2387,8 @@ function updateScoreboard() {
 }
 function setScoreboard(on) {
   _scoreboardOn = on;
-  document.getElementById('peri-btn-stats').classList.toggle('active-btn', on);
+  // Tactical button label flips: map visible → "STATUS", scoreboard visible → "TACTICAL"
+  document.getElementById('peri-btn-tactical').textContent = on ? '◎ TACTICAL' : '◉ STATUS';
   const sb = document.getElementById('scoreboard');
   if (!on) { sb.style.display = 'none'; return; }
   updateScoreboard();
@@ -2405,7 +2406,7 @@ function setScoreboard(on) {
     pointerEvents: 'none',
   });
 }
-document.getElementById('peri-btn-stats').addEventListener('click', () => setScoreboard(!_scoreboardOn));
+// peri-btn-stats is now SPARE — no action yet
 
 // ── WEAPON SELECT ──
 document.getElementById('peri-btn-weapon').addEventListener('click', () => {
@@ -2453,8 +2454,15 @@ function setTacticalSonar(on) {
   });
 }
 document.getElementById('peri-btn-tactical').addEventListener('click', () => {
-  if (!window._isHeightfield) return; // floor plan uses the forward-slider map
-  setTacticalSonar(!_tacticalOn);
+  if (_scoreboardOn) {
+    // Scoreboard showing → switch to map
+    setScoreboard(false);
+    if (window._isHeightfield) setTacticalSonar(true);
+  } else {
+    // Map showing → switch to scoreboard
+    if (window._isHeightfield) setTacticalSonar(false);
+    setScoreboard(true);
+  }
 });
 
 // ── BFS PATHFINDING ──
@@ -5247,7 +5255,8 @@ function launchGame(planGrid) {
   const _wb = document.getElementById('peri-wireframe-btn');
   if (_db) { _db.textContent = state.showDots ? 'ON' : 'OFF'; _db.classList.toggle('on', state.showDots); }
   if (_wb) { _wb.textContent = state.showWireframe ? 'ON' : 'OFF'; _wb.classList.toggle('on', state.showWireframe); }
-  // Auto-show tactical sonar on terrain/canyon maps
+  // Auto-show tactical sonar on terrain/canyon maps; reset scoreboard + button label
+  setScoreboard(false);
   if (window._isHeightfield) {
     setTimeout(() => setTacticalSonar(true), 50);
   } else {

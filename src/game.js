@@ -792,8 +792,8 @@ function drawSonar() {
   const sw = 200, sh = 200;
   const scx = sw/2, scy = sh/2;
   // Scale: fit the room grid into the minimap
-  const scaleX = (sw - 24) / GRID.W;
-  const scaleZ = (sh - 24) / GRID.D;
+  const scaleX = (sw - 4) / GRID.W;
+  const scaleZ = (sh - 4) / GRID.D;
   const scale = Math.min(scaleX, scaleZ);
   const offX = scx - (GRID.W/2) * scale;
   const offZ = scy - (GRID.D/2) * scale;
@@ -918,30 +918,6 @@ function drawSonar() {
   sc.fill();
   sc.restore();
   sc.restore();
-
-  // ── COMPASS ROSE (world-space, fixed, not rotating with camera) ──
-  const compassX = sw - 22, compassY = 22, compassR = 14;
-  sc.strokeStyle = 'rgba(0,180,220,0.3)';
-  sc.lineWidth = 0.5;
-  sc.beginPath(); sc.arc(compassX, compassY, compassR, 0, Math.PI*2); sc.stroke();
-  const dirs2 = [['N',0],['E',Math.PI/2],['S',Math.PI],['W',-Math.PI/2]];
-  dirs2.forEach(([label, angle]) => {
-    const lx = compassX + Math.sin(angle)*(compassR+5);
-    const ly = compassY - Math.cos(angle)*(compassR+5);
-    sc.font = `${label==='N'?'7':'6'}px Share Tech Mono`;
-    sc.fillStyle = label==='N' ? '#00ff9d' : 'rgba(0,180,220,0.6)';
-    sc.textAlign = 'center';
-    sc.textBaseline = 'middle';
-    sc.fillText(label, lx, ly);
-    // Tick
-    const tx1 = compassX + Math.sin(angle)*(compassR-3);
-    const ty1 = compassY - Math.cos(angle)*(compassR-3);
-    const tx2 = compassX + Math.sin(angle)*compassR;
-    const ty2 = compassY - Math.cos(angle)*compassR;
-    sc.beginPath(); sc.moveTo(tx1,ty1); sc.lineTo(tx2,ty2);
-    sc.strokeStyle = label==='N'?'#00ff9d':'rgba(0,180,220,0.5)';
-    sc.lineWidth=1; sc.stroke();
-  });
 
   // ── TORPEDO TRACKS ──
   state.torpedoes.forEach(t => {

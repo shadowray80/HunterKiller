@@ -2406,12 +2406,6 @@ function doPing() {
     state.firingSolution = { x:ix, y:iy, z:iz };
 
     addEvent('◎ FIRING SOLUTION LOCKED — TAP FIRE', false);
-    const fireBtn = document.getElementById('btn-fire');
-    fireBtn.style.display = 'block';
-    fireBtn.textContent = '▶ FIRE — SOLUTION LOCKED';
-    fireBtn.style.animation = 'blink 0.6s infinite';
-    // Also arm periscope fire button
-    document.getElementById('peri-btn-fire').classList.add('armed');
     document.getElementById('mode-badge').textContent = '⊛ SOLUTION LOCKED';
     document.getElementById('mode-badge').style.color = 'rgba(255,200,0,1)';
     document.getElementById('mode-badge').style.borderColor = '#ffcc00';

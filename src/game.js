@@ -3785,6 +3785,14 @@ function drawPeriFwdSlider() {
   periFwdCanvas.width = w;
   periFwdCanvas.height = h;
 
+  // In terrain mode the sonar contour map is the navigation aid — this canvas
+  // has no rooms/furniture to draw so just show a dark drag zone.
+  if (window._isHeightfield) {
+    c.fillStyle = 'rgba(0,4,12,0.97)';
+    c.fillRect(0, 0, w, h);
+    return;
+  }
+
   // ── MINIMAP (top-down, same as sonar in command view) ──
   const pad = 8;
   const mapW = w - pad*2, mapH = h - pad*2;
@@ -3839,8 +3847,8 @@ function drawPeriFwdSlider() {
     c.fillStyle='#ffaa00'; c.shadowBlur=6; c.shadowColor='#ffaa00'; c.fill(); c.shadowBlur=0;
   });
 
-  // Enemy trail
-  const showE = state.forceReveal || state.revealAlpha > 0;
+  // Enemy trail — always visible on floor plan map
+  const showE = true;
   if (showE) {
     state.enemyTrail.forEach((t,i) => {
       const tp=mm(t.x,t.z);

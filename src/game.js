@@ -2391,14 +2391,17 @@ function doFire() {
   const target = state.firingSolution || state.aimCursor;
   if (!target) return;
 
+  // Clamp launch Y to waterline — in surface/surfaced mode player.y >= GRID.H
+  // which puts the torpedo above the grid and the bounds check kills it immediately.
+  const fireY = Math.min(state.player.y, GRID.H);
   const dx = target.x - state.player.x;
-  const dy = target.y - state.player.y;
+  const dy = target.y - fireY;
   const dz = target.z - state.player.z;
   const len = Math.sqrt(dx*dx+dy*dy+dz*dz) || 1;
 
   state.torpedoes.push({
-    ox:state.player.x, oy:state.player.y, oz:state.player.z,
-    x:state.player.x,  y:state.player.y,  z:state.player.z,
+    ox:state.player.x, oy:fireY, oz:state.player.z,
+    x:state.player.x,  y:fireY,  z:state.player.z,
     dx:dx/len, dy:dy/len, dz:dz/len,
     speed:0.3, progress:0
   });

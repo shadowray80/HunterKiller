@@ -566,7 +566,7 @@ overflow: hidden;
 position: relative;
 }
 
-#peri-compass-canvas { display: block; width: 100%; }
+#peri-compass-canvas { display: block; width: 100%; touch-action: none; cursor: ew-resize; }
 
 /* Periscope info panels */
 #peri-info-left {

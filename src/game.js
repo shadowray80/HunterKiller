@@ -3718,6 +3718,32 @@ function setupPeriDrag() {
 }
 setupPeriDrag();
 
+// ── COMPASS DRAG (rotate heading) ──
+(function setupCompassDrag() {
+  const el = document.getElementById('peri-compass');
+  let lastX = 0, active = false;
+  const RAD_PER_PX = (1 / 1.4) * (Math.PI / 180); // matches compass 1.4 px/deg render scale
+
+  el.addEventListener('pointerdown', e => {
+    active = true; lastX = e.clientX;
+    el.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  el.addEventListener('pointermove', e => {
+    if (!active) return;
+    const dx = e.clientX - lastX;
+    if (state.viewMode === 'surface' || state.viewMode === 'surfaced') {
+      surfaceBearing -= dx * RAD_PER_PX;
+    } else {
+      state.periAngleH += dx * RAD_PER_PX;
+    }
+    lastX = e.clientX;
+    e.preventDefault();
+  });
+  el.addEventListener('pointerup',     () => { active = false; });
+  el.addEventListener('pointercancel', () => { active = false; });
+})();
+
 // ── PERISCOPE TOGGLE ──
 // btn-periscope lives in the hidden controls-wrap — route to the unified toggle
 document.getElementById('btn-periscope').addEventListener('click', () => {

@@ -6355,14 +6355,16 @@ function updateShips() {
     ship.x += Math.sin(ship.heading) * ship.speed;
     ship.z += Math.cos(ship.heading) * ship.speed;
 
-    // Bounce off grid boundaries (ships can go over walls but not outside grid)
+    // Bounce off grid boundaries — negate the velocity component that caused the penetration.
+    // X wall: negate X component (sin) → heading = -heading
+    // Z wall: negate Z component (cos) → heading = π - heading
     const margin = ship.length / 2;
     if (ship.x < margin || ship.x > GRID.W - margin) {
-      ship.heading = Math.PI - ship.heading;
+      ship.heading = -ship.heading;
       ship.x = Math.max(margin, Math.min(GRID.W - margin, ship.x));
     }
     if (ship.z < margin || ship.z > GRID.D - margin) {
-      ship.heading = -ship.heading;
+      ship.heading = Math.PI - ship.heading;
       ship.z = Math.max(margin, Math.min(GRID.D - margin, ship.z));
     }
 

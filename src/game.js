@@ -4515,24 +4515,25 @@ function buildGridFromColour(imageData, iw, ih) {
         }
       }
       if (!total) continue;
-      const wF=wC/total;
-      const yF=yC/total;
-      // Yellow (door openings) checked FIRST — always navigable even if wall pixels bleed in
+      const wF=wC/total, yF=yC/total, puF=puC/total;
+      // Yellow (door openings) FIRST — always navigable even if wall pixels bleed in
       if (yF > 0.08) { grid[gz][gx]=0; typeGrid[gz][gx]='door'; }
+      // Black structural walls
       else if (wF > 0.2) { grid[gz][gx]=1; typeGrid[gz][gx]='wall'; }
+      // Purple wardrobes/built-ins — full-height obstacles same as walls
+      else if (puF > 0.25) { grid[gz][gx]=1; typeGrid[gz][gx]='wall'; }
     }
   }
 
-  // Widen door openings: any wall cell adjacent to a door cell gets cleared
-  // so single-pixel doors in the image don't stay blocked by neighbouring wall cells
+  // Widen door openings: clear wall cells immediately adjacent to a door cell
+  // when open space exists on the far side — handles thin yellow lines in GPT output
   for (let gz=1;gz<GD-1;gz++) for (let gx=1;gx<GW-1;gx++) {
     if (typeGrid[gz][gx] !== 'door') continue;
-    const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
-    for (const [dz,dx] of dirs) {
+    const dirs4 = [[0,1],[0,-1],[1,0],[-1,0]];
+    for (const [dz,dx] of dirs4) {
       const nz=gz+dz, nx=gx+dx;
       if (nz<1||nz>=GD-1||nx<1||nx>=GW-1) continue;
-      if (grid[nz][nx]===1 && typeGrid[nz][nx]==='wall') {
-        // Only clear if the cell beyond it is open (confirms this is a wall-gap, not a corner)
+      if (grid[nz][nx]===1) {
         const nz2=gz+dz*2, nx2=gx+dx*2;
         if (nz2>=0&&nz2<GD&&nx2>=0&&nx2<GW && grid[nz2][nx2]===0) {
           grid[nz][nx]=0; typeGrid[nz][nx]='door';
@@ -4555,6 +4556,67 @@ function buildGridFromColour(imageData, iw, ih) {
   // Force border walls
   for (let i=0;i<GW;i++){grid[0][i]=1;grid[GD-1][i]=1;}
   for (let i=0;i<GD;i++){grid[i][0]=1;grid[i][GW-1]=1;}
+
+  // ── CONNECTIVITY REPAIR ──
+  // Flood-fill from the centre to find all reachable open cells.
+  // Any isolated open region gets a breach punched through its thinnest wall
+  // so every room is reachable and the level is always playable.
+  const visited = Array.from({length:GD}, ()=>new Uint8Array(GW));
+  const queue = [];
+  // Seed from centre; walk inward until we find an open cell
+  for (let r=0; r<Math.max(GW,GD)/2; r++) {
+    const cz=Math.floor(GD/2), cx=Math.floor(GW/2);
+    if (!grid[cz+r] || !grid[cz-r]) continue;
+    let seeded=false;
+    for (let dz=-r;dz<=r&&!seeded;dz++) for (let dx=-r;dx<=r&&!seeded;dx++) {
+      const sz=cz+dz, sx=cx+dx;
+      if (sz<1||sz>=GD-1||sx<1||sx>=GW-1) continue;
+      if (!grid[sz][sx]) { queue.push([sz,sx]); visited[sz][sx]=1; seeded=true; }
+    }
+    if (seeded) break;
+  }
+  // BFS
+  for (let qi=0; qi<queue.length; qi++) {
+    const [z,x]=queue[qi];
+    for (const [dz,dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+      const nz=z+dz, nx=x+dx;
+      if (nz<0||nz>=GD||nx<0||nx>=GW||visited[nz][nx]||grid[nz][nx]) continue;
+      visited[nz][nx]=1; queue.push([nz,nx]);
+    }
+  }
+  // Find sealed open regions and punch a 1-cell breach through the thinnest adjacent wall
+  for (let gz=1;gz<GD-1;gz++) for (let gx=1;gx<GW-1;gx++) {
+    if (grid[gz][gx] || visited[gz][gx]) continue;
+    // Unvisited open cell — find shortest wall path to a visited cell
+    let bestWz=-1, bestWx=-1, bestLen=999;
+    for (const [dz,dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+      // Walk in this direction until we hit a visited open cell or the border
+      let wLen=0, wz=gz, wx=gx;
+      while (wz>=1&&wz<GD-1&&wx>=1&&wx<GW-1) {
+        wz+=dz; wx+=dx; wLen++;
+        if (!grid[wz][wx] && visited[wz][wx]) {
+          if (wLen < bestLen) { bestLen=wLen; bestWz=gz+dz; bestWx=gx+dx; }
+          break;
+        }
+        if (wLen>8) break; // don't breach thick walls
+      }
+    }
+    if (bestWz>=0) {
+      // Punch breach and flood-fill the newly connected region
+      grid[bestWz][bestWx]=0; typeGrid[bestWz][bestWx]='door';
+      const patch=[[ gz, gx]];
+      visited[gz][gx]=1;
+      for (let pi=0;pi<patch.length;pi++) {
+        const [pz,px]=patch[pi];
+        for (const [dz,dx] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+          const nz=pz+dz,nx=px+dx;
+          if (nz<0||nz>=GD||nx<0||nx>=GW||visited[nz][nx]) continue;
+          if (!grid[nz][nx]) { visited[nz][nx]=1; patch.push([nz,nx]); }
+        }
+      }
+      visited[bestWz][bestWx]=1;
+    }
+  }
 
   return {grid, typeGrid};
 }

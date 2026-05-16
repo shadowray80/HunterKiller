@@ -5504,7 +5504,7 @@ function spawnMegalodon() {
     y: 1.0 + Math.random() * (GRID.H - 2),
     z: sp.z + Math.random() * 2 - 1,
     heading: Math.random() * Math.PI * 2,
-    speed: 0.014 + Math.random() * 0.006,
+    speed: 0.045 + Math.random() * 0.02,
     length: 14, beam: 4.5,
     alive: true,
     turnTimer: 0,

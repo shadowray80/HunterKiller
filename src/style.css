@@ -1093,16 +1093,22 @@ padding: 16px 16px 32px;
 overflow-y: auto;
 font-family: var(--mono);
 }
+.bg-header {
+display: flex;
+align-items: center;
+gap: 12px;
+width: 100%;
+max-width: 420px;
+margin-bottom: 14px;
+}
 .bg-screen-title {
 font-family: var(--ui);
 font-size: 14px;
 letter-spacing: 0.3em;
 text-shadow: 0 0 16px var(--teal);
 color: var(--teal);
-margin-bottom: 14px;
 }
 .bg-back-btn {
-align-self: flex-start;
 font-family: var(--mono);
 font-size: 8px;
 letter-spacing: 0.2em;
@@ -1111,7 +1117,7 @@ background: transparent;
 border: 1px solid var(--teal-dim);
 color: var(--teal-dim);
 cursor: pointer;
-margin-bottom: 14px;
+flex-shrink: 0;
 -webkit-tap-highlight-color: transparent;
 }
 .bg-back-btn:active { color: var(--teal); border-color: var(--teal); }

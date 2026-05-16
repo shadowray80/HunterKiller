@@ -936,11 +936,12 @@ function drawSonar() {
   });
 
   // ── ENEMY TRAIL ──
-  const showEnemy = state.forceReveal || state.revealAlpha > 0;
+  const showEnemy = true;
+  const _revA = state.forceReveal ? 0.5 : Math.max(0.25, state.revealAlpha);
   if (showEnemy) {
     state.enemyTrail.forEach((t, i) => {
       const tp = mm(t.x, t.z);
-      const a = (state.forceReveal ? 0.5 : state.revealAlpha) * (1-t.age/300) * (i/Math.max(1,state.enemyTrail.length));
+      const a = _revA * (1-t.age/300) * (i/Math.max(1,state.enemyTrail.length));
       if (a > 0.05) {
         sc.beginPath(); sc.arc(tp.x, tp.y, 2, 0, Math.PI*2);
         sc.fillStyle=`rgba(255,68,68,${a})`; sc.fill();
@@ -951,7 +952,7 @@ function drawSonar() {
   // ── ENEMY BLIP ──
   if (state.enemy.alive && showEnemy) {
     const ep = mm(state.enemy.x, state.enemy.z);
-    const ea = state.forceReveal ? 1.0 : state.revealAlpha;
+    const ea = state.forceReveal ? 1.0 : Math.max(0.7, state.revealAlpha);
 
     // Bearing line from player to enemy
     const pp2 = mm(state.player.x, state.player.z);

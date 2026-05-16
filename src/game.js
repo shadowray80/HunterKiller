@@ -2452,7 +2452,10 @@ function setTacticalSonar(on) {
     zIndex: '20', pointerEvents: 'none',
   });
 }
-document.getElementById('peri-btn-tactical').addEventListener('click', () => setTacticalSonar(!_tacticalOn));
+document.getElementById('peri-btn-tactical').addEventListener('click', () => {
+  if (!window._isHeightfield) return; // floor plan uses the forward-slider map
+  setTacticalSonar(!_tacticalOn);
+});
 
 // ── BFS PATHFINDING ──
 function bfsStep(sx, sz, tx, tz) {

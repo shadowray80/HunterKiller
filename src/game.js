@@ -7303,9 +7303,11 @@ function updateShips() {
         ship.huntZ = state.player.z;
       }
 
-      // Ping sound — louder and closer-feeling as detection rises
-      const _pingVol = (0.05 + ship.detection * 0.75) * Math.max(0.1, 1 - _psdist / 40);
-      playShipSonar(_pingVol);
+      // Ping sound — only when ship is right overhead and actively hunting
+      if (state.battleStations && ship.detection > 0.3 && _psdist < 8) {
+        const _pingVol = (0.2 + ship.detection * 0.8) * Math.max(0.2, 1 - _psdist / 10);
+        playShipSonar(_pingVol);
+      }
     }
 
     // Steer toward last-known position when we have a contact

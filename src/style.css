@@ -1134,20 +1134,43 @@ gap: 10px;
 width: 100%;
 max-width: 320px;
 }
-#intro-dive-btn {
+.intro-dive-card {
+background: rgba(0,229,255,0.07);
+border: 2px solid var(--teal);
+box-shadow: 0 0 30px rgba(0,229,255,0.15);
+padding: 14px 16px;
+display: flex;
+flex-direction: column;
+gap: 10px;
+}
+.intro-dive-card-label {
 font-family: var(--mono);
 font-size: 13px;
 letter-spacing: 0.25em;
-padding: 16px;
-background: rgba(0,229,255,0.1);
-border: 2px solid var(--teal);
+color: var(--teal);
+text-shadow: 0 0 12px var(--teal);
+text-align: center;
+}
+.intro-dive-split {
+display: flex;
+gap: 10px;
+}
+.intro-dive-split button {
+font-family: var(--mono);
+font-size: 10px;
+letter-spacing: 0.18em;
+padding: 12px 8px;
+background: transparent;
+border: 1px solid var(--teal);
 color: var(--teal);
 cursor: pointer;
-text-shadow: 0 0 12px var(--teal);
-box-shadow: 0 0 30px rgba(0,229,255,0.15);
+flex: 1;
+text-align: center;
 -webkit-tap-highlight-color: transparent;
 }
-#intro-dive-btn:active { background: rgba(0,229,255,0.25); }
+.intro-dive-split button:active {
+background: rgba(0,229,255,0.2);
+}
 #intro-choose-btn, #intro-upload-btn {
 font-family: var(--mono);
 font-size: 9px;

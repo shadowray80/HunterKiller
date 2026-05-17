@@ -8262,10 +8262,21 @@ if (false) (function() {
 })();
 
 // ── INTRO SCREEN NAVIGATION ──
-document.getElementById('intro-dive-btn').addEventListener('click', function() {
+document.getElementById('intro-btn-floorplan').addEventListener('click', function() {
   window._pendingGrid = null;
   window._isHeightfield = false;
   launchGame(FLOOR_PLAN);
+});
+
+document.getElementById('intro-btn-ocean').addEventListener('click', function() {
+  var canyonBg = BATTLEGROUNDS.find(function(b) { return b.id === 'canyon'; });
+  if (!canyonBg) return;
+  window._isHeightfield = true;
+  document.getElementById('intro-screen').style.display = 'none';
+  canyonBg.loadAsync().then(function(mapGrid) {
+    window._pendingGrid = mapGrid;
+    launchGame(mapGrid);
+  });
 });
 
 document.getElementById('intro-choose-btn').addEventListener('click', function() {

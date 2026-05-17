@@ -177,7 +177,9 @@ function spawnEnemy(avoidRoom) {
     ez = 3 + Math.floor(Math.random() * (GRID.D - 6));
     const gz = Math.min(ez, GRID.D-1), gx = Math.min(ex, GRID.W-1);
     const raw = (window._canyonHeightGrid && window._canyonHeightGrid[gz] && window._canyonHeightGrid[gz][gx] !== undefined) ? window._canyonHeightGrid[gz][gx] : 0;
-    ey = Math.max((raw/255)*GRID.H + 2.5, GRID.H * 0.35);
+    const _ets = window._hfTerrainScale || GRID.H;
+    const _efloor = (raw/255)*_ets;
+    ey = Math.min(Math.max(_efloor + 2.5, GRID.H * 0.35), GRID.H - 1);
   } else {
     const options = SPAWN_POINTS.filter(s => s.name !== 'FAMILY ROOM' && s.name !== avoidRoom);
     const preferred = options[Math.floor(Math.random() * options.length)];
@@ -231,7 +233,9 @@ function spawnPlayer() {
   if (window._isHeightfield && window._canyonHeightGrid) {
     const gz = Math.min(Math.floor(sp.z), GRID.D-1), gx = Math.min(Math.floor(sp.x), GRID.W-1);
     const raw = (window._canyonHeightGrid[gz] && window._canyonHeightGrid[gz][gx] !== undefined) ? window._canyonHeightGrid[gz][gx] : 0;
-    state.player.y = Math.max((raw/255)*GRID.H + 2.5, GRID.H * 0.35);
+    const _pts = window._hfTerrainScale || GRID.H;
+    const _pfloor = (raw/255)*_pts;
+    state.player.y = Math.min(Math.max(_pfloor + 2.5, GRID.H * 0.35), GRID.H - 1);
   } else {
     state.player.y = 3;
   }
@@ -498,12 +502,13 @@ function buildFloorPlanGeometry() {
   // ── HEIGHTFIELD TERRAIN (canyon map) ───────────────────────────────
   if (window._isHeightfield && window._canyonHeightGrid) {
     const hg = window._canyonHeightGrid;
+    const GTS = window._hfTerrainScale || GH; // terrain can exceed waterline for volcanic maps
     // Terrain columns — one box per cell, height from heightmap
     // No border walls: player is clamped by movePlayer bounds, open black is fine
     for (let gz = 0; gz < GD; gz++) {
       for (let gx = 0; gx < GW; gx++) {
         const raw = (hg[gz] && hg[gz][gx] !== undefined) ? hg[gz][gx] : 0;
-        const h = (raw / 255) * GH;
+        const h = (raw / 255) * GTS;
         if (h < 0.4) continue; // deep open water — nothing to draw
         pieces.push({
           type:'terrain', x1:gx, y1:0, z1:gz, x2:gx+1, y2:h, z2:gz+1,
@@ -741,7 +746,8 @@ function buildWallEdges() {
     const hg = window._canyonHeightGrid;
     const GH = GRID.H;
     const HCOLS = GRID.W, HROWS = GRID.D;
-    const hv = (gz, gx) => (hg[gz] && hg[gz][gx] !== undefined) ? (hg[gz][gx] / 255) * GH : 0;
+    const _gts = window._hfTerrainScale || GH;
+    const hv = (gz, gx) => (hg[gz] && hg[gz][gx] !== undefined) ? (hg[gz][gx] / 255) * _gts : 0;
     for (let gz = 0; gz < HROWS - 1; gz++) {
       for (let gx = 0; gx < HCOLS - 1; gx++) {
         // flat array: [TL TR BR BL] world coords — 12 floats per quad
@@ -764,7 +770,7 @@ function buildWallEdges() {
         for (let p = 0; p < 6; p++) {
           const u = rng(), v = rng();
           const wy = h00*(1-u)*(1-v) + h10*u*(1-v) + h01*(1-u)*v + h11*u*v;
-          cloudPoints.push({ x: gx+u, y: wy, z: gz+v, type:'terrain', nx:0, ny:1, nz:0, yFrac: wy/GH });
+          cloudPoints.push({ x: gx+u, y: wy, z: gz+v, type:'terrain', nx:0, ny:1, nz:0, yFrac: Math.min(1, wy/_gts) });
         }
       }
     }
@@ -5898,6 +5904,52 @@ var BATTLEGROUNDS = [
         img.src='/maps/abyss.png';
       });
     }
+  },
+  // ── THE DROP OFF — volcanic mountains breaking the surface ──────────
+  {
+    id: 'dropoff', name: 'THE DROP OFF',
+    desc: 'Volcanic peaks rise above the waves — hunt in the shallows',
+    tag: 'VOLCANIC',
+    isHeightfield: true,
+    gridW: 128, gridD: 128, gridH: 15, gridTerrainScale: 35,
+    _hGrid: null,
+    makeGrid: function() {
+      var R=128,C=128,z,x; var g=[];
+      for(z=0;z<R;z++){g[z]=[];for(x=0;x<C;x++)g[z][x]=0;}
+      return g;
+    },
+    loadAsync: function() {
+      var self = this;
+      var GW = self.gridW, GD = self.gridD;
+      return new Promise(function(resolve) {
+        function buildHg(px) {
+          var g=[],hg=[];
+          for(var z=0;z<GD;z++){
+            g[z]=[]; hg[z]=[];
+            for(var x=0;x<GW;x++){
+              var idx=(z*GW+x)*4;
+              hg[z][x] = px ? px[idx] : 0;
+              g[z][x]=0;
+            }
+          }
+          self._hGrid=hg;
+          window._canyonHeightGrid=hg;
+          window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;
+          window._hfTerrainScale=self.gridTerrainScale;
+          resolve(g);
+        }
+        var img = new Image();
+        img.onload = function() {
+          var tmp=document.createElement('canvas');
+          tmp.width=GW; tmp.height=GD;
+          var tc=tmp.getContext('2d');
+          tc.drawImage(img,0,0,GW,GD);
+          buildHg(tc.getImageData(0,0,GW,GD).data);
+        };
+        img.onerror = function() { buildHg(null); };
+        img.src='/maps/dropoff.png';
+      });
+    }
   }
 ];
 
@@ -5914,6 +5966,7 @@ function launchGame(planGrid) {
   } else {
     GRID.W = 64; GRID.D = 48; GRID.H = 6;
     window._hfGridW = undefined; window._hfGridD = undefined; window._hfGridH = undefined;
+    window._hfTerrainScale = undefined;
   }
 
   // Resize FLOOR_PLAN to match grid (heightfield maps are all-open; floor plans copy in below)
@@ -7793,6 +7846,48 @@ function renderSurfacePeriscope() {
     ctx.fillStyle = `rgba(0,100,180,${ga})`; ctx.fill();
   }
 
+  // ── VOLCANIC MOUNTAINS — terrain peaks above GRID.H ──
+  if (window._isHeightfield && terrainQuads.length > 0 && window._hfTerrainScale && window._hfTerrainScale > GRID.H) {
+    // Sort quads back-to-front by their centre depth
+    const tqItems = [];
+    for (let i = 0; i < terrainQuads.length; i += 12) {
+      const maxY = Math.max(terrainQuads[i+1], terrainQuads[i+4], terrainQuads[i+7], terrainQuads[i+10]);
+      if (maxY <= GRID.H) continue; // fully submerged quad — skip
+      const cx = (terrainQuads[i]+terrainQuads[i+3]+terrainQuads[i+6]+terrainQuads[i+9])*0.25;
+      const cz = (terrainQuads[i+2]+terrainQuads[i+5]+terrainQuads[i+8]+terrainQuads[i+11])*0.25;
+      const dx2 = cx - state.player.x, dz2 = cz - state.player.z;
+      const cosB2 = Math.cos(surfaceBearing), sinB2 = Math.sin(surfaceBearing);
+      const depth2 = -dx2*sinB2 + dz2*cosB2;
+      if (depth2 < 0.3) continue;
+      tqItems.push({i, depth2, maxY});
+    }
+    tqItems.sort((a,b) => b.depth2 - a.depth2);
+    ctx.save();
+    tqItems.forEach(function(item) {
+      const i = item.i;
+      const p0 = projectSurface(terrainQuads[i],   terrainQuads[i+1],  terrainQuads[i+2]);
+      const p1 = projectSurface(terrainQuads[i+3], terrainQuads[i+4],  terrainQuads[i+5]);
+      const p2 = projectSurface(terrainQuads[i+6], terrainQuads[i+7],  terrainQuads[i+8]);
+      const p3 = projectSurface(terrainQuads[i+9], terrainQuads[i+10], terrainQuads[i+11]);
+      if (!p0 || !p1 || !p2 || !p3) return;
+      const distA = Math.max(0, 1 - item.depth2 / 100);
+      if (distA < 0.01) return;
+      const heightFrac = Math.min(1, (item.maxY - GRID.H) / (window._hfTerrainScale - GRID.H));
+      // Dark volcanic rock — near-black with slight warm tint
+      const r = Math.floor(30 + heightFrac * 40), g = Math.floor(20 + heightFrac * 25), b = Math.floor(18 + heightFrac * 22);
+      ctx.fillStyle = `rgba(${r},${g},${b},${Math.min(1, distA * 2.5)})`;
+      ctx.beginPath();
+      ctx.moveTo(p0.sx, p0.sy); ctx.lineTo(p1.sx, p1.sy); ctx.lineTo(p2.sx, p2.sy); ctx.lineTo(p3.sx, p3.sy);
+      ctx.closePath(); ctx.fill();
+      if (heightFrac > 0.5 && distA > 0.1) {
+        ctx.strokeStyle = `rgba(80,50,40,${distA * 0.5})`;
+        ctx.lineWidth = 0.4;
+        ctx.stroke();
+      }
+    });
+    ctx.restore();
+  }
+
   // ── SHIPS — 3D wireframe models ──
   state.ships.forEach(ship => {
     if (!ship.alive && !ship.sinking) return;
@@ -8354,6 +8449,7 @@ document.getElementById('intro-btn-ocean').addEventListener('click', function() 
   if (!canyonBg) return;
   window._isHeightfield = true;
   window._hfGridW = undefined; window._hfGridD = undefined; window._hfGridH = undefined;
+  window._hfTerrainScale = undefined;
   document.getElementById('intro-screen').style.display = 'none';
   canyonBg.loadAsync().then(function(mapGrid) {
     window._pendingGrid = mapGrid;
@@ -8423,6 +8519,7 @@ document.getElementById('upload-back-btn').addEventListener('click', function() 
       window._hfGridW = bg.gridW || undefined;
       window._hfGridD = bg.gridD || undefined;
       window._hfGridH = bg.gridH || undefined;
+      window._hfTerrainScale = bg.gridTerrainScale || undefined;
       launchGame(mapGrid);
     });
     return card;

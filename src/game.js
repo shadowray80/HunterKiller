@@ -2898,6 +2898,15 @@ document.getElementById('peri-btn-battlestations').addEventListener('click', () 
   document.getElementById('btn-battlestations').click();
 });
 
+document.getElementById('peri-alert-btn').addEventListener('click', () => {
+  document.getElementById('btn-battlestations').click();
+});
+
+function _updateAlertImage() {
+  var img = document.getElementById('peri-alert-img');
+  if (img) img.src = state.battleStations ? '/Images/Alert_Red.png' : '/Images/Alert_Grey.png';
+}
+
 document.getElementById('btn-battlestations').addEventListener('click', () => {
   state.battleStations = !state.battleStations;
   const btn = document.getElementById('btn-battlestations');
@@ -2918,6 +2927,7 @@ document.getElementById('btn-battlestations').addEventListener('click', () => {
     if (periBtn) { periBtn.style.color=''; periBtn.style.borderColor=''; }
     addEvent('▸ STAND DOWN — RED ALERT CANCELLED', false);
   }
+  _updateAlertImage();
 });
 
 // ── TORPEDO COOLDOWN DISPLAY ──

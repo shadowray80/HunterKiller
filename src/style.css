@@ -142,6 +142,22 @@ line-height: 1;
 /* Hide the HUD-corner lives — periscope overlay (#peri-lives) is the single source */
 #hud-lives { display: none; }
 
+#peri-alert-btn {
+cursor: pointer;
+margin-top: 10px;
+display: flex;
+justify-content: flex-end;
+-webkit-tap-highlight-color: transparent;
+user-select: none;
+}
+#peri-alert-img {
+width: 64px;
+height: auto;
+display: block;
+transition: filter 0.15s;
+}
+#peri-alert-btn:active #peri-alert-img { filter: brightness(1.3); }
+
 .life-icon {
 display: inline-block;
 width: 38px;

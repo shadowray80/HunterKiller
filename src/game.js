@@ -3266,7 +3266,6 @@ function updateEnemyAI() {
   }
 
   // ── STATE: EVADE — frantic evasion of incoming acoustic torpedo ──
-  // Bypasses pathfinding → risk of terrain collision (Red October moment)
   else if (en.aiState === 'evade') {
     en.evasionTimer--;
     if (en.evasionTimer <= 0) {
@@ -3274,41 +3273,61 @@ function updateEnemyAI() {
       addEvent('▸ BRAVO RESUMING HUNT PATTERN', false);
       return;
     }
-    // Rapid depth changes — diving deep to try to lose the torpedo
+    // Rapid depth changes
     if (_enemyMoveTimer % 18 === 0) {
       en.y = Math.max(0.4, Math.min(GRID.H-0.6, en.y + (Math.random()-0.5)*1.6));
     }
-    // Violent heading changes — zigzag pattern
+    // Zigzag heading changes
     if (_enemyMoveTimer % 22 === 0) {
-      en.heading += (Math.random()-0.5) * Math.PI * 0.9;
+      en.heading += (Math.random()-0.5) * Math.PI * 0.85;
     }
-    // Move fast, bypassing BFS — this is where terrain collision can happen
-    if (_enemyMoveTimer % 5 === 0) {
-      var _evnx = en.x + Math.sin(en.heading) * 1.05;
-      var _evnz = en.z + Math.cos(en.heading) * 1.05;
-      var _evgx = Math.round(_evnx), _evgz = Math.round(_evnz);
-      // ── TERRAIN COLLISION — Red October moment ──
-      if (_evgx < 1 || _evgx >= GRID.W-1 || _evgz < 1 || _evgz >= GRID.D-1 ||
-          (FLOOR_PLAN[_evgz] && FLOOR_PLAN[_evgz][_evgx])) {
-        var _cx = en.x, _cy = en.y, _cz = en.z;
-        en.alive = false; en.hits = 0;
-        state.kills++;
-        addScore(50);
-        playExplosionShip();
-        spawnExplosion(_cx, _cy, _cz, true);
-        spawnExplosion(_cx+(Math.random()-0.5)*3, _cy, _cz+(Math.random()-0.5)*3, true);
-        setTimeout(function() {
-          spawnExplosion(_cx+(Math.random()-0.5)*4, _cy, _cz+(Math.random()-0.5)*4, true);
-          playExplosionShip();
-        }, 350);
-        document.getElementById('kill-count').textContent = state.kills;
-        document.getElementById('enemy-status').textContent = 'DESTROYED';
-        addEvent('⊛ BRAVO DROVE INTO TERRAIN — DESTROYED (+50)', false);
-        setTimeout(function() { addEvent('▸ "THEY TURNED INTO THE MOUNTAIN"', false); }, 1800);
-        setTimeout(function() { respawnEnemy(); }, 7000);
-        return;
+    // Normal movement via BFS toward a random point — fast but pathfinding-safe
+    if (_enemyMoveTimer % 7 === 0) {
+      var _rtx = Math.max(2, Math.min(GRID.W-3, ex + Math.round((Math.random()-0.5)*18)));
+      var _rtz = Math.max(2, Math.min(GRID.D-3, ez + Math.round((Math.random()-0.5)*18)));
+      var _evnext = bfsStep(ex, ez, _rtx, _rtz);
+      if (_evnext) {
+        var _evny = Math.max(0.5, Math.min(GRID.H-0.6, en.y + (Math.random()-0.5)*0.5));
+        var _evnx = en.x + (_evnext.x - ex) * 0.95;
+        var _evnz = en.z + (_evnext.z - ez) * 0.95;
+        if (!isOccupied(_evnx, _evny, _evnz)) {
+          en.x = _evnx; en.y = _evny; en.z = _evnz;
+          en.heading = Math.atan2(_evnext.x - ex, _evnext.z - ez);
+        }
       }
-      en.x = _evnx; en.z = _evnz;
+    }
+    // ── RED OCTOBER MOMENT ──
+    // Only when torpedo is very close (< 5 units): panic move ignores pathfinding → terrain risk
+    if (_incomingHomer && _enemyMoveTimer % 4 === 0) {
+      var _panicDist = Math.sqrt(
+        (_incomingHomer.x-en.x)*(_incomingHomer.x-en.x) +
+        (_incomingHomer.z-en.z)*(_incomingHomer.z-en.z)
+      );
+      if (_panicDist < 5) {
+        var _pnx = en.x + Math.sin(en.heading) * 0.45;
+        var _pnz = en.z + Math.cos(en.heading) * 0.45;
+        var _pgx = Math.round(_pnx), _pgz = Math.round(_pnz);
+        if (_pgx < 1 || _pgx >= GRID.W-1 || _pgz < 1 || _pgz >= GRID.D-1 ||
+            (FLOOR_PLAN[_pgz] && FLOOR_PLAN[_pgz][_pgx])) {
+          var _kcx = en.x, _kcy = en.y, _kcz = en.z;
+          en.alive = false; en.hits = 0;
+          state.kills++; addScore(50);
+          playExplosionShip();
+          spawnExplosion(_kcx, _kcy, _kcz, true);
+          spawnExplosion(_kcx+(Math.random()-0.5)*3, _kcy, _kcz+(Math.random()-0.5)*3, true);
+          setTimeout(function() {
+            spawnExplosion(_kcx+(Math.random()-0.5)*4, _kcy, _kcz+(Math.random()-0.5)*4, true);
+            playExplosionShip();
+          }, 350);
+          document.getElementById('kill-count').textContent = state.kills;
+          document.getElementById('enemy-status').textContent = 'DESTROYED';
+          addEvent('⊛ BRAVO DROVE INTO TERRAIN — DESTROYED (+50)', false);
+          setTimeout(function() { addEvent('▸ "THEY TURNED INTO THE MOUNTAIN"', false); }, 1800);
+          setTimeout(function() { respawnEnemy(); }, 7000);
+          return;
+        }
+        en.x = _pnx; en.z = _pnz;
+      }
     }
   }
 }

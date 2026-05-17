@@ -1006,8 +1006,12 @@ function drawSonar() {
   });
 
   // ── ENEMY TRAIL ──
-  const showEnemy = true;
-  const _revA = state.forceReveal ? 0.5 : Math.max(0.25, state.revealAlpha);
+  // In silent mode only show when a ping/fire reveal is active
+  const _silentReveal = Math.max(state.revealAlpha, state.enemySilentAlpha);
+  const showEnemy = !state.silentRunning || state.forceReveal || _silentReveal > 0;
+  const _revA = state.silentRunning
+    ? _silentReveal * 0.5
+    : (state.forceReveal ? 0.5 : Math.max(0.25, state.revealAlpha));
   if (showEnemy) {
     state.enemyTrail.forEach((t, i) => {
       const tp = mm(t.x, t.z);
@@ -1022,7 +1026,9 @@ function drawSonar() {
   // ── ENEMY BLIP ──
   if (state.enemy.alive && showEnemy) {
     const ep = mm(state.enemy.x, state.enemy.z);
-    const ea = state.forceReveal ? 1.0 : Math.max(0.7, state.revealAlpha);
+    const ea = state.silentRunning
+      ? _silentReveal
+      : (state.forceReveal ? 1.0 : Math.max(0.7, state.revealAlpha));
 
     // Bearing line from player to enemy
     const pp2 = mm(state.player.x, state.player.z);
@@ -2943,6 +2949,12 @@ function enemyFire() {
   });
   state.enemyLastFired = Date.now();
   state.timesDetected++;
+  // Torpedo launch noise reveals Bravo's position briefly on the minimap
+  if (state.silentRunning) {
+    state.revealTimer = Math.max(state.revealTimer, 180);
+    state.revealAlpha = 1.0;
+    state.enemySilentAlpha = Math.max(state.enemySilentAlpha, 1.0);
+  }
   addEvent('⚠ TORPEDO IN THE WATER!', true);
 }
 
@@ -4227,17 +4239,19 @@ function drawPeriFwdSlider() {
     c.fillStyle='#ffaa00'; c.shadowBlur=6; c.shadowColor='#ffaa00'; c.fill(); c.shadowBlur=0;
   });
 
-  // Enemy trail — always visible on floor plan map
-  const showE = true;
+  // Enemy trail — hidden in silent mode unless a reveal is active
+  const _mmSilRev = Math.max(state.revealAlpha, state.enemySilentAlpha);
+  const showE = !state.silentRunning || state.forceReveal || _mmSilRev > 0;
   if (showE) {
+    const _mmRevA = state.silentRunning ? _mmSilRev * 0.5 : (state.forceReveal ? 0.5 : state.revealAlpha);
     state.enemyTrail.forEach((t,i) => {
       const tp=mm(t.x,t.z);
-      const a=(state.forceReveal?0.5:state.revealAlpha)*(1-t.age/300)*(i/Math.max(1,state.enemyTrail.length));
+      const a=_mmRevA*(1-t.age/300)*(i/Math.max(1,state.enemyTrail.length));
       if(a>0.05){c.beginPath();c.arc(tp.x,tp.y,2,0,Math.PI*2);c.fillStyle=`rgba(255,68,68,${a})`;c.fill();}
     });
     if (state.enemy.alive) {
       const ep=mm(state.enemy.x,state.enemy.z);
-      const ea=state.forceReveal?1:Math.max(0.7,state.revealAlpha);
+      const ea=state.silentRunning ? _mmSilRev : (state.forceReveal?1:Math.max(0.7,state.revealAlpha));
       // Bearing line
       const playerPt=mm(state.player.x,state.player.z);
       c.beginPath();c.moveTo(playerPt.x,playerPt.y);c.lineTo(ep.x,ep.y);

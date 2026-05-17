@@ -8397,6 +8397,7 @@ document.getElementById('intro-btn-ocean').addEventListener('click', function() 
   var canyonBg = BATTLEGROUNDS.find(function(b) { return b.id === 'canyon'; });
   if (!canyonBg) return;
   window._isHeightfield = true;
+  window._hfGridW = undefined; window._hfGridD = undefined; window._hfGridH = undefined;
   document.getElementById('intro-screen').style.display = 'none';
   canyonBg.loadAsync().then(function(mapGrid) {
     window._pendingGrid = mapGrid;
@@ -8462,6 +8463,10 @@ document.getElementById('upload-back-btn').addEventListener('click', function() 
       window._pendingGrid = mapGrid;
       window._pendingTypeGrid = null;
       window._isHeightfield = !!bg.isHeightfield;
+      // Always stamp grid dimensions from the bg entry so stale values never bleed across maps
+      window._hfGridW = bg.gridW || undefined;
+      window._hfGridD = bg.gridD || undefined;
+      window._hfGridH = bg.gridH || undefined;
       launchGame(mapGrid);
     });
     return card;

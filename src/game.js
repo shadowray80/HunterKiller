@@ -8632,6 +8632,7 @@ document.getElementById('upload-back-btn').addEventListener('click', function() 
       window._hfGridD = bg.gridD || undefined;
       window._hfGridH = bg.gridH || undefined;
       window._hfTerrainScale = bg.gridTerrainScale || undefined;
+      if (bg._hGrid) window._canyonHeightGrid = bg._hGrid;
       launchGame(mapGrid);
     });
     return card;

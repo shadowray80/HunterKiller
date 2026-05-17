@@ -367,6 +367,15 @@ function playTorpedoLaunch() {
   _torpLaunchAudio.play().catch(function(){});
 }
 
+// Ship sonar ping (volume-scaled, reused element — ships ping infrequently)
+var _shipSonarAudio = null;
+function playShipSonar(vol) {
+  if (!_shipSonarAudio) _shipSonarAudio = new Audio('/Sounds/sonar_ping_single.mp3');
+  _shipSonarAudio.currentTime = 0;
+  _shipSonarAudio.volume = Math.max(0.02, Math.min(1, vol));
+  _shipSonarAudio.play().catch(function(){});
+}
+
 // Shell hits water (near miss / warning shot)
 var _waterSurfExpAudio = null;
 function playWaterSurfaceExplosion() {
@@ -6837,25 +6846,37 @@ function updateDepthCharges() {
       if (ship.dcTimer > 0) return;
       ship.dcTimer = 240 + Math.floor(Math.random() * 180); // 4-7s cooldown
 
-      // Only drop if player is roughly below
-      const dx = state.player.x - ship.x;
-      const dz = state.player.z - ship.z;
+      // Need detection to know where to drop; drop range tightens with confidence
+      const det = ship.detection || 0;
+      if (det < 0.05) return; // blind — no contact, no drops
+
+      // Drop radius from ship shrinks as detection confidence rises (6→0.8 world units)
+      const dcScatter = Math.max(0.8, 6 * (1 - det * 0.88));
+
+      // Use last-known hunt position as the drop aim point when confident
+      const aimX = det > 0.5 ? ship.huntX : ship.x;
+      const aimZ = det > 0.5 ? ship.huntZ : ship.z;
+
+      // Only drop when ship is actually over the target zone
+      const dx = aimX - ship.x;
+      const dz = aimZ - ship.z;
       const dist2d = Math.sqrt(dx*dx + dz*dz);
-      if (dist2d > 15) return;
+      if (dist2d > 8 + det * 10) return; // low detection = must be almost on top
 
       // Drop depth charge — falls from surface down
       state.depthCharges.push({
-        x: ship.x + (Math.random()-0.5)*4,
+        x: aimX + (Math.random()-0.5) * dcScatter * 2,
         y: GRID.H,
-        z: ship.z + (Math.random()-0.5)*4,
+        z: aimZ + (Math.random()-0.5) * dcScatter * 2,
         vy: 0,
         armed: false,
         exploded: false,
         label: ship.label,
         trail: []
       });
-      addEvent(`⚠ DEPTH CHARGES! — ${ship.label}`, true);
-        setTimeout(()=>addEvent('⚠ BRACE FOR IMPACT', true), 800);
+      const detWord = det > 0.75 ? 'LOCKED ON' : det > 0.4 ? 'TRACKING' : 'SEARCHING';
+      addEvent(`⚠ DEPTH CHARGES! — ${ship.label} (${detWord})`, true);
+      setTimeout(()=>addEvent('⚠ BRACE FOR IMPACT', true), 800);
     });
   }
 
@@ -6907,6 +6928,10 @@ function spawnShip(ship) {
   ship.hits = 0;
   ship.onFire = false;
   ship.fireTimer = 0;
+  ship.sonarTimer = undefined;
+  ship.detection = 0;
+  ship.huntX = ship.x;
+  ship.huntZ = ship.z;
   addEvent(`▸ NEW CONTACT — ${ship.label} DETECTED`, true);
 }
 
@@ -6951,6 +6976,61 @@ function updateShips() {
     if (ship.z < margin || ship.z > GRID.D - margin) {
       ship.heading = Math.PI - ship.heading;
       ship.z = Math.max(margin, Math.min(GRID.D - margin, ship.z));
+    }
+
+    // ── SHIP SONAR — detection, homing, ping sound ──
+    if (ship.sonarTimer === undefined) {
+      ship.sonarTimer = Math.floor(Math.random() * 200);
+      ship.detection  = 0;
+      ship.huntX = ship.x;
+      ship.huntZ = ship.z;
+    }
+
+    // Detection confidence decays over time; silent running makes ships lose contact faster
+    const _decayRate = state.silentRunning ? 0.0018 : 0.0007;
+    ship.detection = Math.max(0, ship.detection - _decayRate);
+
+    ship.sonarTimer--;
+    if (ship.sonarTimer <= 0) {
+      // Next ping interval: 240 frames (~4s) at 0 detection → 45 frames (~0.75s) at full lock
+      ship.sonarTimer = Math.round(240 - ship.detection * 195) + Math.floor(Math.random() * 40);
+
+      const _psdx = state.player.x - ship.x;
+      const _psdz = state.player.z - ship.z;
+      const _psdist = Math.sqrt(_psdx*_psdx + _psdz*_psdz);
+
+      // Detection range: red alert expands it, silent running collapses it
+      const _baseRange = state.battleStations ? 28 : 20;
+      const _effRange  = state.silentRunning ? 6 : _baseRange;
+      // Silent running — still detectable via enemy-knows flag (player fired/was pinged)
+      const _noiseHit  = state.silentRunning && state.enemyKnowsPlayer && _psdist < _baseRange;
+
+      if (_psdist < _effRange || _noiseHit) {
+        // Contact! Update detection confidence and last-known position
+        const _gain = state.battleStations ? 0.28 : 0.16;
+        ship.detection = Math.min(1, ship.detection + _gain);
+        ship.huntX = state.player.x;
+        ship.huntZ = state.player.z;
+      }
+
+      // Ping sound — louder and closer-feeling as detection rises
+      const _pingVol = (0.05 + ship.detection * 0.75) * Math.max(0.1, 1 - _psdist / 40);
+      playShipSonar(_pingVol);
+    }
+
+    // Steer toward last-known position when we have a contact
+    if (ship.detection > 0.15) {
+      const _hx = ship.huntX - ship.x;
+      const _hz = ship.huntZ - ship.z;
+      const _hdist = Math.sqrt(_hx*_hx + _hz*_hz);
+      if (_hdist > 1.5) {
+        const _tgt = Math.atan2(_hx, _hz);
+        let _da = _tgt - ship.heading;
+        while (_da >  Math.PI) _da -= Math.PI * 2;
+        while (_da < -Math.PI) _da += Math.PI * 2;
+        // Turn rate scales with confidence — faint contact = slow wander, lock = hard turn
+        ship.heading += _da * 0.04 * ship.detection;
+      }
     }
 
     // Fire puffs on damaged ships

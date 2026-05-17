@@ -4277,9 +4277,12 @@ function movePeriDir(dir) {
 // Strafe right = 90° clockwise from forward
 function movePeriStrafe(dir) {
   const speedMult = state.silentRunning ? 0.5 : 1.0;
-  const _heading = (state.viewMode === 'surface' || state.viewMode === 'surfaced') ? surfaceBearing : state.periAngleH;
-  const strafeX =  Math.cos(_heading) * -dir * speedMult;
-  const strafeZ =  Math.sin(_heading) * -dir * speedMult;
+  const _isSurf = state.viewMode === 'surface' || state.viewMode === 'surfaced';
+  const _heading = _isSurf ? surfaceBearing : state.periAngleH;
+  // Surface view uses normal screen-x (+fx = right), periscope negates it — flip sign
+  const _sign = _isSurf ? 1 : -1;
+  const strafeX =  Math.cos(_heading) * _sign * dir * speedMult;
+  const strafeZ =  Math.sin(_heading) * _sign * dir * speedMult;
   periStrafeAccumX += strafeX;
   periStrafeAccumZ += strafeZ;
   const stepX = Math.trunc(periStrafeAccumX);

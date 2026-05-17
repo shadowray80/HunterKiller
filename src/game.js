@@ -4939,9 +4939,11 @@ function startWaypointMission() {
 
 function collectWaypoint(wp) {
   wp.collected = true;
-  state.wpMission.score += wp.num;
+  var pts = wp.num * 10;
+  state.wpMission.score += pts;
   state.wpMission.nextRequired++;
-  addEvent('⊛ WAYPOINT '+wp.num+' SECURED — +'+wp.num+' PTS', false);
+  addScore(pts);
+  addEvent('⊛ WAYPOINT '+wp.num+' SECURED — +'+pts+' PTS', false);
   playWpCollect();
   updateWpPanel();
   if (state.wpMission.nextRequired > 5) missionAccomplished();
@@ -4951,7 +4953,7 @@ function missionAccomplished() {
   const m = state.wpMission;
   m.active = false; m.result = 'accomplished'; m.resultTimer = 360;
   m.triggerIn = 18000;
-  addEvent('★ MISSION ACCOMPLISHED — '+m.score+' PTS', false);
+  addEvent('★ MISSION ACCOMPLISHED — '+m.score+' PTS ADDED TO SCORE', false);
   playWpAccomplished();
   updateWpPanel();
 }

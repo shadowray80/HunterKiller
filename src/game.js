@@ -4259,8 +4259,9 @@ let periStrafeAccumX = 0, periStrafeAccumZ = 0;
 // Just fix the arrow to match whatever the actual look direction is.
 function movePeriDir(dir) {
   const speedMult = state.silentRunning ? 0.5 : 1.0;
-  const fwdX = -Math.sin(state.periAngleH) * -dir * speedMult;
-  const fwdZ =  Math.cos(state.periAngleH) * -dir * speedMult;
+  const _heading = (state.viewMode === 'surface' || state.viewMode === 'surfaced') ? surfaceBearing : state.periAngleH;
+  const fwdX = -Math.sin(_heading) * -dir * speedMult;
+  const fwdZ =  Math.cos(_heading) * -dir * speedMult;
   periMoveAccumX += fwdX;
   periMoveAccumZ += fwdZ;
   const stepX = Math.trunc(periMoveAccumX);
@@ -4276,8 +4277,9 @@ function movePeriDir(dir) {
 // Strafe right = 90° clockwise from forward
 function movePeriStrafe(dir) {
   const speedMult = state.silentRunning ? 0.5 : 1.0;
-  const strafeX =  Math.cos(state.periAngleH) * -dir * speedMult;
-  const strafeZ =  Math.sin(state.periAngleH) * -dir * speedMult;
+  const _heading = (state.viewMode === 'surface' || state.viewMode === 'surfaced') ? surfaceBearing : state.periAngleH;
+  const strafeX =  Math.cos(_heading) * -dir * speedMult;
+  const strafeZ =  Math.sin(_heading) * -dir * speedMult;
   periStrafeAccumX += strafeX;
   periStrafeAccumZ += strafeZ;
   const stepX = Math.trunc(periStrafeAccumX);
@@ -7846,43 +7848,63 @@ function renderSurfacePeriscope() {
     ctx.fillStyle = `rgba(0,100,180,${ga})`; ctx.fill();
   }
 
-  // ── VOLCANIC MOUNTAINS — terrain peaks above GRID.H ──
+  // ── VOLCANIC MOUNTAINS — synthwave wireframe for terrain peaks above GRID.H ──
   if (window._isHeightfield && terrainQuads.length > 0 && window._hfTerrainScale && window._hfTerrainScale > GRID.H) {
-    // Sort quads back-to-front by their centre depth
+    const cosB2 = Math.cos(surfaceBearing), sinB2 = Math.sin(surfaceBearing);
     const tqItems = [];
     for (let i = 0; i < terrainQuads.length; i += 12) {
       const maxY = Math.max(terrainQuads[i+1], terrainQuads[i+4], terrainQuads[i+7], terrainQuads[i+10]);
-      if (maxY <= GRID.H) continue; // fully submerged quad — skip
+      if (maxY <= GRID.H) continue;
       const cx = (terrainQuads[i]+terrainQuads[i+3]+terrainQuads[i+6]+terrainQuads[i+9])*0.25;
       const cz = (terrainQuads[i+2]+terrainQuads[i+5]+terrainQuads[i+8]+terrainQuads[i+11])*0.25;
-      const dx2 = cx - state.player.x, dz2 = cz - state.player.z;
-      const cosB2 = Math.cos(surfaceBearing), sinB2 = Math.sin(surfaceBearing);
-      const depth2 = -dx2*sinB2 + dz2*cosB2;
+      const depth2 = -(cx - state.player.x)*sinB2 + (cz - state.player.z)*cosB2;
       if (depth2 < 0.3) continue;
       tqItems.push({i, depth2, maxY});
     }
     tqItems.sort((a,b) => b.depth2 - a.depth2);
     ctx.save();
+    ctx.lineCap = 'round';
     tqItems.forEach(function(item) {
       const i = item.i;
-      const p0 = projectSurface(terrainQuads[i],   terrainQuads[i+1],  terrainQuads[i+2]);
-      const p1 = projectSurface(terrainQuads[i+3], terrainQuads[i+4],  terrainQuads[i+5]);
-      const p2 = projectSurface(terrainQuads[i+6], terrainQuads[i+7],  terrainQuads[i+8]);
-      const p3 = projectSurface(terrainQuads[i+9], terrainQuads[i+10], terrainQuads[i+11]);
+      // Clamp quad vertices to waterline — submerged parts hidden, peaks emerge above
+      const clampY = (y) => Math.max(GRID.H, y);
+      const p0 = projectSurface(terrainQuads[i],   clampY(terrainQuads[i+1]),  terrainQuads[i+2]);
+      const p1 = projectSurface(terrainQuads[i+3], clampY(terrainQuads[i+4]),  terrainQuads[i+5]);
+      const p2 = projectSurface(terrainQuads[i+6], clampY(terrainQuads[i+7]),  terrainQuads[i+8]);
+      const p3 = projectSurface(terrainQuads[i+9], clampY(terrainQuads[i+10]), terrainQuads[i+11]);
       if (!p0 || !p1 || !p2 || !p3) return;
-      const distA = Math.max(0, 1 - item.depth2 / 100);
+      const distA = Math.max(0, 1 - item.depth2 / 90);
       if (distA < 0.01) return;
       const heightFrac = Math.min(1, (item.maxY - GRID.H) / (window._hfTerrainScale - GRID.H));
-      // Dark volcanic rock — near-black with slight warm tint
-      const r = Math.floor(30 + heightFrac * 40), g = Math.floor(20 + heightFrac * 25), b = Math.floor(18 + heightFrac * 22);
-      ctx.fillStyle = `rgba(${r},${g},${b},${Math.min(1, distA * 2.5)})`;
+      // Synthwave teal — brighter at high peaks, dimmer at waterline
+      const lineA = distA * (0.25 + heightFrac * 0.55);
+      const lineW = Math.max(0.3, (0.5 + heightFrac * 0.8) * (1 - item.depth2 / 90));
+      // Dark fill to occlude what's behind
+      ctx.fillStyle = `rgba(0,4,10,${Math.min(0.92, distA * 1.4)})`;
       ctx.beginPath();
       ctx.moveTo(p0.sx, p0.sy); ctx.lineTo(p1.sx, p1.sy); ctx.lineTo(p2.sx, p2.sy); ctx.lineTo(p3.sx, p3.sy);
       ctx.closePath(); ctx.fill();
-      if (heightFrac > 0.5 && distA > 0.1) {
-        ctx.strokeStyle = `rgba(80,50,40,${distA * 0.5})`;
-        ctx.lineWidth = 0.4;
+      // Wireframe edges — teal glow
+      const edgeColor = heightFrac > 0.6
+        ? `rgba(0,230,255,${lineA})`
+        : `rgba(0,180,200,${lineA * 0.7})`;
+      ctx.strokeStyle = edgeColor;
+      ctx.lineWidth = lineW;
+      if (lineA > 0.04) {
+        ctx.shadowBlur = heightFrac > 0.5 ? 6 : 0;
+        ctx.shadowColor = 'rgba(0,220,255,0.6)';
+        ctx.beginPath();
+        ctx.moveTo(p0.sx, p0.sy); ctx.lineTo(p1.sx, p1.sy); ctx.lineTo(p2.sx, p2.sy);
+        ctx.lineTo(p3.sx, p3.sy); ctx.closePath();
         ctx.stroke();
+        // Diagonal to show the quad face
+        if (heightFrac > 0.35 && distA > 0.15) {
+          ctx.shadowBlur = 0;
+          ctx.lineWidth = lineW * 0.4;
+          ctx.strokeStyle = `rgba(0,160,200,${lineA * 0.35})`;
+          ctx.beginPath(); ctx.moveTo(p0.sx, p0.sy); ctx.lineTo(p2.sx, p2.sy); ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
       }
     });
     ctx.restore();

@@ -3449,27 +3449,16 @@ function renderPeriscope() {
           }
         }
       } else if (item.kind === 'enemy') {
-        const ep = item.ep;
-        const eScale = Math.max(0.4, Math.min(2, 8 / ep.depth));
         const eAlpha = state.silentRunning
           ? state.enemySilentAlpha
           : (state.forceReveal ? 1 : state.revealAlpha);
-        ctx.save();
-        ctx.translate(ep.sx, ep.sy);
-        ctx.globalAlpha = eAlpha;
-        ctx.shadowBlur = 12; ctx.shadowColor = '#ff4444';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 12*eScale, 5*eScale, 0, 0, Math.PI*2);
-        ctx.fillStyle = 'rgba(255,68,68,0.15)';
-        ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 1.2;
-        ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#ff4444';
-        ctx.fillRect(-2*eScale, -8*eScale, 4*eScale, 5*eScale);
-        ctx.shadowBlur = 0;
-        ctx.font = `${Math.round(7*eScale)}px Share Tech Mono`;
-        ctx.fillStyle = '#ff4444'; ctx.textAlign = 'center';
-        ctx.fillText('BRAVO', 0, -12*eScale);
-        ctx.restore();
+        if (eAlpha > 0.02) {
+          ctx.save();
+          ctx.globalAlpha = eAlpha;
+          drawTyphoonPeri(eAlpha);
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        }
       } else if (item.kind === 'whale') {
         drawWhalePeri(item.w);
       } else if (item.kind === 'megalodon') {
@@ -6151,6 +6140,183 @@ function drawWaterGrid(surfaceFrac) {
 }
 
 // ── 3D WIREFRAME SHIP (Battlezone-style) ──
+// ── TYPHOON CLASS 3D WIREFRAME (periscope / surface views) ──
+function drawTyphoonPeri(alpha, projFn) {
+  projFn = projFn || projectPeriscope;
+  const en  = state.enemy;
+  const cosH = Math.cos(en.heading), sinH = Math.sin(en.heading);
+
+  // World dimensions: L=length, B=beam, HH=half-height (Typhoon is massive and wide)
+  const L  = 5.2, B  = 1.9, HH = 0.75;
+  const hl = L * 0.5, hb = B * 0.5;
+
+  // Local → world → screen  (bow = +lz, starboard = +lx, up = +ly)
+  function tp(lx, ly, lz) {
+    const wx = en.x + lx * cosH + lz * sinH;
+    const wz = en.z - lx * sinH + lz * cosH;
+    return projFn(wx, en.y + ly, wz);
+  }
+
+  const col = '#ff4444';
+  function line(a, b, a2) {
+    if (!a || !b) return;
+    ctx.strokeStyle = `rgba(255,68,68,${((a2 !== undefined ? a2 : alpha)).toFixed(3)})`;
+    ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.shadowBlur = 8; ctx.shadowColor = col;
+
+  // Hull cross-section frames — 7 rings from stern to bow
+  // Each ring: [lz, widthScale, heightScale]
+  const ringDefs = [
+    [-hl,      0.30, 0.30],  // stern cap
+    [-hl*0.70, 0.82, 0.82],  // aft
+    [-hl*0.25, 1.00, 1.00],  // aft-mid
+    [ 0,       1.00, 1.00],  // amidships (widest)
+    [ hl*0.30, 1.00, 0.95],  // fore-mid
+    [ hl*0.68, 0.80, 0.78],  // forward
+    [ hl,      0.28, 0.28],  // bow cap
+  ];
+
+  // 8-point oval for each ring: T, TS, S, BS, B, BP, P, TP
+  const offsets = [
+    [ 0,    1,    0  ],  // top
+    [ 0.70, 0.70, 0  ],  // top-starboard
+    [ 1,    0,    0  ],  // starboard
+    [ 0.70,-0.70, 0  ],  // bottom-starboard
+    [ 0,   -1,    0  ],  // bottom
+    [-0.70,-0.70, 0  ],  // bottom-port
+    [-1,    0,    0  ],  // port
+    [-0.70, 0.70, 0  ],  // top-port
+  ];
+
+  const rings = ringDefs.map(([lz, xs, ys]) =>
+    offsets.map(([ox, oy]) => tp(ox * hb * xs, oy * HH * ys, lz))
+  );
+
+  // Draw ring frames
+  ctx.lineWidth = 1.1;
+  rings.forEach(r => {
+    for (let i = 0; i < 8; i++) line(r[i], r[(i+1)%8], alpha * 0.8);
+  });
+
+  // Longitudinal stringers (top, starboard, bottom, port + 45° diagonals)
+  ctx.lineWidth = 1.0;
+  for (let i = 0; i < rings.length - 1; i++) {
+    [0, 2, 4, 6].forEach(k => line(rings[i][k], rings[i+1][k], alpha * 0.85));
+    [1, 3, 5, 7].forEach(k => line(rings[i][k], rings[i+1][k], alpha * 0.45));
+  }
+
+  // Twin pressure-hull ridges along the top (distinctive Typhoon feature)
+  ctx.lineWidth = 0.8;
+  const ridgeZ0 = -hl * 0.65, ridgeZ1 = hl * 0.55;
+  [-0.38, 0.38].forEach(rx => {
+    const r0 = tp(rx * hb, HH * 0.98, ridgeZ0);
+    const r1 = tp(rx * hb, HH * 0.98, ridgeZ1);
+    line(r0, r1, alpha * 0.55);
+  });
+
+  // ── SAIL (conning tower) — wide, forward of amidships ──
+  const sailZ  =  hl * 0.22;   // sail centre
+  const sailHl =  hl * 0.22;   // fore-aft half-length of sail base
+  const sailHb =  hb * 0.42;   // port-starboard half-width of sail
+  const sailBot =  HH * 0.88;  // sail base height (just above hull top)
+  const sailTop =  HH * 0.88 + L * 0.28; // sail top height
+
+  const sFL = tp(-sailHb, sailBot, sailZ + sailHl);
+  const sFR = tp( sailHb, sailBot, sailZ + sailHl);
+  const sAL = tp(-sailHb, sailBot, sailZ - sailHl);
+  const sAR = tp( sailHb, sailBot, sailZ - sailHl);
+  const sTL = tp(-sailHb, sailTop, sailZ + sailHl * 0.6);
+  const sTR = tp( sailHb, sailTop, sailZ + sailHl * 0.6);
+  const sTAL = tp(-sailHb, sailTop * 0.85, sailZ - sailHl);
+  const sTAR = tp( sailHb, sailTop * 0.85, sailZ - sailHl);
+
+  ctx.lineWidth = 1.2;
+  // Sail base footprint
+  line(sFL, sFR); line(sAL, sAR); line(sFL, sAL); line(sFR, sAR);
+  // Sail verticals
+  line(sFL, sTL); line(sFR, sTR); line(sAL, sTAL); line(sAR, sTAR);
+  // Sail top
+  line(sTL, sTR); line(sTAL, sTAR); line(sTL, sTAL); line(sTR, sTAR);
+  // Internal sail spine
+  const sailSpineBot = tp(0, sailBot, sailZ);
+  const sailSpineTop = tp(0, sailTop * 0.9, sailZ);
+  ctx.lineWidth = 0.7;
+  line(sailSpineBot, sailSpineTop, alpha * 0.4);
+
+  // Periscope / mast cluster (3 masts at different heights)
+  ctx.lineWidth = 0.9;
+  [[-0.3, sailTop, sailZ + sailHl*0.3],
+   [ 0,   sailTop, sailZ + sailHl*0.1],
+   [ 0.3, sailTop, sailZ - sailHl*0.1]].forEach(([mx, my, mz], i) => {
+    const mBot = tp(mx * sailHb, my,             mz);
+    const mTop = tp(mx * sailHb, my + L * 0.12 - i * L * 0.03, mz);
+    line(mBot, mTop, alpha * (0.85 - i * 0.15));
+  });
+
+  // ── STERN STABILISERS ──
+  const stZ = -hl * 0.60;
+  ctx.lineWidth = 1.1;
+  [[-1],[1]].forEach(([s]) => {
+    // Horizontal planes (port/starboard)
+    const h1 = tp(s * hb * 0.8,  0,          stZ);
+    const h2 = tp(s * hb * 2.3, -HH * 0.1,   stZ - hl * 0.18);
+    const h3 = tp(s * hb * 1.9, -HH * 0.1,   stZ - hl * 0.32);
+    const h4 = tp(s * hb * 0.8,  0,           stZ - hl * 0.12);
+    line(h1, h2); line(h2, h3); line(h3, h4); line(h4, h1, alpha * 0.6);
+  });
+  // Vertical rudder (top)
+  const rv1 = tp(0,  HH * 0.7,  stZ);
+  const rv2 = tp(0,  HH * 2.4,  stZ - hl * 0.22);
+  const rv3 = tp(0,  HH * 2.0,  stZ - hl * 0.36);
+  const rv4 = tp(0,  HH * 0.7,  stZ - hl * 0.12);
+  line(rv1, rv2); line(rv2, rv3); line(rv3, rv4); line(rv4, rv1, alpha * 0.6);
+  // Vertical keel (bottom)
+  const rk1 = tp(0, -HH * 0.7,  stZ);
+  const rk2 = tp(0, -HH * 2.2,  stZ - hl * 0.20);
+  const rk3 = tp(0, -HH * 1.8,  stZ - hl * 0.33);
+  const rk4 = tp(0, -HH * 0.7,  stZ - hl * 0.12);
+  line(rk1, rk2); line(rk2, rk3); line(rk3, rk4); line(rk4, rk1, alpha * 0.6);
+
+  // ── TWIN COUNTER-ROTATING PROPELLERS ──
+  [-hb * 0.38, hb * 0.38].forEach((px, idx) => {
+    const hub = tp(px, 0, -hl);
+    if (!hub) return;
+    const tip = tp(px + 0.28, 0, -hl);
+    const propR = tip ? Math.abs(tip.sx - hub.sx) * 2.2 + 4 : 8;
+    const spin = state.animFrame * (idx === 0 ? 0.10 : -0.10);
+    ctx.save(); ctx.translate(hub.sx, hub.sy);
+    for (let b = 0; b < 5; b++) {
+      ctx.save(); ctx.rotate(spin + b * Math.PI * 2 / 5);
+      ctx.strokeStyle = `rgba(255,68,68,${(alpha * 0.55).toFixed(3)})`;
+      ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -propR); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.strokeStyle = `rgba(255,68,68,${(alpha * 0.8).toFixed(3)})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  });
+
+  // Label above sail
+  const labelPt = tp(0, sailTop + L * 0.08, sailZ);
+  if (labelPt) {
+    ctx.shadowBlur = 0;
+    const ls = Math.max(0.5, Math.min(2, 8 / labelPt.depth));
+    ctx.font = `${Math.round(7 * ls)}px Share Tech Mono`;
+    ctx.fillStyle = col; ctx.textAlign = 'center';
+    ctx.globalAlpha = alpha;
+    ctx.fillText('BRAVO', labelPt.sx, labelPt.sy);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.shadowBlur = 0; ctx.lineWidth = 0.7;
+  ctx.restore();
+}
+
 // projFn defaults to projectPeriscope; pass projectSurface for the surface view.
 function drawShipWireframe3D(ship, alpha, projFn) {
   projFn = projFn || projectPeriscope;

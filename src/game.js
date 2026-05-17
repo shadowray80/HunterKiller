@@ -6965,7 +6965,7 @@ function updateShips() {
             tx: _stx, tz: _stz,
             t: 0,
             duration: 80 + Math.random() * 30,
-            arcHeight: 3.5 + Math.random() * 2,
+            arcHeight: 1.2 + Math.random() * 0.8,
             isWarning: _isWarn,
             shipLabel: ship.label
           });

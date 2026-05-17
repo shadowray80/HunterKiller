@@ -5883,7 +5883,7 @@ var BATTLEGROUNDS = [
     desc: 'Large-scale deep ocean — 128×128 battle zone',
     tag: 'LARGE',
     isHeightfield: true,
-    gridW: 128, gridD: 128, gridH: 64,
+    gridW: 128, gridD: 128, gridH: 20,
     _hGrid: null,
     makeGrid: function() {
       var R=128,C=128,z,x; var g=[];

@@ -1792,8 +1792,7 @@ function gameOver() {
     document.getElementById('sonar-wrap').style.display = 'none';
     document.getElementById('canvas').style.display = 'none';
     document.getElementById('intro-screen').style.display = '';
-    _introMusic.currentTime = 0;
-    _introMusic.play().catch(function(){});
+    restartIntroMusic();
   }, 2500);
 }
 
@@ -8282,21 +8281,29 @@ if (false) (function() {
 var _introMusic = new Audio('/Sounds/intro_theme.mp3');
 _introMusic.loop = true;
 _introMusic.volume = 0.75;
+var _introAudioUnlocked = false;
 
-(function() {
-  function _startIntroMusic() {
-    if (document.getElementById('intro-screen').style.display === 'none') return;
-    _introMusic.play().catch(function(){});
-    document.removeEventListener('click', _startIntroMusic);
-    document.removeEventListener('touchstart', _startIntroMusic);
-  }
-  document.addEventListener('click', _startIntroMusic, { once: true });
-  document.addEventListener('touchstart', _startIntroMusic, { once: true });
-})();
+function _tryPlayIntroMusic() {
+  if (_introAudioUnlocked) return;
+  _introAudioUnlocked = true;
+  _introMusic.play().catch(function(){});
+}
+
+// touchend is the reliable iOS unlock event (touchstart is blocked by Safari)
+// Attach directly to the intro screen so the play() fires BEFORE the button
+// handler has a chance to hide the screen and call stopIntroMusic()
+document.getElementById('intro-screen').addEventListener('touchend', _tryPlayIntroMusic);
+document.getElementById('intro-screen').addEventListener('click', _tryPlayIntroMusic);
 
 function stopIntroMusic() {
   _introMusic.pause();
   _introMusic.currentTime = 0;
+}
+
+function restartIntroMusic() {
+  _introAudioUnlocked = false;
+  _introMusic.currentTime = 0;
+  _introMusic.play().catch(function(){});
 }
 
 // ── INTRO SCREEN NAVIGATION ──

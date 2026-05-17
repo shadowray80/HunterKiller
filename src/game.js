@@ -243,7 +243,7 @@ const state = {
   player: { x: 4, y: 3, z: 40, heading: 0 },
   enemy:  { x: 44, y: 3, z: 2, heading: 180, alive: true,
             aiState: 'hunt', aiTarget: null, aiTimer: 0, flankDir: 1,
-            hits: 0, bubbling: false, bubbleTimer: 0 },
+            hits: 0, bubbling: false, bubbleTimer: 0, evasionTimer: 0 },
   torpedoes: [],
   aimCursor: null,
   torpCount: Infinity,
@@ -289,6 +289,9 @@ const state = {
   ships: [],
   depthCharges: [],
   shells: [],
+  noisemakers: [],
+  countermeasures: 3,
+  acousticLock: 0,
   whales: [],
   weaponMode: 'torpedo',  // 'torpedo' or 'mine'
   periAngleH: 0,         // periscope horizontal bearing (radians)
@@ -1069,6 +1072,17 @@ function drawSonar() {
     sc.strokeStyle = `rgba(255,80,80,${p.alpha * 0.85})`;
     sc.lineWidth = 1.5;
     sc.stroke();
+  });
+
+  // ── NOISEMAKER BLIPS on minimap ──
+  if (state.noisemakers) state.noisemakers.forEach(function(nm) {
+    const _nmbp = mm(nm.x, nm.z);
+    const _nmba = Math.max(0.3, 1 - nm.age/540);
+    const _pulse = 0.5 + 0.5*Math.sin(nm.age*0.25);
+    sc.beginPath(); sc.arc(_nmbp.x, _nmbp.y, 3 + _pulse*2, 0, Math.PI*2);
+    sc.strokeStyle = `rgba(255,180,0,${_nmba*_pulse*0.7})`; sc.lineWidth=1; sc.stroke();
+    sc.beginPath(); sc.arc(_nmbp.x, _nmbp.y, 2.5, 0, Math.PI*2);
+    sc.fillStyle=`rgba(255,160,0,${_nmba})`; sc.shadowBlur=5; sc.shadowColor='#ffaa00'; sc.fill(); sc.shadowBlur=0;
   });
 
   // ── PLAYER SUB (always at correct world position) ──
@@ -1862,9 +1876,22 @@ function update() {
     }
   }
 
+  // Acoustic lock — how well the enemy is centred in the periscope crosshairs
+  state.acousticLock = 0;
+  if (state.enemy.alive && (state.viewMode === 'periscope' || state.viewMode === 'surface')) {
+    var _aep = projectPeriscope(state.enemy.x, state.enemy.y, state.enemy.z);
+    if (_aep && _aep.depth > 0.5) {
+      var _adx = _aep.sx - W/2, _ady = _aep.sy - H*0.44;
+      var _adist = Math.sqrt(_adx*_adx + _ady*_ady);
+      var _lockPxR = Math.min(W, H) * 0.52 * 0.15; // innermost ring radius px
+      state.acousticLock = Math.max(0, 1 - _adist / _lockPxR);
+    }
+  }
+
   // Update surface ships
   updateShips();
   updateShells();
+  updateNoisemakers();
   updateDepthCharges();
   updateWhales();
   updateMegalodons();
@@ -1873,12 +1900,29 @@ function update() {
   // Update torpedoes
   state.torpedoes = state.torpedoes.filter(t => {
     t.progress += t.speed;
-    t.x = t.ox + t.dx * t.progress;
-    t.y = t.oy + t.dy * t.progress;
-    t.z = t.oz + t.dz * t.progress;
+    if (t.isHoming) {
+      // Homing torpedo — steer then move directly (not from origin formula)
+      _steerHomingTorp(t);
+      t.x += t.dx * t.speed;
+      t.y += (t.dy || 0) * t.speed;
+      t.z += t.dz * t.speed;
+      // ── TERRAIN COLLISION — the Red October moment ──
+      const _thx = Math.round(t.x), _thz = Math.round(t.z);
+      if (t.x < 1 || t.x >= GRID.W-1 || t.z < 1 || t.z >= GRID.D-1 ||
+          (FLOOR_PLAN[_thz] && FLOOR_PLAN[_thz][_thx])) {
+        spawnExplosion(t.x, t.y, t.z, false);
+        playExplosion(false);
+        addEvent('▸ ACOUSTIC — TERRAIN DETONATION', false);
+        return false;
+      }
+    } else {
+      t.x = t.ox + t.dx * t.progress;
+      t.y = t.oy + t.dy * t.progress;
+      t.z = t.oz + t.dz * t.progress;
+    }
 
     // Hit enemy (armed after travelling minimum safe distance)
-    const travelDist = Math.sqrt((t.x-t.ox)*(t.x-t.ox)+(t.y-t.oy)*(t.y-t.oy)+(t.z-t.oz)*(t.z-t.oz));
+    const travelDist = t.isHoming ? t.progress : Math.sqrt((t.x-t.ox)*(t.x-t.ox)+(t.y-t.oy)*(t.y-t.oy)+(t.z-t.oz)*(t.z-t.oz));
     if (travelDist > 3.5 && !t.isEnemy && state.enemy.alive &&
         Math.abs(t.x-state.enemy.x)<0.5 &&
         Math.abs(t.y-state.enemy.y)<0.5 &&
@@ -2721,15 +2765,20 @@ function setScoreboard(on) {
 
 // ── WEAPON SELECT ──
 document.getElementById('peri-btn-weapon').addEventListener('click', () => {
-  state.weaponMode = state.weaponMode === 'torpedo' ? 'mine' : 'torpedo';
+  const _modes = ['torpedo', 'acoustic', 'mine'];
+  state.weaponMode = _modes[(_modes.indexOf(state.weaponMode) + 1) % _modes.length];
   const btn = document.getElementById('peri-btn-weapon');
   if (state.weaponMode === 'mine') {
     btn.innerHTML = '⬆<br><span class="peri-weapon-label">MINE</span>';
-    btn.classList.add('mine-mode');
+    btn.classList.remove('acoustic-mode'); btn.classList.add('mine-mode');
     addEvent('⬆ WEAPON: TORPEDO MINE', false);
+  } else if (state.weaponMode === 'acoustic') {
+    btn.innerHTML = '◎<br><span class="peri-weapon-label">ACOU</span>';
+    btn.classList.remove('mine-mode'); btn.classList.add('acoustic-mode');
+    addEvent('◎ WEAPON: ACOUSTIC HOMING TORPEDO — KEEP TARGET IN CROSSHAIRS', false);
   } else {
     btn.innerHTML = '━━▶<br><span class="peri-weapon-label">TORP</span>';
-    btn.classList.remove('mine-mode');
+    btn.classList.remove('mine-mode'); btn.classList.remove('acoustic-mode');
     addEvent('▶ WEAPON: TORPEDO', false);
   }
 });
@@ -2958,6 +3007,52 @@ function enemyFire() {
   addEvent('⚠ TORPEDO IN THE WATER!', true);
 }
 
+// ── ACOUSTIC TORPEDO HOMING PHYSICS ──
+function _steerHomingTorp(t) {
+  if (t.heading === undefined) t.heading = Math.atan2(t.dx, t.dz);
+
+  // Find best target: nearest noisemaker wins if it's significantly closer than the enemy
+  var tgtX = state.enemy.alive ? state.enemy.x : (t.x + t.dx * 30);
+  var tgtZ = state.enemy.alive ? state.enemy.z : (t.z + t.dz * 30);
+  var tgtY = state.enemy.alive ? state.enemy.y : t.y;
+  if (state.noisemakers && state.noisemakers.length) {
+    var eDist2 = state.enemy.alive
+      ? (state.enemy.x-t.x)*(state.enemy.x-t.x) + (state.enemy.z-t.z)*(state.enemy.z-t.z)
+      : Infinity;
+    state.noisemakers.forEach(function(nm) {
+      var nd2 = (nm.x-t.x)*(nm.x-t.x) + (nm.z-t.z)*(nm.z-t.z);
+      if (nd2 < eDist2 * 0.55) { tgtX = nm.x; tgtZ = nm.z; tgtY = nm.y; eDist2 = nd2; }
+    });
+  }
+
+  // Steer toward target with a maximum turn rate (realistic turn radius)
+  var desH = Math.atan2(tgtX - t.x, tgtZ - t.z);
+  var da = desH - t.heading;
+  while (da >  Math.PI) da -= Math.PI * 2;
+  while (da < -Math.PI) da += Math.PI * 2;
+  var lk = t.lockStrength !== undefined ? t.lockStrength : 0.5;
+  // Tighter turn when lock is strong; minimum turn rate so it always tries
+  var effTurn = 0.03 * (0.22 + lk * 0.78);
+  t.heading += Math.sign(da) * Math.min(Math.abs(da), effTurn);
+  t.dx = Math.sin(t.heading);
+  t.dz = Math.cos(t.heading);
+
+  // Update lock strength from player's periscope guidance
+  if ((state.viewMode === 'periscope' || state.viewMode === 'surface') && state.acousticLock > 0) {
+    t.lockStrength = Math.min(1, lk + state.acousticLock * 0.022);
+  } else {
+    t.lockStrength = Math.max(0.08, lk - 0.004); // slowly degrades without guidance
+  }
+
+  // Slow vertical homing
+  var dvy = tgtY - t.y;
+  if (Math.abs(dvy) > 0.25) {
+    t.vy = ((t.vy || 0) * 0.88) + Math.sign(dvy) * 0.006;
+    t.vy = Math.max(-0.022, Math.min(0.022, t.vy));
+    t.dy = t.vy;
+  }
+}
+
 // ── ENEMY AI — STATE MACHINE ──
 // States: 'hunt' | 'cover' | 'ambush' | 'flank'
 var _enemyMoveTimer = 0;
@@ -2984,6 +3079,25 @@ function updateEnemyAI() {
   state.enemyTrail = state.enemyTrail.filter(function(t) { return t.age < 300; });
 
   en.aiTimer = Math.max(0, en.aiTimer - 1);
+
+  // ── HOMING TORPEDO DETECTION — triggers evasive manoeuvres ──
+  var _incomingHomer = null;
+  for (var _ehi = 0; _ehi < state.torpedoes.length; _ehi++) {
+    var _eht = state.torpedoes[_ehi];
+    if (!_eht.isHoming || _eht.isEnemy) continue;
+    var _ehdx = _eht.x - en.x, _ehdz = _eht.z - en.z;
+    if (Math.sqrt(_ehdx*_ehdx + _ehdz*_ehdz) < 24) { _incomingHomer = _eht; break; }
+  }
+  if (_incomingHomer) {
+    en.evasionTimer = Math.max(en.evasionTimer, 360);
+    if (en.aiState !== 'evade') {
+      en.aiState = 'evade';
+      // Turn hard away from the torpedo
+      en.heading = Math.atan2(en.x - _incomingHomer.x, en.z - _incomingHomer.z)
+                   + (Math.random()-0.5) * Math.PI * 0.6;
+      addEvent('⚠ BRAVO TAKING EVASIVE ACTION', true);
+    }
+  }
 
   // ── STATE: HUNT ──
   // Move toward player, fire when LOS opens up
@@ -3148,6 +3262,53 @@ function updateEnemyAI() {
           en.heading = Math.atan2(fnext.x-ex, fnext.z-ez);
         }
       }
+    }
+  }
+
+  // ── STATE: EVADE — frantic evasion of incoming acoustic torpedo ──
+  // Bypasses pathfinding → risk of terrain collision (Red October moment)
+  else if (en.aiState === 'evade') {
+    en.evasionTimer--;
+    if (en.evasionTimer <= 0) {
+      en.aiState = 'hunt'; en.aiTimer = 60;
+      addEvent('▸ BRAVO RESUMING HUNT PATTERN', false);
+      return;
+    }
+    // Rapid depth changes — diving deep to try to lose the torpedo
+    if (_enemyMoveTimer % 18 === 0) {
+      en.y = Math.max(0.4, Math.min(GRID.H-0.6, en.y + (Math.random()-0.5)*1.6));
+    }
+    // Violent heading changes — zigzag pattern
+    if (_enemyMoveTimer % 22 === 0) {
+      en.heading += (Math.random()-0.5) * Math.PI * 0.9;
+    }
+    // Move fast, bypassing BFS — this is where terrain collision can happen
+    if (_enemyMoveTimer % 5 === 0) {
+      var _evnx = en.x + Math.sin(en.heading) * 1.05;
+      var _evnz = en.z + Math.cos(en.heading) * 1.05;
+      var _evgx = Math.round(_evnx), _evgz = Math.round(_evnz);
+      // ── TERRAIN COLLISION — Red October moment ──
+      if (_evgx < 1 || _evgx >= GRID.W-1 || _evgz < 1 || _evgz >= GRID.D-1 ||
+          (FLOOR_PLAN[_evgz] && FLOOR_PLAN[_evgz][_evgx])) {
+        var _cx = en.x, _cy = en.y, _cz = en.z;
+        en.alive = false; en.hits = 0;
+        state.kills++;
+        addScore(50);
+        playExplosionShip();
+        spawnExplosion(_cx, _cy, _cz, true);
+        spawnExplosion(_cx+(Math.random()-0.5)*3, _cy, _cz+(Math.random()-0.5)*3, true);
+        setTimeout(function() {
+          spawnExplosion(_cx+(Math.random()-0.5)*4, _cy, _cz+(Math.random()-0.5)*4, true);
+          playExplosionShip();
+        }, 350);
+        document.getElementById('kill-count').textContent = state.kills;
+        document.getElementById('enemy-status').textContent = 'DESTROYED';
+        addEvent('⊛ BRAVO DROVE INTO TERRAIN — DESTROYED (+50)', false);
+        setTimeout(function() { addEvent('▸ "THEY TURNED INTO THE MOUNTAIN"', false); }, 1800);
+        setTimeout(function() { respawnEnemy(); }, 7000);
+        return;
+      }
+      en.x = _evnx; en.z = _evnz;
     }
   }
 }
@@ -3539,6 +3700,27 @@ function renderPeriscope() {
     ctx.restore();
   }
 
+  // ── NOISEMAKERS — sinking barrels pulsing acoustic signal ──
+  if (state.noisemakers && state.noisemakers.length) {
+    state.noisemakers.forEach(function(nm) {
+      const _nmp = projectPeriscope(nm.x, nm.y, nm.z);
+      if (!_nmp || _nmp.depth < 0.2 || _nmp.depth > 60) return;
+      const _nms = Math.max(0.5, 4 - _nmp.depth * 0.06);
+      const _nma = Math.max(0.3, 1 - nm.age / 540);
+      // Pulse ring
+      const _pulse = 0.5 + 0.5 * Math.sin(nm.age * 0.25);
+      ctx.beginPath();
+      ctx.arc(_nmp.sx, _nmp.sy, _nms * (2.5 + _pulse * 4), 0, Math.PI*2);
+      ctx.strokeStyle = `rgba(255,180,0,${_nma * _pulse * 0.5})`;
+      ctx.lineWidth = 1; ctx.stroke();
+      // Barrel body
+      ctx.beginPath();
+      ctx.arc(_nmp.sx, _nmp.sy, _nms * 1.8, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(200,140,20,${_nma})`;
+      ctx.shadowBlur = 6; ctx.shadowColor = '#ffaa00'; ctx.fill(); ctx.shadowBlur = 0;
+    });
+  }
+
   // ── POINT CLOUD — drawn after terrain fills so dots sit on the surface ──
   if (state.showDots) cloudPoints.forEach(p => {
     const dx = state.player.x - p.x, dy = state.player.y - p.y, dz = state.player.z - p.z;
@@ -3707,6 +3889,37 @@ function renderPeriscope() {
     sc.strokeStyle = `rgba(0,229,255,${0.15 - r*0.1})`;
     sc.stroke();
   });
+  // ── ACOUSTIC LOCK RING ──
+  var _activeHomer = null;
+  for (var _li = 0; _li < state.torpedoes.length; _li++) {
+    if (state.torpedoes[_li].isHoming && !state.torpedoes[_li].isEnemy) {
+      _activeHomer = state.torpedoes[_li]; break;
+    }
+  }
+  if (_activeHomer || state.weaponMode === 'acoustic') {
+    var _lk = _activeHomer ? (_activeHomer.lockStrength || 0) : state.acousticLock;
+    var _lockR = scopeR * 0.15;
+    // Background ring
+    sc.beginPath(); sc.arc(scopeCX, scopeCY, _lockR, 0, Math.PI*2);
+    sc.strokeStyle = 'rgba(255,140,0,0.18)'; sc.lineWidth = 2.5; sc.stroke();
+    // Filled arc scaled to lock strength
+    if (_lk > 0.01) {
+      var _lkRGB = _lk > 0.75 ? '0,255,100' : _lk > 0.4 ? '255,200,0' : '255,50,50';
+      sc.beginPath();
+      sc.arc(scopeCX, scopeCY, _lockR, -Math.PI/2, -Math.PI/2 + _lk * Math.PI * 2);
+      sc.strokeStyle = `rgba(${_lkRGB},${0.55 + _lk*0.45})`;
+      sc.lineWidth = 3.5; sc.stroke();
+    }
+    // Status label
+    var _lkLabel = _activeHomer
+      ? (_lk > 0.75 ? '⊛ LOCK' : _lk > 0.4 ? '◎ GUIDE' : '○ WEAK')
+      : (_lk > 0.35 ? '◎ AIM' : '○ AIM');
+    var _lkCol = _lk > 0.75 ? '#00ff66' : _lk > 0.4 ? '#ffcc00' : '#ff4444';
+    sc.font = 'bold 8px Share Tech Mono'; sc.textAlign = 'center';
+    sc.fillStyle = _lkCol;
+    sc.fillText(_lkLabel, scopeCX, scopeCY - _lockR - 7);
+  }
+
   // Tick marks
   for (let a = 0; a < 360; a += 10) {
     const rad = a * Math.PI/180;
@@ -4379,6 +4592,34 @@ function drawPeriFwdSlider() {
 function periFireTorpedo() {
   if (!torpReady()) { addEvent('⚠ TORPEDO RELOADING — ' + torpSecsLeft() + 's', true); return; }
 
+  // ── ACOUSTIC HOMING TORPEDO ──
+  if (state.weaponMode === 'acoustic') {
+    if (state.torpCount !== Infinity && state.torpCount <= 0) { addEvent('⚠ NO TORPEDOES', true); return; }
+    if (!state.enemy.alive) { addEvent('⚠ NO TARGET', true); return; }
+    const _ah = state.periAngleH;
+    const _adx = -Math.sin(_ah), _adz = Math.cos(_ah);
+    const _aox = state.player.x + _adx * 1.5, _aoz = state.player.z + _adz * 1.5;
+    state.torpedoes.push({
+      ox: _aox, oy: state.player.y, oz: _aoz,
+      x:  _aox, y:  state.player.y, z:  _aoz,
+      dx: _adx, dy: 0, dz: _adz,
+      heading: Math.atan2(_adx, _adz),
+      speed: 0.11, progress: 0,
+      isHoming: true, lockStrength: Math.max(0.25, state.acousticLock)
+    });
+    if (state.torpCount !== Infinity) state.torpCount--;
+    state.torpsFired++;
+    state.torpLastFired = Date.now();
+    state.muzzleFlash = 8;
+    if (state.silentRunning) revealPlayerToEnemy(420);
+    if (!state.battleStations) document.getElementById('btn-battlestations').click();
+    playTorpedoLaunch();
+    const _lkWord = state.acousticLock > 0.7 ? 'STRONG LOCK' : state.acousticLock > 0.35 ? 'PARTIAL LOCK' : 'WEAK LOCK — KEEP TRACKING';
+    addEvent(`⊛ ACOUSTIC AWAY — ${_lkWord}`, false);
+    document.getElementById('torp-count').textContent = state.torpCount === Infinity ? '∞' : state.torpCount;
+    return;
+  }
+
   // ── TORPEDO MINE ──
   if (state.weaponMode === 'mine') {
     if (state.torpCount !== Infinity && state.torpCount <= 0) { addEvent('⚠ NO TORPEDOES', true); return; }
@@ -4455,6 +4696,7 @@ function periFireTorpedo() {
 // Periscope ping button
 document.getElementById('peri-btn-ping-peri').addEventListener('click', doPing);
 document.getElementById('peri-btn-ping-peri').addEventListener('pointerup', doPing);
+document.getElementById('peri-btn-cm').addEventListener('click', launchCountermeasures);
 
 // ── SILENT RUNNING TOGGLE ──
 let _silentPreset = null;
@@ -7150,6 +7392,40 @@ function updateShips() {
       }
     });
   });
+}
+
+// ── NOISEMAKER / COUNTERMEASURE UPDATE ──
+function updateNoisemakers() {
+  if (!state.noisemakers || !state.noisemakers.length) return;
+  state.noisemakers = state.noisemakers.filter(function(nm) {
+    nm.age++;
+    nm.vy = Math.min(0.035, nm.vy + 0.0008);
+    nm.y = Math.max(0, nm.y - nm.vy);
+    return nm.age < 540; // 9 second lifetime
+  });
+}
+
+function launchCountermeasures() {
+  if (!state.countermeasures || state.countermeasures <= 0) {
+    addEvent('⚠ NO COUNTERMEASURES REMAINING', true); return;
+  }
+  state.countermeasures--;
+  const _cmBtn = document.getElementById('peri-btn-cm');
+  if (_cmBtn) _cmBtn.textContent = state.countermeasures > 0 ? `◈ CM ${state.countermeasures}` : '◈ CM —';
+  // Launch two noisemakers aft of the sub
+  const _bh = state.periAngleH + Math.PI;
+  for (var _ci = 0; _ci < 2; _ci++) {
+    const _off = (_ci - 0.5) * 0.6;
+    state.noisemakers.push({
+      x: state.player.x + Math.sin(_bh + _off) * 1.8,
+      y: state.player.y,
+      z: state.player.z + Math.cos(_bh + _off) * 1.8,
+      vy: 0, age: 0
+    });
+  }
+  playTorpedoLaunch();
+  addEvent('◈ COUNTERMEASURES DEPLOYED — NOISEMAKERS AWAY', false);
+  if (state.countermeasures === 0) addEvent('⚠ ALL COUNTERMEASURES EXPENDED', true);
 }
 
 // ── SHELL UPDATE — arcing naval gun fire at surfaced player ──

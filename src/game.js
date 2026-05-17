@@ -402,19 +402,52 @@ function playWhaleCall() {
 }
 
 // ── AMBIENT SOUND MANAGER ──
-// Two looping layers: underwater-white-noise (sonar/periscope) and waves (surface/surfaced)
-var _ambUnderwater = null;
+// Underwater: Web Audio API AudioBufferSourceNode (frame-accurate gapless loop)
+// Surface/surfaced: HTML Audio with loop (waves)
 var _ambWaves = null;
 var _ambCurrentMode = null; // 'underwater' | 'surface' | null
 
-function _getAmbUnderwater() {
-  if (!_ambUnderwater) {
-    _ambUnderwater = new Audio('/Sounds/underwater-white-noise.mp3');
-    _ambUnderwater.loop = true;
-    _ambUnderwater.volume = 0.8;
-  }
-  return _ambUnderwater;
+// Web Audio gapless underwater layer
+var _uwBuffer  = null;   // decoded AudioBuffer — loaded once
+var _uwSource  = null;   // current AudioBufferSourceNode (one-shot, recreated each play)
+var _uwGain    = null;   // GainNode — persistent, stays connected
+var _uwLoading = false;
+
+function _uwLoad() {
+  if (_uwBuffer || _uwLoading) return;
+  _uwLoading = true;
+  initAudio();
+  fetch('/Sounds/underwater-ambience-loop.mp3')
+    .then(function(r) { return r.arrayBuffer(); })
+    .then(function(b) { return audioCtx.decodeAudioData(b); })
+    .then(function(decoded) {
+      _uwBuffer = decoded;
+      _uwLoading = false;
+      if (_ambCurrentMode === 'underwater') _uwStart();
+    })
+    .catch(function() { _uwLoading = false; });
 }
+
+function _uwStart() {
+  if (!_uwBuffer) { _uwLoad(); return; }
+  // Stop any existing source before creating a new one
+  if (_uwSource) { try { _uwSource.stop(); } catch(e){} _uwSource = null; }
+  if (!_uwGain) {
+    _uwGain = audioCtx.createGain();
+    _uwGain.gain.value = 0.8;
+    _uwGain.connect(audioCtx.destination);
+  }
+  _uwSource = audioCtx.createBufferSource();
+  _uwSource.buffer = _uwBuffer;
+  _uwSource.loop = true;        // loop point is sample-accurate — zero gap
+  _uwSource.connect(_uwGain);
+  _uwSource.start(0);
+}
+
+function _uwStop() {
+  if (_uwSource) { try { _uwSource.stop(); } catch(e){} _uwSource = null; }
+}
+
 function _getAmbWaves() {
   if (!_ambWaves) {
     _ambWaves = new Audio('/Sounds/waves.mp3');
@@ -430,14 +463,12 @@ function setAmbientMode(mode) {
   _ambCurrentMode = mode;
   if (mode === 'underwater') {
     if (_ambWaves) _ambWaves.pause();
-    var u = _getAmbUnderwater();
-    u.play().catch(function(){});
+    _uwStart();
   } else if (mode === 'surface') {
-    if (_ambUnderwater) _ambUnderwater.pause();
-    var w = _getAmbWaves();
-    w.play().catch(function(){});
+    _uwStop();
+    _getAmbWaves().play().catch(function(){});
   } else {
-    if (_ambUnderwater) _ambUnderwater.pause();
+    _uwStop();
     if (_ambWaves) _ambWaves.pause();
   }
 }

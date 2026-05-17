@@ -288,6 +288,7 @@ const state = {
   torpCooldown: 0,
   ships: [],
   depthCharges: [],
+  shells: [],
   whales: [],
   weaponMode: 'torpedo',  // 'torpedo' or 'mine'
   periAngleH: 0,         // periscope horizontal bearing (radians)
@@ -364,6 +365,21 @@ function playTorpedoLaunch() {
   if (!_torpLaunchAudio) _torpLaunchAudio = new Audio('/Sounds/Torpedo_Launch.mp3');
   _torpLaunchAudio.currentTime = 0;
   _torpLaunchAudio.play().catch(function(){});
+}
+
+// Shell hits water (near miss / warning shot)
+var _waterSurfExpAudio = null;
+function playWaterSurfaceExplosion() {
+  if (!_waterSurfExpAudio) _waterSurfExpAudio = new Audio('/Sounds/water_Surface_explosion.mp3');
+  _waterSurfExpAudio.currentTime = 0;
+  _waterSurfExpAudio.play().catch(function(){});
+}
+// Shell direct hit
+var _exp01Audio = null;
+function playExplosion01() {
+  if (!_exp01Audio) _exp01Audio = new Audio('/Sounds/explosion_01.mp3');
+  _exp01Audio.currentTime = 0;
+  _exp01Audio.play().catch(function(){});
 }
 
 // ── WHALE AUDIO ──
@@ -1802,6 +1818,7 @@ function update() {
 
   // Update surface ships
   updateShips();
+  updateShells();
   updateDepthCharges();
   updateWhales();
   updateMegalodons();
@@ -6911,6 +6928,54 @@ function updateShips() {
       if (ship.fireTimer % 75 === 0) spawnFirePuff(ship.x, GRID.H, ship.z);
     }
 
+    // ── SHELL FIRE — attack surfaced player ──
+    const _surfExposed = state.viewMode === 'surfaced' ||
+      (state.viewMode === 'surface' && !state.silentRunning);
+    if (_surfExposed) {
+      if (ship.shellTimer === undefined) {
+        // Stagger first shot per ship so they don't all fire at once
+        ship.shellTimer = 60 + Math.floor(Math.random() * 120);
+        ship.warningShotFired = false;
+      }
+      ship.shellTimer--;
+      if (ship.shellTimer <= 0) {
+        ship.shellTimer = 240 + Math.floor(Math.random() * 240); // 4-8s between shots
+        const _sdx = state.player.x - ship.x;
+        const _sdz = state.player.z - ship.z;
+        const _sdist = Math.sqrt(_sdx*_sdx + _sdz*_sdz);
+        if (_sdist < 40) { // only fire if in range
+          let _stx, _stz;
+          const _isWarn = !ship.warningShotFired;
+          if (_isWarn) {
+            // Warning shot — deliberately misses, splashes nearby
+            const _missAng = Math.atan2(_sdx, _sdz) + (Math.random() - 0.5) * 1.0;
+            const _missOff = 3.5 + Math.random() * 3;
+            _stx = state.player.x + Math.sin(_missAng) * _missOff;
+            _stz = state.player.z + Math.cos(_missAng) * _missOff;
+            ship.warningShotFired = true;
+            addEvent(`⚠ WARNING SHOT — ${ship.label} IS FIRING`, true);
+          } else {
+            // Aimed shot — targets player's current position
+            _stx = state.player.x + (Math.random() - 0.5) * 0.8;
+            _stz = state.player.z + (Math.random() - 0.5) * 0.8;
+            addEvent(`⚠ SHELLS INCOMING — ${ship.label}`, true);
+          }
+          state.shells.push({
+            ox: ship.x, oz: ship.z,
+            tx: _stx, tz: _stz,
+            t: 0,
+            duration: 80 + Math.random() * 30,
+            arcHeight: 3.5 + Math.random() * 2,
+            isWarning: _isWarn,
+            shipLabel: ship.label
+          });
+        }
+      }
+    } else {
+      ship.shellTimer = undefined;
+      ship.warningShotFired = false;
+    }
+
     // Check torpedo hits
     state.torpedoes.forEach(t => {
       if (!ship.alive || ship.sinking) return;
@@ -6959,6 +7024,35 @@ function updateShips() {
         t.progress = 999; // remove torpedo
       }
     });
+  });
+}
+
+// ── SHELL UPDATE — arcing naval gun fire at surfaced player ──
+function updateShells() {
+  if (!state.shells || !state.shells.length) return;
+  state.shells = state.shells.filter(shell => {
+    shell.t += 1 / shell.duration;
+    if (shell.t >= 1) {
+      // Shell lands at target
+      const _hdx = shell.tx - state.player.x;
+      const _hdz = shell.tz - state.player.z;
+      const _hdist = Math.sqrt(_hdx*_hdx + _hdz*_hdz);
+      const _atSurface = state.viewMode === 'surfaced' || state.viewMode === 'surface';
+      spawnExplosion(shell.tx, GRID.H, shell.tz, true);
+      if (!shell.isWarning && _hdist < 2.0 && _atSurface) {
+        // Direct hit
+        playExplosion01();
+        applyHullDamage(25, '⚠ SHELL IMPACT — DIRECT HIT');
+        addEvent('⊛ DIRECT HIT — HULL BREACHED', true);
+      } else if (!shell.isWarning && _hdist < 5) {
+        playWaterSurfaceExplosion();
+        addEvent('▸ NEAR MISS — SHELL IN THE WATER', false);
+      } else {
+        playWaterSurfaceExplosion();
+      }
+      return false;
+    }
+    return true;
   });
 }
 
@@ -7235,6 +7329,60 @@ function renderSurfacePeriscope() {
     if (alpha < 0.02) return;
     drawShipWireframe3D(ship, alpha, projectSurface);
   });
+
+  // ── SHELLS — arcing naval gun rounds ──
+  if (state.shells && state.shells.length) {
+    state.shells.forEach(shell => {
+      const t = shell.t;
+      // Current world position along the arc
+      const cwx = shell.ox + (shell.tx - shell.ox) * t;
+      const cwz = shell.oz + (shell.tz - shell.oz) * t;
+      const cwy = GRID.H + Math.sin(t * Math.PI) * shell.arcHeight;
+      const csp = projectSurface(cwx, cwy, cwz);
+      if (!csp || csp.depth < 0.2 || csp.depth > 120) return;
+
+      // Trail — 8 fading dots back along the arc
+      for (let i = 1; i <= 8; i++) {
+        const tt = Math.max(0, t - i * 0.035);
+        const twx = shell.ox + (shell.tx - shell.ox) * tt;
+        const twz = shell.oz + (shell.tz - shell.oz) * tt;
+        const twy = GRID.H + Math.sin(tt * Math.PI) * shell.arcHeight;
+        const tsp = projectSurface(twx, twy, twz);
+        if (!tsp || tsp.depth < 0.2) continue;
+        const fa = (1 - i / 9) * 0.55;
+        const tr = Math.max(0.5, (3 - csp.depth * 0.03) * (1 - i / 9));
+        ctx.beginPath();
+        ctx.arc(tsp.sx, tsp.sy, tr, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,160,30,${fa})`;
+        ctx.fill();
+      }
+
+      // Shell head — bright glowing dot
+      const sr = Math.max(1.5, 5 - csp.depth * 0.04);
+      ctx.beginPath();
+      ctx.arc(csp.sx, csp.sy, sr, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,230,100,1)';
+      ctx.shadowBlur = 14;
+      ctx.shadowColor = '#ffaa00';
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Short streak in direction of travel
+      const t2 = Math.min(1, t + 0.025);
+      const nwx = shell.ox + (shell.tx - shell.ox) * t2;
+      const nwz = shell.oz + (shell.tz - shell.oz) * t2;
+      const nwy = GRID.H + Math.sin(t2 * Math.PI) * shell.arcHeight;
+      const nsp = projectSurface(nwx, nwy, nwz);
+      if (nsp && nsp.depth > 0.2) {
+        ctx.beginPath();
+        ctx.moveTo(csp.sx, csp.sy);
+        ctx.lineTo(nsp.sx, nsp.sy);
+        ctx.strokeStyle = 'rgba(255,200,60,0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    });
+  }
 
   // ── SURFACE EXPLOSIONS ──
   // Rings + flash projected via projectSurface

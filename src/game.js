@@ -5755,61 +5755,38 @@ var BATTLEGROUNDS = [
     desc: 'Natural rocky terrain — heightmap battleground',
     tag: 'TERRAIN',
     isHeightfield: true,
+    gridW: 128, gridD: 128, gridH: 20,
     _hGrid: null,
     makeGrid: function() {
-      // Synchronous fallback: open ocean with border walls only
-      var R=48,C=64,z,x; var g=[];
+      var R=128,C=128,z,x; var g=[];
       for(z=0;z<R;z++){g[z]=[];for(x=0;x<C;x++)g[z][x]=0;}
-      for(x=0;x<C;x++){g[0][x]=1;g[R-1][x]=1;}
-      for(z=0;z<R;z++){g[z][0]=1;g[z][C-1]=1;}
       return g;
     },
     loadAsync: function() {
       var self = this;
+      var GW=self.gridW, GD=self.gridD;
       return new Promise(function(resolve) {
-        var img = new Image();
-        function smoothHg(hg, R, C, passes) {
-          for(var p=0;p<passes;p++){
-            var t=[]; for(var z=0;z<R;z++){t[z]=[];for(var x=0;x<C;x++){var s=0,n=0;for(var dz=-1;dz<=1;dz++)for(var dx=-1;dx<=1;dx++){var nz=z+dz,nx2=x+dx;if(nz>=0&&nz<R&&nx2>=0&&nx2<C){s+=hg[nz][nx2];n++;}}t[z][x]=s/n;}}
-            for(var z=0;z<R;z++)for(var x=0;x<C;x++)hg[z][x]=t[z][x];
-          }
-          return hg;
-        }
-        img.onload = function() {
-          var tmp = document.createElement('canvas');
-          tmp.width = 64; tmp.height = 48;
-          var tc = tmp.getContext('2d');
-          tc.drawImage(img, 0, 0, 64, 48);
-          var px = tc.getImageData(0, 0, 64, 48).data;
-          var R=48,C=64,z,x; var g=[]; var hg=[];
-          for(z=0;z<R;z++){
+        function buildHg(px) {
+          var g=[],hg=[];
+          for(var z=0;z<GD;z++){
             g[z]=[]; hg[z]=[];
-            for(x=0;x<C;x++){
-              var idx=(z*C+x)*4;
-              hg[z][x]=px[idx];
+            for(var x=0;x<GW;x++){
+              var idx=(z*GW+x)*4;
+              hg[z][x]=px ? px[idx] : 0;
               g[z][x]=0;
             }
           }
-          smoothHg(hg, R, C, 2);
           self._hGrid=hg; window._canyonHeightGrid=hg;
+          window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;
           resolve(g);
+        }
+        var img = new Image();
+        img.onload = function() {
+          var tmp=document.createElement('canvas'); tmp.width=GW; tmp.height=GD;
+          var tc=tmp.getContext('2d'); tc.drawImage(img,0,0,GW,GD);
+          buildHg(tc.getImageData(0,0,GW,GD).data);
         };
-        img.onerror = function() {
-          // Procedural fallback canyon if PNG not found
-          var R=48,C=64,z,x; var g=[]; var hg=[];
-          for(z=0;z<R;z++){
-            g[z]=[]; hg[z]=[];
-            for(x=0;x<C;x++){
-              var nx=x/C, nz=z/R;
-              var h=Math.round(128+80*Math.sin(nx*3)*Math.sin(nz*4)+40*Math.sin(nx*7+1)*Math.cos(nz*6+2));
-              if(h<0)h=0; if(h>255)h=255;
-              hg[z][x]=h; g[z][x]=0;
-            }
-          }
-          smoothHg(hg, R, C, 2);
-          self._hGrid=hg; window._canyonHeightGrid=hg;
-          resolve(g);
-        };
+        img.onerror = function() { buildHg(null); };
         img.src='/maps/canyon.png';
       });
     }
@@ -5820,59 +5797,38 @@ var BATTLEGROUNDS = [
     desc: 'Deep ocean trench — extreme depth and narrow passages',
     tag: 'TERRAIN',
     isHeightfield: true,
+    gridW: 128, gridD: 128, gridH: 20,
     _hGrid: null,
     makeGrid: function() {
-      var R=48,C=64,z,x; var g=[];
+      var R=128,C=128,z,x; var g=[];
       for(z=0;z<R;z++){g[z]=[];for(x=0;x<C;x++)g[z][x]=0;}
-      for(x=0;x<C;x++){g[0][x]=1;g[R-1][x]=1;}
-      for(z=0;z<R;z++){g[z][0]=1;g[z][C-1]=1;}
       return g;
     },
     loadAsync: function() {
       var self = this;
+      var GW=self.gridW, GD=self.gridD;
       return new Promise(function(resolve) {
-        var img = new Image();
-        function smoothHg(hg, R, C, passes) {
-          for(var p=0;p<passes;p++){
-            var t=[]; for(var z=0;z<R;z++){t[z]=[];for(var x=0;x<C;x++){var s=0,n=0;for(var dz=-1;dz<=1;dz++)for(var dx=-1;dx<=1;dx++){var nz=z+dz,nx2=x+dx;if(nz>=0&&nz<R&&nx2>=0&&nx2<C){s+=hg[nz][nx2];n++;}}t[z][x]=s/n;}}
-            for(var z=0;z<R;z++)for(var x=0;x<C;x++)hg[z][x]=t[z][x];
-          }
-          return hg;
-        }
-        img.onload = function() {
-          var tmp = document.createElement('canvas');
-          tmp.width = 64; tmp.height = 48;
-          var tc = tmp.getContext('2d');
-          tc.drawImage(img, 0, 0, 64, 48);
-          var px = tc.getImageData(0, 0, 64, 48).data;
-          var R=48,C=64,z,x; var g=[]; var hg=[];
-          for(z=0;z<R;z++){
+        function buildHg(px) {
+          var g=[],hg=[];
+          for(var z=0;z<GD;z++){
             g[z]=[]; hg[z]=[];
-            for(x=0;x<C;x++){
-              var idx=(z*C+x)*4;
-              hg[z][x]=px[idx];
+            for(var x=0;x<GW;x++){
+              var idx=(z*GW+x)*4;
+              hg[z][x]=px ? px[idx] : 0;
               g[z][x]=0;
             }
           }
-          smoothHg(hg, R, C, 2);
           self._hGrid=hg; window._canyonHeightGrid=hg;
+          window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;
           resolve(g);
+        }
+        var img = new Image();
+        img.onload = function() {
+          var tmp=document.createElement('canvas'); tmp.width=GW; tmp.height=GD;
+          var tc=tmp.getContext('2d'); tc.drawImage(img,0,0,GW,GD);
+          buildHg(tc.getImageData(0,0,GW,GD).data);
         };
-        img.onerror = function() {
-          var R=48,C=64,z,x; var g=[]; var hg=[];
-          for(z=0;z<R;z++){
-            g[z]=[]; hg[z]=[];
-            for(x=0;x<C;x++){
-              var nx=x/C, nz=z/R;
-              var h=Math.round(100+60*Math.sin(nx*2)*Math.sin(nz*3)+80*Math.abs(Math.sin(nx*5+nz*4)));
-              if(h<0)h=0; if(h>255)h=255;
-              hg[z][x]=h; g[z][x]=0;
-            }
-          }
-          smoothHg(hg, R, C, 2);
-          self._hGrid=hg; window._canyonHeightGrid=hg;
-          resolve(g);
-        };
+        img.onerror = function() { buildHg(null); };
         img.src='/maps/trench.png';
       });
     }

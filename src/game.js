@@ -1322,138 +1322,209 @@ function drawSub(sub, color, label, hidden=false, alpha=1.0) {
   if (hidden || alpha < 0.02) return;
 
   const isEnemy = color === '#ff4444' || color.includes('255,68,68');
-  const col = isEnemy ? '#ff4444' : '#00e5ff';
-  const colFill = isEnemy ? 'rgba(255,68,68,0.15)' : 'rgba(0,180,255,0.12)';
+  const col     = isEnemy ? '#ff4444' : '#00e5ff';
+  const colFill = isEnemy ? 'rgba(255,68,68,0.11)' : 'rgba(0,180,255,0.10)';
+  const colHi   = isEnemy ? 'rgba(255,150,150,0.38)' : 'rgba(120,235,255,0.42)';
+  const colDim  = isEnemy ? 'rgba(255,100,100,0.22)' : 'rgba(0,200,255,0.22)';
+
+  // Forward vector in world space → screen angle (bow = +X axis in local space)
+  const fwdX = isEnemy ? Math.sin(sub.heading) : Math.sin(state.periAngleH);
+  const fwdZ = isEnemy ? Math.cos(sub.heading)  : -Math.cos(state.periAngleH);
+  const sp2  = project(sub.x + fwdX * 2, sub.y, sub.z + fwdZ * 2);
+  const screenAngle = Math.atan2(sp2.sy - sp.sy, sp2.sx - sp.sx);
 
   ctx.save();
   ctx.translate(sp.sx, sp.sy);
+  ctx.rotate(screenAngle); // orient hull along actual heading
   ctx.globalAlpha = alpha;
 
-  // Player sub always points UP-screen (screen-relative movement)
-  // Enemy sub points in its world heading
-  if (!isEnemy) {
-    // Sub stays horizontal — direction arrow shows movement direction (always up-screen)
-  }
-
-  // Glow halo
-  const grd = ctx.createRadialGradient(0,0,0,0,0,30);
-  grd.addColorStop(0, isEnemy ? 'rgba(255,68,68,0.18)' : 'rgba(0,229,255,0.15)');
+  const haloR = isEnemy ? 44 : 34;
+  const grd = ctx.createRadialGradient(0,0,0,0,0,haloR);
+  grd.addColorStop(0, isEnemy ? 'rgba(255,68,68,0.16)' : 'rgba(0,229,255,0.13)');
   grd.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = grd;
-  ctx.beginPath(); ctx.arc(0,0,30,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0,0,haloR,0,Math.PI*2); ctx.fill();
 
-  ctx.shadowBlur = 10;
-  ctx.shadowColor = col;
+  ctx.shadowBlur = 10; ctx.shadowColor = col;
 
-  // Main hull — teardrop bezier
-  ctx.beginPath();
-  ctx.moveTo(-18, 0);
-  ctx.bezierCurveTo(-18,-6, -8,-8,  0,-7);
-  ctx.bezierCurveTo(  8,-6, 16,-4, 20, 0);
-  ctx.bezierCurveTo( 16, 4,  8, 6,  0, 7);
-  ctx.bezierCurveTo( -8, 6,-18, 6,-18, 0);
-  ctx.closePath();
-  ctx.fillStyle = colFill;
-  ctx.strokeStyle = col;
-  ctx.lineWidth = 1.2;
-  ctx.fill(); ctx.stroke();
-
-  // Hull highlight
-  ctx.beginPath();
-  ctx.moveTo(-14,-3);
-  ctx.bezierCurveTo(-6,-6, 6,-6, 14,-2);
-  ctx.strokeStyle = isEnemy ? 'rgba(255,120,120,0.4)' : 'rgba(100,230,255,0.4)';
-  ctx.lineWidth = 0.8; ctx.stroke();
-
-  // Conning tower / sail
-  ctx.beginPath();
-  ctx.moveTo(-4,-7);
-  ctx.lineTo(-4,-15);
-  ctx.bezierCurveTo(-4,-17, 4,-17, 4,-15);
-  ctx.lineTo(4,-7);
-  ctx.closePath();
-  ctx.fillStyle = colFill;
-  ctx.strokeStyle = col;
-  ctx.lineWidth = 1.2;
-  ctx.fill(); ctx.stroke();
-
-  // Periscope
-  ctx.beginPath();
-  ctx.moveTo(2,-15); ctx.lineTo(2,-19); ctx.lineTo(5,-19);
-  ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.stroke();
-
-  // Forward dive planes
-  [[-7,-10,-13,-9],[-7,10,-13,9]].forEach(([x1,y1,x2,y2])=>{
-    ctx.beginPath();
-    ctx.moveTo(x1,y1>0?7:-7);
-    ctx.lineTo(x1,y1); ctx.lineTo(x2,y2>0?y2-1:y2+1); ctx.lineTo(x2,y1>0?7:-7);
-    ctx.closePath();
-    ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 0.8;
-    ctx.fill(); ctx.stroke();
-  });
-
-  // Stern planes
-  [[16,-2,21,-7],[16,2,21,7]].forEach(([x1,y1,x2,y2])=>{
-    ctx.beginPath();
-    ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.lineTo(22,y2>0?5:-5); ctx.lineTo(19,0);
-    ctx.closePath();
-    ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 0.8;
-    ctx.fill(); ctx.stroke();
-  });
-
-  // Propeller blades (spinning)
-  ctx.save();
-  ctx.translate(21,0);
-  const propSpin = state.animFrame * (isEnemy ? 0.07 : 0.11);
-  for (let b=0; b<3; b++) {
-    ctx.save();
-    ctx.rotate(propSpin + b * Math.PI*2/3);
-    ctx.beginPath();
-    ctx.ellipse(0,-4,1.5,4,0,0,Math.PI*2);
-    ctx.fillStyle = col; ctx.globalAlpha = 0.6*alpha;
-    ctx.fill(); ctx.restore();
-  }
-  ctx.restore();
-
-  // Torpedo tube dots at bow
-  [-3,0,3].forEach(oy=>{
-    ctx.beginPath(); ctx.arc(-18,oy,1,0,Math.PI*2);
-    ctx.fillStyle=col; ctx.globalAlpha=0.5*alpha; ctx.fill();
-  });
-
-  // Direction arrow for player — always points UP-screen = drag-up direction
   if (!isEnemy) {
-    ctx.shadowBlur = 10; ctx.shadowColor = col;
-    ctx.strokeStyle = col;
-    ctx.fillStyle = col;
-    ctx.lineWidth = 2;
-    // Shaft pointing straight up from sub
+    // ── VIRGINIA CLASS SSN (Alpha) ──
+    // Bow → +X (right), Stern → -X (left).  Length ≈ 44px, beam ≈ 12px.
+
+    // Main hull — long slim cigar, tapered nose and tail
     ctx.beginPath();
-    ctx.moveTo(0, -22);
-    ctx.lineTo(0, -36);
-    ctx.stroke();
-    // Arrowhead
-    ctx.beginPath();
-    ctx.moveTo(0, -42);
-    ctx.lineTo(-6, -34);
-    ctx.lineTo( 6, -34);
+    ctx.moveTo(22, 0);                                        // bow tip
+    ctx.bezierCurveTo(22,-2,  14,-6,   2,-6);
+    ctx.bezierCurveTo(-4,-6, -14,-5, -20,-3);
+    ctx.bezierCurveTo(-22,-1,-22, 1, -20, 3);
+    ctx.bezierCurveTo(-14, 5,  -4, 6,   2,  6);
+    ctx.bezierCurveTo(14,  6,  22,  2,  22, 0);
     ctx.closePath();
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 1.3;
+    ctx.fill(); ctx.stroke();
+
+    // Top-deck ridge highlight
+    ctx.beginPath();
+    ctx.moveTo(18,-2); ctx.bezierCurveTo(6,-5, -6,-5, -16,-2);
+    ctx.strokeStyle = colHi; ctx.lineWidth = 0.8; ctx.stroke();
+
+    // Keel centreline
+    ctx.beginPath(); ctx.moveTo(18,0); ctx.lineTo(-18,0);
+    ctx.strokeStyle = colDim; ctx.lineWidth = 0.5; ctx.stroke();
+
+    // Sail — compact, swept-back, 1/3 from bow (x≈8)
+    ctx.beginPath();
+    ctx.moveTo(10,-6); ctx.lineTo(8,-15);
+    ctx.bezierCurveTo(8,-17, 14,-17, 14,-15);
+    ctx.lineTo(14,-6);
+    ctx.closePath();
+    ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 1.1;
+    ctx.fill(); ctx.stroke();
+
+    // Periscope / mast cluster
+    ctx.beginPath(); ctx.moveTo(12,-15); ctx.lineTo(12,-20); ctx.lineTo(14,-20);
+    ctx.strokeStyle = col; ctx.lineWidth = 0.9; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(10,-14); ctx.lineTo(10,-18);
+    ctx.strokeStyle = colHi; ctx.lineWidth = 0.7; ctx.stroke();
+
+    // Fairwater (sail) planes — horizontal fins each side of sail
+    [[-1],[1]].forEach(([s]) => {
+      ctx.beginPath();
+      ctx.moveTo(10, s*6); ctx.lineTo(6, s*10); ctx.lineTo(14, s*9); ctx.lineTo(14, s*6);
+      ctx.closePath();
+      ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 0.8;
+      ctx.fill(); ctx.stroke();
+    });
+
+    // Stern cruciform X-planes
+    [[-1],[1]].forEach(([s]) => {
+      ctx.beginPath();
+      ctx.moveTo(-16, s*3); ctx.lineTo(-22, s*9); ctx.lineTo(-22, s*4); ctx.lineTo(-18, 0);
+      ctx.closePath();
+      ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 0.85;
+      ctx.fill(); ctx.stroke();
+    });
+    // Vertical rudder
+    ctx.beginPath();
+    ctx.moveTo(-16,-2); ctx.lineTo(-23,-7); ctx.lineTo(-23,7); ctx.lineTo(-16,2);
+    ctx.closePath();
+    ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 0.85;
+    ctx.fill(); ctx.stroke();
+
+    // Single large pump-jet / propeller at stern
+    ctx.save(); ctx.translate(-22, 0);
+    const pSpin = state.animFrame * 0.13;
+    for (let b=0; b<7; b++) {
+      ctx.save(); ctx.rotate(pSpin + b*Math.PI*2/7);
+      ctx.beginPath(); ctx.ellipse(0,-3.5,1.1,3.5,0.25,0,Math.PI*2);
+      ctx.fillStyle = col; ctx.globalAlpha = 0.5*alpha; ctx.fill(); ctx.restore();
+    }
+    // Hub
+    ctx.beginPath(); ctx.arc(0,0,1.8,0,Math.PI*2);
+    ctx.fillStyle = col; ctx.globalAlpha = 0.7*alpha; ctx.fill();
+    ctx.restore();
+
+    // 4 torpedo tube ports at bow
+    [-2.5,-0.8,0.8,2.5].forEach(oy => {
+      ctx.beginPath(); ctx.arc(22,oy,1.1,0,Math.PI*2);
+      ctx.fillStyle=col; ctx.globalAlpha=0.55*alpha; ctx.fill();
+    });
+
+  } else {
+    // ── TYPHOON CLASS SSBN (Bravo) ──
+    // Massive: bow → +X, stern → -X.  Length ≈ 52px, beam ≈ 24px.
+
+    // Outer pressure hull — very wide, blunt rounded bow
+    ctx.beginPath();
+    ctx.moveTo(26, 0);                                        // bow tip (still rounded)
+    ctx.bezierCurveTo(26,-8,  18,-14,  4,-14);
+    ctx.bezierCurveTo(-6,-14,-18,-12,-24, -7);
+    ctx.bezierCurveTo(-26,-4,-26,  4, -24,  7);
+    ctx.bezierCurveTo(-18, 12, -6, 14,  4, 14);
+    ctx.bezierCurveTo(18, 14,  26,  8,  26,  0);
+    ctx.closePath();
+    ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+    ctx.fill(); ctx.stroke();
+
+    // Twin pressure-hull spine ridges (the distinctive Typhoon double-hull)
+    [-5,5].forEach(ry => {
+      ctx.beginPath();
+      ctx.moveTo(22,ry); ctx.bezierCurveTo(6,ry*1.2,-10,ry*1.2,-22,ry);
+      ctx.strokeStyle = colDim; ctx.lineWidth = 0.8; ctx.stroke();
+    });
+
+    // Outer hull highlight
+    ctx.beginPath();
+    ctx.moveTo(20,-8); ctx.bezierCurveTo(4,-12,-12,-12,-20,-8);
+    ctx.strokeStyle = colHi; ctx.lineWidth = 0.8; ctx.stroke();
+
+    // Wide, prominent sail — forward-biased (≈1/4 from bow)
+    ctx.beginPath();
+    ctx.moveTo(14,-14); ctx.lineTo(12,-26);
+    ctx.bezierCurveTo(12,-29, 2,-29, 2,-26);
+    ctx.lineTo(2,-14);
+    ctx.closePath();
+    ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 1.3;
+    ctx.fill(); ctx.stroke();
+
+    // Sail top detail
+    ctx.beginPath(); ctx.moveTo(8,-14); ctx.lineTo(8,-26);
+    ctx.strokeStyle = colDim; ctx.lineWidth = 0.6; ctx.stroke();
+
+    // Periscope cluster atop sail
+    [[4,-26],[7,-26],[10,-26]].forEach(([x,y]) => {
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y-5);
+      ctx.strokeStyle = col; ctx.lineWidth = 0.9; ctx.stroke();
+    });
+
+    // Large swept-back stern stabilisers
+    [[-1],[1]].forEach(([s]) => {
+      ctx.beginPath();
+      ctx.moveTo(-20, s*5); ctx.lineTo(-28, s*18); ctx.lineTo(-26, s*10); ctx.lineTo(-22, s*4);
+      ctx.closePath();
+      ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 1.1;
+      ctx.fill(); ctx.stroke();
+    });
+    // Vertical tail fin / rudder
+    ctx.beginPath();
+    ctx.moveTo(-18,-4); ctx.lineTo(-28,-12); ctx.lineTo(-28,12); ctx.lineTo(-18,4);
+    ctx.closePath();
+    ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 1.1;
+    ctx.fill(); ctx.stroke();
+
+    // Twin counter-rotating propellers (signature Typhoon feature)
+    [-6,6].forEach((yOff, idx) => {
+      ctx.save(); ctx.translate(-26, yOff);
+      const pSpin = state.animFrame * (idx===0 ? 0.09 : -0.09); // counter-rotate
+      for (let b=0; b<5; b++) {
+        ctx.save(); ctx.rotate(pSpin + b*Math.PI*2/5);
+        ctx.beginPath(); ctx.ellipse(0,-3,1.0,3,0.2,0,Math.PI*2);
+        ctx.fillStyle = col; ctx.globalAlpha = 0.48*alpha; ctx.fill(); ctx.restore();
+      }
+      ctx.beginPath(); ctx.arc(0,0,1.6,0,Math.PI*2);
+      ctx.fillStyle = col; ctx.globalAlpha = 0.65*alpha; ctx.fill();
+      ctx.restore();
+    });
+
+    // 6 torpedo tube ports at bow (wider spread)
+    [-5,-2,1,-1,2,5].forEach((oy,i) => {
+      if (i > 3) return;
+      ctx.beginPath(); ctx.arc(26, oy*1.2, 1.3, 0, Math.PI*2);
+      ctx.fillStyle=col; ctx.globalAlpha=0.55*alpha; ctx.fill();
+    });
   }
 
-  ctx.shadowBlur = 0;
-  ctx.globalAlpha = 1.0;
+  ctx.shadowBlur = 0; ctx.globalAlpha = 1.0;
   ctx.restore();
 
-  // Labels
+  // Labels — offset perpendicular to heading so they don't overlap hull
   ctx.globalAlpha = alpha;
   ctx.font = '8px Share Tech Mono';
   ctx.textAlign = 'left';
   ctx.fillStyle = col;
-  ctx.fillText(label, sp.sx+28, sp.sy-10);
-  ctx.fillStyle = isEnemy ? 'rgba(255,68,68,0.55)' : 'rgba(0,200,255,0.55)';
-  ctx.fillText(`${sub.x.toFixed(0)},${sub.y.toFixed(0)},${sub.z.toFixed(0)}`, sp.sx+28, sp.sy);
+  ctx.fillText(label, sp.sx+30, sp.sy-12);
+  ctx.fillStyle = isEnemy ? 'rgba(255,68,68,0.5)' : 'rgba(0,200,255,0.5)';
+  ctx.fillText(`${sub.x.toFixed(0)},${sub.y.toFixed(0)},${sub.z.toFixed(0)}`, sp.sx+30, sp.sy-2);
   ctx.globalAlpha = 1.0;
 }
 

@@ -8498,6 +8498,93 @@ document.getElementById('bg-back-btn').addEventListener('click', function() {
   document.getElementById('intro-screen').style.display = 'flex';
 });
 
+// ── RULES OF ENGAGEMENT ──
+(function() {
+  var rulesScreen = document.getElementById('rules-screen');
+  var pages = Array.from(document.querySelectorAll('.rules-page'));
+  var totalPages = pages.length;
+  var current = 0;
+
+  var dotsEl = document.getElementById('rules-dots');
+  var progressEl = document.getElementById('rules-progress');
+  var prevBtn = document.getElementById('rules-prev');
+  var nextBtn = document.getElementById('rules-next');
+
+  // Build dots
+  pages.forEach(function(_, i) {
+    var d = document.createElement('div');
+    d.className = 'rules-dot' + (i === 0 ? ' active' : '');
+    dotsEl.appendChild(d);
+  });
+
+  function goTo(idx, direction) {
+    var oldPage = pages[current];
+    oldPage.classList.remove('active');
+    oldPage.classList.add('exit-left');
+    setTimeout(function() { oldPage.classList.remove('exit-left'); }, 200);
+
+    current = idx;
+    var newPage = pages[current];
+    newPage.style.transform = direction > 0 ? 'translateX(40px)' : 'translateX(-40px)';
+    newPage.classList.add('active');
+    // Force reflow then reset transform via class
+    newPage.getBoundingClientRect();
+    newPage.style.transform = '';
+    newPage.scrollTop = 0;
+
+    // Update dots
+    Array.from(dotsEl.children).forEach(function(d, i) {
+      d.classList.toggle('active', i === current);
+    });
+    progressEl.textContent = (current + 1) + ' / ' + totalPages;
+    prevBtn.disabled = current === 0;
+    nextBtn.disabled = current === totalPages - 1;
+  }
+
+  prevBtn.disabled = true;
+  prevBtn.addEventListener('click', function() { if (current > 0) goTo(current - 1, -1); });
+  nextBtn.addEventListener('click', function() { if (current < totalPages - 1) goTo(current + 1, 1); });
+
+  // Swipe support
+  var swipeStartX = 0, swipeStartY = 0, swipeActive = false;
+  rulesScreen.addEventListener('touchstart', function(e) {
+    swipeStartX = e.touches[0].clientX;
+    swipeStartY = e.touches[0].clientY;
+    swipeActive = true;
+  }, {passive: true});
+  rulesScreen.addEventListener('touchend', function(e) {
+    if (!swipeActive) return;
+    swipeActive = false;
+    var dx = e.changedTouches[0].clientX - swipeStartX;
+    var dy = e.changedTouches[0].clientY - swipeStartY;
+    if (Math.abs(dx) > Math.abs(dy) * 1.5 && Math.abs(dx) > 40) {
+      if (dx < 0 && current < totalPages - 1) goTo(current + 1, 1);
+      else if (dx > 0 && current > 0) goTo(current - 1, -1);
+    }
+  }, {passive: true});
+
+  document.getElementById('intro-rules-btn').addEventListener('click', function() {
+    current = 0;
+    pages.forEach(function(p, i) {
+      p.classList.toggle('active', i === 0);
+      p.style.transform = '';
+    });
+    Array.from(dotsEl.children).forEach(function(d, i) {
+      d.classList.toggle('active', i === 0);
+    });
+    progressEl.textContent = '1 / ' + totalPages;
+    prevBtn.disabled = true;
+    nextBtn.disabled = false;
+    document.getElementById('intro-screen').style.display = 'none';
+    rulesScreen.style.display = 'flex';
+  });
+
+  document.getElementById('rules-back-btn').addEventListener('click', function() {
+    rulesScreen.style.display = 'none';
+    document.getElementById('intro-screen').style.display = 'flex';
+  });
+})();
+
 document.getElementById('upload-back-btn').addEventListener('click', function() {
   document.getElementById('upload-screen').style.display = 'none';
   document.getElementById('intro-screen').style.display = 'flex';

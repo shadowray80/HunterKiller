@@ -31,6 +31,261 @@
     </div>
     <button id="intro-choose-btn">◈ CHOOSE A BATTLEGROUND</button>
     <button id="intro-upload-btn">▲ UPLOAD A PLAN</button>
+    <button id="intro-rules-btn">⊛ RULES OF ENGAGEMENT</button>
+  </div>
+</div>
+
+<!-- Rules of Engagement Screen -->
+<div id="rules-screen">
+  <div class="rules-header">
+    <button id="rules-back-btn">← BACK</button>
+    <div class="rules-title">RULES OF ENGAGEMENT</div>
+    <div class="rules-progress" id="rules-progress">1 / 9</div>
+  </div>
+
+  <div class="rules-pages" id="rules-pages">
+
+    <!-- PAGE 1: MISSION BRIEFING -->
+    <div class="rules-page active" data-page="1">
+      <div class="rules-page-title">MISSION BRIEFING</div>
+      <div class="rules-text">
+        You command a nuclear submarine in hostile waters. Your objective: locate and destroy the enemy Typhoon-class submarine <span class="hl">BRAVO</span> before it destroys you.<br><br>
+        Navigate through ocean trenches, floor plans, and volcanic battlegrounds. Use stealth, sonar, and superior tactics to gain the upper hand. Every kill earns points — but one mistake can implode your hull.
+      </div>
+      <div class="rules-stat-grid">
+        <div class="rules-stat"><span class="hl">+30 PTS</span><br>Enemy destroyed</div>
+        <div class="rules-stat"><span class="hl">+10–50 PTS</span><br>Waypoint secured</div>
+        <div class="rules-stat"><span class="hl">3 LIVES</span><br>Per mission</div>
+        <div class="rules-stat"><span class="hl">IMPLODE</span><br>At zero hull</div>
+      </div>
+      <img class="rules-img" src="/Images/Rules/Periscope_view.png" alt="Periscope View">
+    </div>
+
+    <!-- PAGE 2: VIEW MODES -->
+    <div class="rules-page" data-page="2">
+      <div class="rules-page-title">VIEW MODES</div>
+      <div class="rules-text">
+        Your submarine has four operational views. Switch between them using the <span class="hl">PERISCOPE</span> and <span class="hl">COMMAND</span> buttons, and by adjusting depth.
+      </div>
+      <div class="rules-mode-list">
+        <div class="rules-mode">
+          <div class="rules-mode-name">PERISCOPE</div>
+          <div class="rules-mode-desc">3D first-person underwater view. See terrain, the enemy sub, torpedoes, and all sea creatures. Your primary combat view.</div>
+        </div>
+        <div class="rules-mode">
+          <div class="rules-mode-name">SURFACE</div>
+          <div class="rules-mode-desc">Rise to periscope depth. The ocean surface appears above you. Ships become visible — they will fire on you.</div>
+        </div>
+        <div class="rules-mode">
+          <div class="rules-mode-name">SURFACED</div>
+          <div class="rules-mode-desc">Break fully through the surface. Your deck is visible. Hull repairs automatically. Ships are extremely dangerous here.</div>
+        </div>
+        <div class="rules-mode">
+          <div class="rules-mode-name">COMMAND MAP</div>
+          <div class="rules-mode-desc">Top-down tactical map. Plan your approach, see waypoints, and review the battlefield. Press COMMAND to enter, PERISCOPE to return.</div>
+        </div>
+      </div>
+      <img class="rules-img" src="/Images/Rules/Surfaced_mode.png" alt="Surfaced Mode">
+    </div>
+
+    <!-- PAGE 3: CONTROLS -->
+    <div class="rules-page" data-page="3">
+      <div class="rules-page-title">CONTROLS</div>
+      <div class="rules-text">All movement is touch or mouse driven — no buttons required for navigation.</div>
+      <div class="rules-control-grid">
+        <div class="rules-ctrl">
+          <div class="rules-ctrl-icon">↕</div>
+          <div class="rules-ctrl-label">FORWARD / BACK</div>
+          <div class="rules-ctrl-desc">Drag up/down on the left minimap panel to move forward or backward in your facing direction.</div>
+        </div>
+        <div class="rules-ctrl">
+          <div class="rules-ctrl-icon">↔</div>
+          <div class="rules-ctrl-label">STRAFE</div>
+          <div class="rules-ctrl-desc">Drag left/right on the minimap panel to strafe sideways without turning.</div>
+        </div>
+        <div class="rules-ctrl">
+          <div class="rules-ctrl-icon">⟳</div>
+          <div class="rules-ctrl-label">LOOK / TURN</div>
+          <div class="rules-ctrl-desc">Drag left/right on the main view (or the compass) to rotate your periscope bearing. Drag up/down to tilt.</div>
+        </div>
+        <div class="rules-ctrl">
+          <div class="rules-ctrl-icon">⇕</div>
+          <div class="rules-ctrl-label">DEPTH</div>
+          <div class="rules-ctrl-desc">Use the <span class="hl">RISE / DIVE</span> slider on the right side. Drag up to rise, down to dive. Watch the depth gauge.</div>
+        </div>
+        <div class="rules-ctrl">
+          <div class="rules-ctrl-icon">◈</div>
+          <div class="rules-ctrl-label">COMMAND VIEW</div>
+          <div class="rules-ctrl-desc">Press the <span class="hl">COMMAND</span> button (top right) for the tactical map. Drag to pan, pinch to zoom.</div>
+        </div>
+        <div class="rules-ctrl">
+          <div class="rules-ctrl-icon">⊙</div>
+          <div class="rules-ctrl-label">WIREFRAME</div>
+          <div class="rules-ctrl-desc">Toggle the <span class="hl">LINES</span> button to show terrain wireframe overlay in periscope view.</div>
+        </div>
+      </div>
+      <img class="rules-img" src="/Images/Rules/Submerged_ocean.png" alt="Submerged Ocean View">
+    </div>
+
+    <!-- PAGE 4: NAVIGATION & SONAR -->
+    <div class="rules-page" data-page="4">
+      <div class="rules-page-title">NAVIGATION &amp; SONAR</div>
+      <div class="rules-text">
+        You have three navigation tools. Use them together to build a complete picture of the battlefield.
+      </div>
+      <div class="rules-nav-list">
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">MINIMAP (Left Panel)</div>
+          <div class="rules-nav-body">Shows your position, enemy contacts, torpedo tracks, waypoints, and surface ship positions. In ocean terrain mode it renders a sonar contour map of the seabed. Also your movement control area — drag here to move.</div>
+        </div>
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">DEPTH GAUGE (Right Panel)</div>
+          <div class="rules-nav-body">Vertical track showing your depth (A marker) and the enemy's depth (B marker, red). The waterline is at the top. The <span class="hl">crush depth</span> zone grows in red as your hull weakens — descend into it at your peril.</div>
+        </div>
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">SONAR SWEEP</div>
+          <div class="rules-nav-body">The rotating green sweep on the minimap reveals contacts. In <span class="hl">SILENT RUNNING</span> mode, fire a silent ping with the <span class="hl">PING</span> button to briefly light up the terrain without making noise.</div>
+        </div>
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">COMPASS</div>
+          <div class="rules-nav-body">The compass strip at the top shows your bearing in degrees. Drag it to turn. In command view the compass rotates the camera.</div>
+        </div>
+      </div>
+      <img class="rules-img" src="/Images/Rules/Command_view_ocean.png" alt="Command View Ocean">
+    </div>
+
+    <!-- PAGE 5: WEAPONS -->
+    <div class="rules-page" data-page="5">
+      <div class="rules-page-title">WEAPONS</div>
+      <div class="rules-text">
+        You have two torpedo types. Both fire from your current position in your facing direction. Time your shots — torpedoes travel fast but run out of fuel.
+      </div>
+      <div class="rules-weapon-list">
+        <div class="rules-weapon">
+          <div class="rules-weapon-name">⊙ STANDARD TORPEDO</div>
+          <div class="rules-weapon-body">Press <span class="hl">FIRE</span> to launch. Travels straight ahead at high speed. Will detonate on contact with the enemy sub or any solid obstacle. Two direct hits destroy BRAVO. Three hits when their hull is reinforced.</div>
+        </div>
+        <div class="rules-weapon">
+          <div class="rules-weapon-name">◈ ACOUSTIC TORPEDO</div>
+          <div class="rules-weapon-body">Press <span class="hl">ACOUSTIC</span> to launch a homing torpedo. It locks onto the enemy's acoustic signature and steers toward them — but only if you have an <span class="hl">acoustic lock</span> (keep the enemy centred in your crosshairs to build lock). Can be spoofed by countermeasures.</div>
+        </div>
+        <div class="rules-weapon">
+          <div class="rules-weapon-name">⊛ NOISEMAKER</div>
+          <div class="rules-weapon-body">Press <span class="hl">NOISE</span> to deploy a decoy barrel. It emits a loud acoustic signal that diverts incoming homing torpedoes. Use it when BRAVO fires on you. Limited supply.</div>
+        </div>
+      </div>
+      <img class="rules-img" src="/Images/Rules/Acoustic_torpedo.png" alt="Acoustic Torpedo">
+    </div>
+
+    <!-- PAGE 6: THREATS -->
+    <div class="rules-page" data-page="6">
+      <div class="rules-page-title">THREATS</div>
+      <div class="rules-text">
+        Multiple threats will target you. Learn to recognise each and respond accordingly.
+      </div>
+      <div class="rules-threat-list">
+        <div class="rules-threat">
+          <div class="rules-threat-name warn">ENEMY TORPEDO</div>
+          <div class="rules-threat-body">BRAVO fires standard and acoustic torpedoes. You will hear a sonar ping warning. Evade by moving perpendicular to the incoming track, or deploy a noisemaker to redirect homing rounds.</div>
+        </div>
+        <div class="rules-threat">
+          <div class="rules-threat-name warn">DEPTH CHARGES</div>
+          <div class="rules-threat-body">Surface ships drop depth charges when you are detected. They sink slowly and detonate at depth — stay deep and move. The closer the blast, the more hull damage you take. Reduce your detection score by going silent.</div>
+        </div>
+        <div class="rules-threat">
+          <div class="rules-threat-name warn">SURFACE SHIPS</div>
+          <div class="rules-threat-body">Warships patrol the surface. If you surface or go to periscope depth, they may detect you. At <span class="hl">BATTLE STATIONS</span> they become very aggressive. Naval gun shells arc toward your position.</div>
+        </div>
+        <div class="rules-threat">
+          <div class="rules-threat-name warn">SEA CREATURES</div>
+          <div class="rules-threat-body">Whales, megalodons, and giant squid inhabit the deep. They are not hostile, but their sonar signatures can mask the enemy sub — or startle you at the worst moment.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE 7: SILENT RUNNING & BATTLE STATIONS -->
+    <div class="rules-page" data-page="7">
+      <div class="rules-page-title">STEALTH &amp; ALERT STATES</div>
+      <div class="rules-text">
+        Managing your noise signature and alert state is critical to survival.
+      </div>
+      <div class="rules-mode-list">
+        <div class="rules-mode">
+          <div class="rules-mode-name">SILENT RUNNING</div>
+          <div class="rules-mode-desc">Press <span class="hl">SILENT</span> to cut all active sonar and reduce engine noise. The enemy cannot detect you as easily and loses track faster. Movement speed is halved. In silent mode, use the <span class="hl">PING</span> button to fire a single passive ping that briefly reveals terrain without broadcasting your position.</div>
+        </div>
+        <div class="rules-mode">
+          <div class="rules-mode-name">BATTLE STATIONS</div>
+          <div class="rules-mode-desc">Press the <span class="hl">RED ALERT</span> image button below your lives panel to toggle battle stations. At battle stations, surface ships become highly aggressive and your detection threshold rises. Use it when you want to go offensive and accept the increased surface threat. The alert image turns red when active.</div>
+        </div>
+        <div class="rules-mode">
+          <div class="rules-mode-name">DETECTION METER</div>
+          <div class="rules-mode-desc">The <span class="hl">DETECT</span> bar shows how well the enemy has found you. High detection means they will fire more often and ships will ping more aggressively. Stay deep, go silent, and use terrain for cover to reduce detection.</div>
+        </div>
+      </div>
+      <img class="rules-img" src="/Images/Rules/Submerged_floorplan.png" alt="Floor Plan Mode">
+    </div>
+
+    <!-- PAGE 8: HULL & STATUS PANEL -->
+    <div class="rules-page" data-page="8">
+      <div class="rules-page-title">HULL &amp; STATUS PANEL</div>
+      <div class="rules-text">
+        Monitor your submarine's health at all times. Ignoring the hull gauge is how commanders die.
+      </div>
+      <div class="rules-nav-list">
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">HULL INTEGRITY</div>
+          <div class="rules-nav-body">Shown as a percentage in the status panel. Every torpedo hit, depth charge, and collision reduces it. At <span class="hl">0% hull</span> your pressure hull fails and the submarine implodes — instant death. Hull repairs slowly when you are <span class="hl">fully surfaced</span>.</div>
+        </div>
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">CRUSH DEPTH</div>
+          <div class="rules-nav-body">As your hull weakens, the <span class="hl">crush depth</span> zone on the depth gauge grows upward in red. If you descend into it, the pressure will finish off your weakened hull. Always check the gauge before diving deep.</div>
+        </div>
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">IMPLOSION WARNING</div>
+          <div class="rules-nav-body">When hull reaches critical level a loud creaking sound begins and the screen flashes. You have seconds to surface and begin repairs before the hull gives way completely. Rise immediately and surface to buy time.</div>
+        </div>
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">STATUS PANEL</div>
+          <div class="rules-nav-body">The left panel shows: <span class="hl">HULL</span> %, <span class="hl">DEPTH</span> in metres, <span class="hl">SPEED</span>, <span class="hl">DETECT</span> level, <span class="hl">SCORE</span>, <span class="hl">KILLS</span>, and enemy status. The right panel mirrors hull and score in the periscope overlay. Monitor both during combat.</div>
+        </div>
+      </div>
+      <img class="rules-img" src="/Images/Rules/Command_view_floorplan.png" alt="Command View Floor Plan">
+    </div>
+
+    <!-- PAGE 9: THE NUMBERS GAME -->
+    <div class="rules-page" data-page="9">
+      <div class="rules-page-title">THE NUMBERS GAME</div>
+      <div class="rules-text">
+        Hidden across every battleground are <span class="hl">5 numbered waypoints</span>. Collect them all to complete a secret mission — and earn serious bonus points.
+      </div>
+      <div class="rules-nav-list">
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">HOW TO FIND THEM</div>
+          <div class="rules-nav-body">Waypoints appear as glowing numbered markers visible in periscope and command view. They are scattered across the map — some in open water, some tucked into terrain. Check the minimap: they appear as numbered blips.</div>
+        </div>
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">HOW TO COLLECT</div>
+          <div class="rules-nav-body">Navigate your submarine through the waypoint marker. When you pass through it, it is collected automatically. You must collect them in <span class="hl">order (1 through 5)</span>. Collecting out of sequence does nothing — find them in numeric order.</div>
+        </div>
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">SCORING</div>
+          <div class="rules-nav-body">Each waypoint is worth <span class="hl">its number × 10 points</span>, added directly to your main score. Waypoint 1 = 10 pts, waypoint 5 = 50 pts. Collect all five and a mission accomplished message triggers. Total bonus: <span class="hl">150 points</span>.</div>
+        </div>
+        <div class="rules-nav-item">
+          <div class="rules-nav-title">WAYPOINT PANEL</div>
+          <div class="rules-nav-body">The waypoint progress panel shows which number you need next and your current waypoint score. It appears in the corner of the periscope view once the first waypoint is in range.</div>
+        </div>
+      </div>
+      <div class="rules-footer-note">Good luck, Commander. The deep is unforgiving.</div>
+    </div>
+
+  </div><!-- end rules-pages -->
+
+  <div class="rules-nav-bar">
+    <button class="rules-nav-btn" id="rules-prev">← PREV</button>
+    <div class="rules-dots" id="rules-dots"></div>
+    <button class="rules-nav-btn" id="rules-next">NEXT →</button>
   </div>
 </div>
 

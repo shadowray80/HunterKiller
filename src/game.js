@@ -1923,10 +1923,13 @@ function update() {
 
     // Hit enemy (armed after travelling minimum safe distance)
     const travelDist = t.isHoming ? t.progress : Math.sqrt((t.x-t.ox)*(t.x-t.ox)+(t.y-t.oy)*(t.y-t.oy)+(t.z-t.oz)*(t.z-t.oz));
+    // OBB check — oriented along enemy heading to match hull footprint
+    var _ehDx = t.x - state.enemy.x, _ehDy = t.y - state.enemy.y, _ehDz = t.z - state.enemy.z;
+    var _ehCos = Math.cos(state.enemy.heading), _ehSin = Math.sin(state.enemy.heading);
+    var _ehLong = _ehDx * _ehSin + _ehDz * _ehCos;
+    var _ehLat  = _ehDx * _ehCos - _ehDz * _ehSin;
     if (travelDist > 3.5 && !t.isEnemy && state.enemy.alive &&
-        Math.abs(t.x-state.enemy.x)<0.5 &&
-        Math.abs(t.y-state.enemy.y)<0.5 &&
-        Math.abs(t.z-state.enemy.z)<0.5) {
+        Math.abs(_ehLong) < 1.85 && Math.abs(_ehLat) < 0.8 && Math.abs(_ehDy) < 0.9) {
       state.enemy.hits++;
       state.torpsHit++;
       addScore(10);
@@ -6478,8 +6481,8 @@ function drawTyphoonPeri(alpha, projFn) {
   const en  = state.enemy;
   const cosH = Math.cos(en.heading), sinH = Math.sin(en.heading);
 
-  // World dimensions: L=length, B=beam, HH=half-height (Typhoon is massive and wide)
-  const L  = 5.2, B  = 1.9, HH = 0.75;
+  // World dimensions: L=length, B=beam, HH=half-height
+  const L  = 3.5, B  = 1.2, HH = 0.55;
   const hl = L * 0.5, hb = B * 0.5;
 
   // Local → world → screen  (bow = +lz, starboard = +lx, up = +ly)

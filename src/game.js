@@ -740,7 +740,7 @@ function buildWallEdges() {
   if (window._isHeightfield && window._canyonHeightGrid) {
     const hg = window._canyonHeightGrid;
     const GH = GRID.H;
-    const HCOLS = 64, HROWS = 48;
+    const HCOLS = GRID.W, HROWS = GRID.D;
     const hv = (gz, gx) => (hg[gz] && hg[gz][gx] !== undefined) ? (hg[gz][gx] / 255) * GH : 0;
     for (let gz = 0; gz < HROWS - 1; gz++) {
       for (let gx = 0; gx < HCOLS - 1; gx++) {
@@ -5876,15 +5876,95 @@ var BATTLEGROUNDS = [
         img.src='/maps/trench.png';
       });
     }
+  },
+  // ── THE ABYSS — 128×128 large-scale heightfield ────────────────────
+  {
+    id: 'abyss', name: 'THE ABYSS',
+    desc: 'Large-scale deep ocean — 128×128 battle zone',
+    tag: 'LARGE',
+    isHeightfield: true,
+    gridW: 128, gridD: 128, gridH: 64,
+    _hGrid: null,
+    makeGrid: function() {
+      var R=128,C=128,z,x; var g=[];
+      for(z=0;z<R;z++){g[z]=[];for(x=0;x<C;x++)g[z][x]=0;}
+      return g;
+    },
+    loadAsync: function() {
+      var self = this;
+      var GW = self.gridW, GD = self.gridD;
+      return new Promise(function(resolve) {
+        function buildHg(px) {
+          var g=[],hg=[];
+          for(var z=0;z<GD;z++){
+            g[z]=[]; hg[z]=[];
+            for(var x=0;x<GW;x++){
+              var idx=(z*GW+x)*4;
+              hg[z][x] = px ? px[idx] : 0;
+              g[z][x]=0;
+            }
+          }
+          // No smoothing — keep cliff edges sharp
+          self._hGrid=hg;
+          window._canyonHeightGrid=hg;
+          window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;
+          resolve(g);
+        }
+        function proceduralFallback() {
+          // Dramatic ridge-and-trench terrain — bimodal contrast
+          var px = new Uint8Array(GW*GD*4);
+          for(var z=0;z<GD;z++) {
+            for(var x=0;x<GW;x++) {
+              var nx=x/GW, nz=z/GD;
+              // Crossing diagonal ridges create natural trench corridors
+              var r1 = Math.sin(nx*Math.PI*3)*Math.sin(nz*Math.PI*2.5);
+              var r2 = Math.sin(nx*Math.PI*2)*Math.cos(nz*Math.PI*3.5+0.8);
+              var r3 = Math.sin((nx+nz)*Math.PI*4)*0.4;
+              var h = (r1*0.45 + r2*0.35 + r3) * 0.5 + 0.5;
+              // Sigmoid contrast — push toward peaks and trenches
+              h = 1/(1+Math.exp(-9*(h-0.5)));
+              var v = Math.round(Math.max(0,Math.min(255, h*255)));
+              var idx=(z*GW+x)*4;
+              px[idx]=px[idx+1]=px[idx+2]=v; px[idx+3]=255;
+            }
+          }
+          buildHg(px);
+        }
+        var img = new Image();
+        img.onload = function() {
+          var tmp=document.createElement('canvas');
+          tmp.width=GW; tmp.height=GD;
+          var tc=tmp.getContext('2d');
+          tc.drawImage(img,0,0,GW,GD);
+          buildHg(tc.getImageData(0,0,GW,GD).data);
+        };
+        img.onerror = proceduralFallback;
+        img.src='/maps/abyss.png';
+      });
+    }
   }
 ];
 
 // Launch with current grid
 function launchGame(planGrid) {
   stopIntroMusic();
-  _sonarTerrainCache = null; // rebuild sonar heightmap for new map
-  // Heightfield maps use GRID.H = 32 for canyon depth; standard maps use 6
-  GRID.H = window._isHeightfield ? 32 : 6;
+  _sonarTerrainCache = null;
+
+  // Set grid dimensions — heightfield maps can override W/D/H via window._hfGrid*
+  if (window._isHeightfield) {
+    GRID.W = window._hfGridW || 64;
+    GRID.D = window._hfGridD || 48;
+    GRID.H = window._hfGridH || 32;
+  } else {
+    GRID.W = 64; GRID.D = 48; GRID.H = 6;
+    window._hfGridW = undefined; window._hfGridD = undefined; window._hfGridH = undefined;
+  }
+
+  // Resize FLOOR_PLAN to match grid (heightfield maps are all-open; floor plans copy in below)
+  if (FLOOR_PLAN.length !== GRID.D || (FLOOR_PLAN[0] && FLOOR_PLAN[0].length !== GRID.W)) {
+    FLOOR_PLAN.length = 0;
+    for (let _fpz = 0; _fpz < GRID.D; _fpz++) FLOOR_PLAN.push(new Array(GRID.W).fill(0));
+  }
 
   if (planGrid && planGrid !== FLOOR_PLAN) {
     for (let gz=0;gz<FLOOR_PLAN.length;gz++)

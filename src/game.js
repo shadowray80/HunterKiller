@@ -1792,6 +1792,8 @@ function gameOver() {
     document.getElementById('sonar-wrap').style.display = 'none';
     document.getElementById('canvas').style.display = 'none';
     document.getElementById('intro-screen').style.display = '';
+    _introMusic.currentTime = 0;
+    _introMusic.play().catch(function(){});
   }, 2500);
 }
 
@@ -5880,6 +5882,7 @@ var BATTLEGROUNDS = [
 
 // Launch with current grid
 function launchGame(planGrid) {
+  stopIntroMusic();
   _sonarTerrainCache = null; // rebuild sonar heightmap for new map
   // Heightfield maps use GRID.H = 32 for canyon depth; standard maps use 6
   GRID.H = window._isHeightfield ? 32 : 6;
@@ -8274,6 +8277,27 @@ if (false) (function() {
   var _origUpBack = document.getElementById('upload-back-btn');
   if(_origUpBack) _origUpBack.addEventListener('click', function(){ if(!_iraf) _iDraw(); });
 })();
+
+// ── INTRO MUSIC ──
+var _introMusic = new Audio('/Sounds/intro_theme.mp3');
+_introMusic.loop = true;
+_introMusic.volume = 0.75;
+
+(function() {
+  function _startIntroMusic() {
+    if (document.getElementById('intro-screen').style.display === 'none') return;
+    _introMusic.play().catch(function(){});
+    document.removeEventListener('click', _startIntroMusic);
+    document.removeEventListener('touchstart', _startIntroMusic);
+  }
+  document.addEventListener('click', _startIntroMusic, { once: true });
+  document.addEventListener('touchstart', _startIntroMusic, { once: true });
+})();
+
+function stopIntroMusic() {
+  _introMusic.pause();
+  _introMusic.currentTime = 0;
+}
 
 // ── INTRO SCREEN NAVIGATION ──
 document.getElementById('intro-btn-floorplan').addEventListener('click', function() {

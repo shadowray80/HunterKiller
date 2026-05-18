@@ -115,16 +115,11 @@ gap: 6px;
 justify-content: flex-end;
 margin-top: 6px;
 }
-#peri-lives-row {
+.peri-life-row {
 display: flex;
 align-items: center;
-gap: 8px;
+gap: 10px;
 justify-content: flex-end;
-margin-top: 6px;
-}
-#peri-lives {
-display: flex;
-gap: 6px;
 }
 .peri-respawn-btn {
 font-family: var(--mono);
@@ -137,21 +132,22 @@ border-radius: 3px;
 cursor: pointer;
 -webkit-tap-highlight-color: transparent;
 line-height: 1;
+margin-top: 6px;
+align-self: flex-end;
 }
 .peri-respawn-btn:active { color: var(--teal); border-color: var(--teal); }
-/* Hide the HUD-corner lives — periscope overlay (#peri-lives) is the single source */
+/* Hide the HUD-corner lives — periscope overlay (#peri-info-right) is the single source */
 #hud-lives { display: none; }
 
 #peri-alert-btn {
 cursor: pointer;
-margin-top: 10px;
 display: flex;
-justify-content: flex-end;
+align-items: center;
 -webkit-tap-highlight-color: transparent;
 user-select: none;
 }
 #peri-alert-img {
-width: 64px;
+width: 36px;
 height: auto;
 display: block;
 transition: filter 0.15s;
@@ -619,10 +615,11 @@ z-index: 8;
 
 #peri-info-right {
 position: absolute;
-top: calc(env(safe-area-inset-top) + 52px); right: 12px;
-background: rgba(0,8,18,0.6);
-padding: 4px 8px;
-border: 1px solid rgba(0,180,220,0.25);
+top: calc(env(safe-area-inset-top) + 58px); right: 8px;
+display: flex;
+flex-direction: column;
+align-items: flex-end;
+gap: 10px;
 pointer-events: all;
 z-index: 8;
 }

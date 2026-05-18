@@ -8590,6 +8590,18 @@ document.getElementById('upload-back-btn').addEventListener('click', function() 
   document.getElementById('intro-screen').style.display = 'flex';
 });
 
+document.getElementById('peri-btn-abort').addEventListener('click', function() {
+  _gameOver = true;
+  _imploding = false;
+  document.getElementById('periscope-overlay').classList.remove('active');
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('controls-wrap').style.display = 'none';
+  document.getElementById('sonar-wrap').style.display = 'none';
+  document.getElementById('canvas').style.display = 'none';
+  document.getElementById('intro-screen').style.display = '';
+  restartIntroMusic();
+});
+
 // ── BATTLEGROUND CARDS ──
 (function() {
   var bgGrid = document.getElementById('bg-grid');

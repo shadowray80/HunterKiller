@@ -545,6 +545,31 @@ border-right: none;
 border-left: 1px solid rgba(0,180,220,0.25);
 }
 
+#peri-btn-abort {
+position: absolute;
+top: calc(env(safe-area-inset-top) + 52px);
+left: 0;
+width: 70px;
+font-family: var(--mono);
+font-size: 8px;
+letter-spacing: 0.15em;
+padding: 7px 0;
+background: rgba(0,4,12,0.92);
+border: none;
+border-right: 1px solid rgba(0,180,220,0.25);
+border-bottom: 1px solid rgba(0,180,220,0.25);
+color: rgba(180,50,50,0.75);
+cursor: pointer;
+pointer-events: all;
+z-index: 12;
+text-align: center;
+-webkit-tap-highlight-color: transparent;
+}
+#peri-btn-abort:active {
+background: rgba(80,0,0,0.4);
+color: var(--warn);
+}
+
 /* Combat buttons row above the control panel */
 #peri-combat-btns {
 position: absolute;

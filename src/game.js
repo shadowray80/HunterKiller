@@ -1930,16 +1930,27 @@ function update() {
     }
   }
 
-  // Acoustic lock — how well the enemy is centred in the periscope crosshairs
+  // Guided lock — scan all actors, lock onto whichever is closest to crosshair centre
   state.acousticLock = 0;
-  if (state.enemy.alive && (state.viewMode === 'periscope' || state.viewMode === 'surface')) {
-    var _aep = projectPeriscope(state.enemy.x, state.enemy.y, state.enemy.z);
-    if (_aep && _aep.depth > 0.5) {
-      var _adx = _aep.sx - W/2, _ady = _aep.sy - H*0.44;
-      var _adist = Math.sqrt(_adx*_adx + _ady*_ady);
-      var _lockPxR = Math.min(W, H) * 0.52 * 0.15; // innermost ring radius px
-      state.acousticLock = Math.max(0, 1 - _adist / _lockPxR);
+  state.guidedLockTarget = null;
+  if (state.viewMode === 'periscope' || state.viewMode === 'surface') {
+    var _lockPxR = Math.min(W, H) * 0.52 * 0.15;
+    var _bestLock = 0, _bestTarget = null;
+    function _checkGuidedLock(ref, type, wx, wy, wz) {
+      if (!ref || ref.alive === false || (ref.sinking)) return;
+      var _p = projectPeriscope(wx, wy, wz);
+      if (!_p || _p.depth < 0.3) return;
+      var _dx = _p.sx - W/2, _dy = _p.sy - H*0.44;
+      var _lk = Math.max(0, 1 - Math.sqrt(_dx*_dx+_dy*_dy) / _lockPxR);
+      if (_lk > _bestLock) { _bestLock = _lk; _bestTarget = { type, ref, x:wx, y:wy, z:wz }; }
     }
+    if (state.enemy.alive) _checkGuidedLock(state.enemy, 'BRAVO', state.enemy.x, state.enemy.y, state.enemy.z);
+    if (state.whales)     state.whales.forEach(w  => { if (w.alive)  _checkGuidedLock(w,  'WHALE', w.x, w.y, w.z); });
+    if (state.megalodons) state.megalodons.forEach(m => { if (m.alive) _checkGuidedLock(m,  'MEGA',  m.x, m.y, m.z); });
+    if (state.squids)     state.squids.forEach(s   => { if (s.alive)  _checkGuidedLock(s,  'SQUID', s.x, s.y, s.z); });
+    if (state.ships)      state.ships.forEach(sh   => { if (sh.alive && !sh.sinking) _checkGuidedLock(sh, 'SHIP', sh.x, GRID.H, sh.z); });
+    state.acousticLock = _bestLock;
+    state.guidedLockTarget = _bestTarget;
   }
 
   // Update surface ships
@@ -3127,21 +3138,29 @@ function enemyFire() {
   addEvent('⚠ TORPEDO IN THE WATER!', true);
 }
 
-// ── ACOUSTIC TORPEDO HOMING PHYSICS ──
+// ── GUIDED TORPEDO HOMING PHYSICS ──
 function _steerHomingTorp(t) {
   if (t.heading === undefined) t.heading = Math.atan2(t.dx, t.dz);
 
-  // Find best target: nearest noisemaker wins if it's significantly closer than the enemy
-  var tgtX = state.enemy.alive ? state.enemy.x : (t.x + t.dx * 30);
-  var tgtZ = state.enemy.alive ? state.enemy.z : (t.z + t.dz * 30);
-  var tgtY = state.enemy.alive ? state.enemy.y : t.y;
+  // Use the locked target reference (set at launch, can be any actor)
+  var ltr = t.lockedTargetRef;
+  var tgtX, tgtY, tgtZ;
+  if (ltr && ltr.x !== undefined && ltr.alive !== false) {
+    tgtX = ltr.x;
+    tgtY = Math.min(GRID.H - 0.5, ltr.y !== undefined ? ltr.y : t.y); // cap at near-surface
+    tgtZ = ltr.z;
+  } else if (state.enemy.alive) {
+    tgtX = state.enemy.x; tgtY = state.enemy.y; tgtZ = state.enemy.z;
+  } else {
+    tgtX = t.x + t.dx * 30; tgtY = t.y; tgtZ = t.z + t.dz * 30;
+  }
+
+  // Noisemakers still divert guided torpedoes
   if (state.noisemakers && state.noisemakers.length) {
-    var eDist2 = state.enemy.alive
-      ? (state.enemy.x-t.x)*(state.enemy.x-t.x) + (state.enemy.z-t.z)*(state.enemy.z-t.z)
-      : Infinity;
+    var tDist2 = (tgtX-t.x)*(tgtX-t.x) + (tgtZ-t.z)*(tgtZ-t.z);
     state.noisemakers.forEach(function(nm) {
       var nd2 = (nm.x-t.x)*(nm.x-t.x) + (nm.z-t.z)*(nm.z-t.z);
-      if (nd2 < eDist2 * 0.55) { tgtX = nm.x; tgtZ = nm.z; tgtY = nm.y; eDist2 = nd2; }
+      if (nd2 < tDist2 * 0.55) { tgtX = nm.x; tgtZ = nm.z; tgtY = nm.y; tDist2 = nd2; }
     });
   }
 
@@ -4231,10 +4250,12 @@ function renderPeriscope() {
       sc.strokeStyle = `rgba(${_lkRGB},${0.55 + _lk*0.45})`;
       sc.lineWidth = 3.5; sc.stroke();
     }
-    // Status label
-    var _lkLabel = _activeHomer
+    // Status label — shows lock state and current target
+    var _tgtName = _activeHomer ? (_activeHomer.lockedTargetType || 'BRAVO') : (state.guidedLockTarget ? state.guidedLockTarget.type : '');
+    var _lkStatus = _activeHomer
       ? (_lk > 0.75 ? '⊛ LOCK' : _lk > 0.4 ? '◎ GUIDE' : '○ WEAK')
       : (_lk > 0.35 ? '◎ AIM' : '○ AIM');
+    var _lkLabel = _tgtName ? `${_lkStatus} — ${_tgtName}` : _lkStatus;
     var _lkCol = _lk > 0.75 ? '#00ff66' : _lk > 0.4 ? '#ffcc00' : '#ff4444';
     sc.font = 'bold 8px Share Tech Mono'; sc.textAlign = 'center';
     sc.fillStyle = _lkCol;
@@ -4921,17 +4942,21 @@ function periFireTorpedo() {
   // ── GUIDED TORPEDO ──
   if (state.weaponMode === 'guided') {
     if (state.torpCount !== Infinity && state.torpCount <= 0) { addEvent('⚠ NO TORPEDOES', true); return; }
-    if (!state.enemy.alive) { addEvent('⚠ NO TARGET', true); return; }
+    const _gtgt = state.guidedLockTarget;
+    if (!_gtgt && !state.enemy.alive) { addEvent('⚠ NO TARGET IN CROSSHAIRS', true); return; }
     const _ah = state.periAngleH;
     const _adx = -Math.sin(_ah), _adz = Math.cos(_ah);
     const _aox = state.player.x + _adx * 1.5, _aoz = state.player.z + _adz * 1.5;
+    const _tRef = _gtgt ? _gtgt.ref : state.enemy;
+    const _tType = _gtgt ? _gtgt.type : 'BRAVO';
     state.torpedoes.push({
       ox: _aox, oy: state.player.y, oz: _aoz,
       x:  _aox, y:  state.player.y, z:  _aoz,
       dx: _adx, dy: 0, dz: _adz,
       heading: Math.atan2(_adx, _adz),
       speed: 0.38, progress: 0, frames: 0,
-      isHoming: true, lockStrength: Math.max(0.35, state.acousticLock)
+      isHoming: true, lockStrength: Math.max(0.35, state.acousticLock),
+      lockedTargetRef: _tRef, lockedTargetType: _tType
     });
     if (state.torpCount !== Infinity) state.torpCount--;
     state.torpsFired++;
@@ -4941,7 +4966,7 @@ function periFireTorpedo() {
     if (!state.battleStations) document.getElementById('btn-battlestations').click();
     playTorpedoLaunch();
     const _lkWord = state.acousticLock > 0.7 ? 'STRONG LOCK' : state.acousticLock > 0.35 ? 'PARTIAL LOCK' : 'WEAK LOCK — KEEP TRACKING';
-    addEvent(`⊛ GUIDED TORPEDO AWAY — ${_lkWord}`, false);
+    addEvent(`⊛ GUIDED TORPEDO AWAY — ${_tType} — ${_lkWord}`, false);
     document.getElementById('torp-count').textContent = state.torpCount === Infinity ? '∞' : state.torpCount;
     return;
   }

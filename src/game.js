@@ -7653,6 +7653,9 @@ function updateDeployedMines() {
       // Gentle bob on the chain
       m.currentY = m.floatY + Math.sin(m.age * 0.04) * 0.2;
 
+      // Arming delay — mine cannot detonate for first 3 seconds after deployment
+      if (m.age < 90) return true;
+
       // Proximity check — player
       if (Math.abs(state.player.x-m.x) < 2.5 && Math.abs(state.player.y-m.currentY) < 2.5 && Math.abs(state.player.z-m.z) < 2.5) {
         spawnExplosion(m.x, m.currentY, m.z, false);

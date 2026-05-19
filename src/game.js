@@ -1009,9 +1009,27 @@ function drawSonar() {
     const tp2 = mm(t.x - t.dx*3, t.z - t.dz*3);
     sc.beginPath(); sc.moveTo(tp.x,tp.y); sc.lineTo(tp2.x,tp2.y);
     sc.strokeStyle='rgba(255,170,0,0.5)'; sc.lineWidth=1.5; sc.stroke();
+    const _torpColor = t.isAcoustic ? '#00e5ff' : '#ffaa00';
+    const _torpGlow  = t.isAcoustic ? '#00ccff' : '#ffaa00';
     sc.beginPath(); sc.arc(tp.x,tp.y,2.5,0,Math.PI*2);
-    sc.fillStyle='#ffaa00'; sc.shadowBlur=6; sc.shadowColor='#ffaa00';
+    sc.fillStyle=_torpColor; sc.shadowBlur=6; sc.shadowColor=_torpGlow;
     sc.fill(); sc.shadowBlur=0;
+
+    // Acoustic torpedo: ping rings + lock line
+    if (t.isAcoustic && t.pingRings) {
+      t.pingRings.forEach(r => {
+        const pr = (r.age / 90) * 14 * scale;
+        const pa = (1 - r.age / 90) * 0.75;
+        sc.beginPath(); sc.arc(tp.x, tp.y, pr, 0, Math.PI*2);
+        sc.strokeStyle = `rgba(0,220,255,${pa})`; sc.lineWidth = 1.2; sc.stroke();
+      });
+      if (t.lockTarget) {
+        const lp = mm(t.lockTarget.x, t.lockTarget.z);
+        sc.beginPath(); sc.moveTo(tp.x, tp.y); sc.lineTo(lp.x, lp.y);
+        sc.strokeStyle = t.lockTarget.type === 'player' ? 'rgba(255,50,50,0.7)' : 'rgba(0,220,255,0.4)';
+        sc.lineWidth = 0.8; sc.setLineDash([2,3]); sc.stroke(); sc.setLineDash([]);
+      }
+    }
   });
 
   // ── ENEMY TRAIL ──
@@ -1909,17 +1927,57 @@ function update() {
     t.progress += t.speed;
     if (t.isHoming) {
       // Homing torpedo — steer then move directly (not from origin formula)
-      _steerHomingTorp(t);
+      t.frames = (t.frames || 0) + 1;
+      const _expired = t.frames > 900; // 30 seconds at 30fps
+      if (_expired) {
+        // Time limit expired — sink to seabed
+        t.vy = Math.max(-0.18, ((t.vy || 0) * 0.7) - 0.03);
+        t.dy = t.vy;
+      } else {
+        _steerHomingTorp(t);
+      }
       t.x += t.dx * t.speed;
       t.y += (t.dy || 0) * t.speed;
       t.z += t.dz * t.speed;
       // ── TERRAIN COLLISION — the Red October moment ──
       const _thx = Math.round(t.x), _thz = Math.round(t.z);
       if (t.x < 1 || t.x >= GRID.W-1 || t.z < 1 || t.z >= GRID.D-1 ||
-          (FLOOR_PLAN[_thz] && FLOOR_PLAN[_thz][_thx])) {
+          (FLOOR_PLAN[_thz] && FLOOR_PLAN[_thz][_thx]) || (_expired && t.y <= 0.5)) {
+        spawnExplosion(t.x, Math.max(0.5, t.y), t.z, false);
+        playExplosion(false);
+        addEvent(_expired ? '▸ GUIDED — TIME EXPIRED — SEABED DETONATION' : '▸ GUIDED — TERRAIN DETONATION', false);
+        return false;
+      }
+    } else if (t.isAcoustic) {
+      // True acoustic torpedo — ping-based target selection
+      t.frames = (t.frames || 0) + 1;
+      const _aExp = t.frames > 900;
+      if (_aExp) {
+        t.vy = Math.max(-0.18, ((t.vy||0)*0.7) - 0.03);
+        t.dy = t.vy;
+      } else {
+        _updateAcousticTorp(t);
+      }
+      t.x += t.dx * t.speed;
+      t.y += (t.dy||0) * t.speed;
+      t.z += t.dz * t.speed;
+      const _atx = Math.round(t.x), _atz = Math.round(t.z);
+      if (t.x < 1 || t.x >= GRID.W-1 || t.z < 1 || t.z >= GRID.D-1 ||
+          (FLOOR_PLAN[_atz] && FLOOR_PLAN[_atz][_atx]) || (_aExp && t.y <= 0.5)) {
+        spawnExplosion(t.x, Math.max(0.5, t.y), t.z, false);
+        playExplosion(false);
+        addEvent(_aExp ? '▸ ACOUSTIC — TIME EXPIRED — SEABED DETONATION' : '▸ ACOUSTIC — TERRAIN DETONATION', false);
+        return false;
+      }
+      // Friendly fire — acoustic torpedo locks onto player and hits them
+      const _afDist = t.progress;
+      if (_afDist > 4.0 && t.lockTarget && t.lockTarget.type === 'player' &&
+          Math.abs(t.x-state.player.x) < 2.0 && Math.abs(t.y-state.player.y) < 2.0 && Math.abs(t.z-state.player.z) < 2.0) {
         spawnExplosion(t.x, t.y, t.z, false);
         playExplosion(false);
-        addEvent('▸ ACOUSTIC — TERRAIN DETONATION', false);
+        applyHullDamage(25, '⚠ OWN TORPEDO — HULL BREACH');
+        addEvent('⚠ OWN TORPEDO — DIRECT HIT', true);
+        setTimeout(()=>addEvent('YOU ARROGANT ASS — YOU KILLED US!', true), 700);
         return false;
       }
     } else {
@@ -1929,7 +1987,7 @@ function update() {
     }
 
     // Hit enemy (armed after travelling minimum safe distance)
-    const travelDist = t.isHoming ? t.progress : Math.sqrt((t.x-t.ox)*(t.x-t.ox)+(t.y-t.oy)*(t.y-t.oy)+(t.z-t.oz)*(t.z-t.oz));
+    const travelDist = (t.isHoming || t.isAcoustic) ? t.progress : Math.sqrt((t.x-t.ox)*(t.x-t.ox)+(t.y-t.oy)*(t.y-t.oy)+(t.z-t.oz)*(t.z-t.oz));
     // OBB check — oriented along enemy heading to match hull footprint
     var _ehDx = t.x - state.enemy.x, _ehDy = t.y - state.enemy.y, _ehDz = t.z - state.enemy.z;
     var _ehCos = Math.cos(state.enemy.heading), _ehSin = Math.sin(state.enemy.heading);
@@ -2775,20 +2833,24 @@ function setScoreboard(on) {
 
 // ── WEAPON SELECT ──
 document.getElementById('peri-btn-weapon').addEventListener('click', () => {
-  const _modes = ['torpedo', 'acoustic', 'mine'];
+  const _modes = ['torpedo', 'guided', 'acoustic', 'mine'];
   state.weaponMode = _modes[(_modes.indexOf(state.weaponMode) + 1) % _modes.length];
   const btn = document.getElementById('peri-btn-weapon');
+  btn.classList.remove('mine-mode', 'guided-mode', 'acoustic-mode');
   if (state.weaponMode === 'mine') {
     btn.innerHTML = '⬆<br><span class="peri-weapon-label">MINE</span>';
-    btn.classList.remove('acoustic-mode'); btn.classList.add('mine-mode');
+    btn.classList.add('mine-mode');
     addEvent('⬆ WEAPON: TORPEDO MINE', false);
+  } else if (state.weaponMode === 'guided') {
+    btn.innerHTML = '◎<br><span class="peri-weapon-label">GUID</span>';
+    btn.classList.add('guided-mode');
+    addEvent('◎ WEAPON: GUIDED TORPEDO — KEEP TARGET IN CROSSHAIRS', false);
   } else if (state.weaponMode === 'acoustic') {
-    btn.innerHTML = '◎<br><span class="peri-weapon-label">ACOU</span>';
-    btn.classList.remove('mine-mode'); btn.classList.add('acoustic-mode');
-    addEvent('◎ WEAPON: ACOUSTIC HOMING TORPEDO — KEEP TARGET IN CROSSHAIRS', false);
+    btn.innerHTML = '◉<br><span class="peri-weapon-label">ACOU</span>';
+    btn.classList.add('acoustic-mode');
+    addEvent('◉ WEAPON: ACOUSTIC TORPEDO — PINGS FOR NEAREST LOUD TARGET', false);
   } else {
     btn.innerHTML = '━━▶<br><span class="peri-weapon-label">TORP</span>';
-    btn.classList.remove('mine-mode'); btn.classList.remove('acoustic-mode');
     addEvent('▶ WEAPON: TORPEDO', false);
   }
 });
@@ -3052,24 +3114,98 @@ function _steerHomingTorp(t) {
   while (da < -Math.PI) da += Math.PI * 2;
   var lk = t.lockStrength !== undefined ? t.lockStrength : 0.5;
   // Tighter turn when lock is strong; minimum turn rate so it always tries
-  var effTurn = 0.03 * (0.22 + lk * 0.78);
+  var effTurn = 0.09 * (0.45 + lk * 0.55);
   t.heading += Math.sign(da) * Math.min(Math.abs(da), effTurn);
   t.dx = Math.sin(t.heading);
   t.dz = Math.cos(t.heading);
 
   // Update lock strength from player's periscope guidance
   if ((state.viewMode === 'periscope' || state.viewMode === 'surface') && state.acousticLock > 0) {
-    t.lockStrength = Math.min(1, lk + state.acousticLock * 0.022);
+    t.lockStrength = Math.min(1, lk + state.acousticLock * 0.03);
   } else {
-    t.lockStrength = Math.max(0.08, lk - 0.004); // slowly degrades without guidance
+    t.lockStrength = Math.max(0.2, lk - 0.002); // slowly degrades without guidance
   }
 
-  // Slow vertical homing
+  // Aggressive vertical homing
   var dvy = tgtY - t.y;
-  if (Math.abs(dvy) > 0.25) {
-    t.vy = ((t.vy || 0) * 0.88) + Math.sign(dvy) * 0.006;
-    t.vy = Math.max(-0.022, Math.min(0.022, t.vy));
+  if (Math.abs(dvy) > 0.15) {
+    t.vy = ((t.vy || 0) * 0.82) + Math.sign(dvy) * 0.018;
+    t.vy = Math.max(-0.08, Math.min(0.08, t.vy));
     t.dy = t.vy;
+  }
+}
+
+// ── TRUE ACOUSTIC TORPEDO — passive sonar pings, locks onto loudest source ──
+function _updateAcousticTorp(t) {
+  if (t.heading === undefined) t.heading = Math.atan2(t.dx, t.dz);
+
+  const PING_INTERVAL = 60; // ping every 2 seconds at 30fps
+  t.pingTimer = (t.pingTimer || 0) + 1;
+  t.pingRings = t.pingRings || [];
+
+  if (t.pingTimer >= PING_INTERVAL) {
+    t.pingTimer = 0;
+    t.pingRings.push({ age: 0 });
+
+    // Acoustic score: noise level / (distance + falloff)
+    // Higher = torpedo prefers this target
+    var best = null, bestScore = 0;
+    function _acScore(noise, ref, rx, ry, rz, type) {
+      var d = Math.sqrt((rx-t.x)*(rx-t.x) + (rz-t.z)*(rz-t.z));
+      var s = noise / (d + 3);
+      if (s > bestScore) { bestScore = s; best = { type, ref, x:rx, y:ry, z:rz }; }
+    }
+
+    // Enemy sub — moderate noise
+    if (state.enemy.alive) _acScore(3.5, state.enemy, state.enemy.x, state.enemy.y, state.enemy.z, 'enemy');
+    // Player — loud unless silent running
+    _acScore(state.silentRunning ? 0.6 : 5.0, state.player, state.player.x, state.player.y, state.player.z, 'player');
+    // Noisemakers — extremely loud, designed to attract torpedoes
+    if (state.noisemakers) state.noisemakers.forEach(nm => _acScore(12.0, nm, nm.x, nm.y, nm.z, 'noisemaker'));
+    // Surface ships
+    if (state.ships) state.ships.forEach(sh => { if (sh.alive && !sh.sinking) _acScore(4.5, sh, sh.x, GRID.H, sh.z, 'ship'); });
+    // Whales
+    if (state.whales) state.whales.forEach(w => { if (w.alive) _acScore(2.5, w, w.x, w.y, w.z, 'whale'); });
+    // Megalodons
+    if (state.megalodons) state.megalodons.forEach(m => { if (m.alive) _acScore(3.0, m, m.x, m.y, m.z, 'megalodon'); });
+
+    // Update lock — report changes
+    var prevType = t.lockTarget ? t.lockTarget.type : null;
+    if (best) {
+      if (!prevType) {
+        if (best.type === 'player') {
+          addEvent('⚠ ACOUSTIC LOCKED ONTO YOU!', true);
+          setTimeout(()=>addEvent('⚠ DEPLOY NOISEMAKER — NOW!', true), 600);
+        } else {
+          addEvent(`⊛ ACOUSTIC LOCK — ${best.type.toUpperCase()}`, false);
+        }
+      } else if (prevType !== best.type) {
+        addEvent(`⚠ ACOUSTIC RELOCK — ${best.type.toUpperCase()}`, true);
+        if (best.type === 'player') setTimeout(()=>addEvent('⚠ DEPLOY NOISEMAKER — NOW!', true), 400);
+      }
+      t.lockTarget = best;
+    }
+  }
+
+  // Decay old ping rings
+  t.pingRings = t.pingRings.filter(r => { r.age++; return r.age < 90; });
+
+  // Steer toward locked target
+  if (t.lockTarget) {
+    var tgt = t.lockTarget;
+    if (tgt.ref) { tgt.x = tgt.ref.x; if (tgt.ref.y !== undefined) tgt.y = tgt.ref.y; tgt.z = tgt.ref.z; }
+    var desH = Math.atan2(tgt.x - t.x, tgt.z - t.z);
+    var da = desH - t.heading;
+    while (da >  Math.PI) da -= Math.PI*2;
+    while (da < -Math.PI) da += Math.PI*2;
+    t.heading += Math.sign(da) * Math.min(Math.abs(da), 0.055);
+    t.dx = Math.sin(t.heading);
+    t.dz = Math.cos(t.heading);
+    var dvy = tgt.y - t.y;
+    if (Math.abs(dvy) > 0.2) {
+      t.vy = Math.max(-0.05, Math.min(0.05, (t.vy||0)*0.85 + Math.sign(dvy)*0.01));
+      t.dy = t.vy;
+    }
   }
 }
 
@@ -3834,6 +3970,18 @@ function renderPeriscope() {
           ctx.fillStyle = `rgba(0,120,200,${fade * 0.6})`;
           ctx.shadowBlur = 3; ctx.shadowColor = '#0080cc';
         }
+      } else if (t.isAcoustic) {
+        // Cyan sonar torpedo
+        if (i === 0) {
+          ctx.fillStyle = `rgba(0,230,255,${fade})`;
+          ctx.shadowBlur = 22; ctx.shadowColor = '#00e5ff';
+        } else if (i < 5) {
+          ctx.fillStyle = `rgba(0,180,220,${fade * 0.9})`;
+          ctx.shadowBlur = 8; ctx.shadowColor = '#00bbee';
+        } else {
+          ctx.fillStyle = `rgba(0,100,160,${fade * 0.6})`;
+          ctx.shadowBlur = 3; ctx.shadowColor = '#006699';
+        }
       } else if (i === 0) {
         ctx.fillStyle = `rgba(255,240,80,${fade})`;
         ctx.shadowBlur = 20; ctx.shadowColor = '#ffdd00';
@@ -3928,14 +4076,36 @@ function renderPeriscope() {
     sc.strokeStyle = `rgba(0,229,255,${0.15 - r*0.1})`;
     sc.stroke();
   });
-  // ── ACOUSTIC LOCK RING ──
+  // ── ACOUSTIC TORPEDO IN WATER — show lock target ──
+  var _activeAcoustic = null;
+  for (var _ai = 0; _ai < state.torpedoes.length; _ai++) {
+    if (state.torpedoes[_ai].isAcoustic) { _activeAcoustic = state.torpedoes[_ai]; break; }
+  }
+  if (_activeAcoustic) {
+    var _acTgt = _activeAcoustic.lockTarget;
+    var _acLabel = _acTgt ? `◉ LOCKED: ${_acTgt.type.toUpperCase()}` : '◉ ACOUSTIC — PINGING';
+    var _acCol = (!_acTgt || _acTgt.type === 'player') ? '#ff4444' : '#00e5ff';
+    sc.font = 'bold 8px Share Tech Mono'; sc.textAlign = 'center';
+    sc.fillStyle = _acCol;
+    sc.shadowBlur = 6; sc.shadowColor = _acCol;
+    sc.fillText(_acLabel, scopeCX, scopeCY + scopeR * 0.72);
+    sc.shadowBlur = 0;
+    // Pulsing ring when recently pinged
+    if (_activeAcoustic.pingTimer < 12) {
+      var _pfade = 1 - _activeAcoustic.pingTimer / 12;
+      sc.beginPath(); sc.arc(scopeCX, scopeCY, scopeR * 0.08, 0, Math.PI*2);
+      sc.strokeStyle = `rgba(0,220,255,${_pfade * 0.6})`; sc.lineWidth = 2; sc.stroke();
+    }
+  }
+
+  // ── GUIDED LOCK RING ──
   var _activeHomer = null;
   for (var _li = 0; _li < state.torpedoes.length; _li++) {
     if (state.torpedoes[_li].isHoming && !state.torpedoes[_li].isEnemy) {
       _activeHomer = state.torpedoes[_li]; break;
     }
   }
-  if (_activeHomer || state.weaponMode === 'acoustic') {
+  if (_activeHomer || state.weaponMode === 'guided') {
     var _lk = _activeHomer ? (_activeHomer.lockStrength || 0) : state.acousticLock;
     var _lockR = scopeR * 0.15;
     // Background ring
@@ -4636,8 +4806,8 @@ function drawPeriFwdSlider() {
 function periFireTorpedo() {
   if (!torpReady()) { addEvent('⚠ TORPEDO RELOADING — ' + torpSecsLeft() + 's', true); return; }
 
-  // ── ACOUSTIC HOMING TORPEDO ──
-  if (state.weaponMode === 'acoustic') {
+  // ── GUIDED TORPEDO ──
+  if (state.weaponMode === 'guided') {
     if (state.torpCount !== Infinity && state.torpCount <= 0) { addEvent('⚠ NO TORPEDOES', true); return; }
     if (!state.enemy.alive) { addEvent('⚠ NO TARGET', true); return; }
     const _ah = state.periAngleH;
@@ -4648,8 +4818,8 @@ function periFireTorpedo() {
       x:  _aox, y:  state.player.y, z:  _aoz,
       dx: _adx, dy: 0, dz: _adz,
       heading: Math.atan2(_adx, _adz),
-      speed: 0.11, progress: 0,
-      isHoming: true, lockStrength: Math.max(0.25, state.acousticLock)
+      speed: 0.38, progress: 0, frames: 0,
+      isHoming: true, lockStrength: Math.max(0.35, state.acousticLock)
     });
     if (state.torpCount !== Infinity) state.torpCount--;
     state.torpsFired++;
@@ -4659,7 +4829,35 @@ function periFireTorpedo() {
     if (!state.battleStations) document.getElementById('btn-battlestations').click();
     playTorpedoLaunch();
     const _lkWord = state.acousticLock > 0.7 ? 'STRONG LOCK' : state.acousticLock > 0.35 ? 'PARTIAL LOCK' : 'WEAK LOCK — KEEP TRACKING';
-    addEvent(`⊛ ACOUSTIC AWAY — ${_lkWord}`, false);
+    addEvent(`⊛ GUIDED TORPEDO AWAY — ${_lkWord}`, false);
+    document.getElementById('torp-count').textContent = state.torpCount === Infinity ? '∞' : state.torpCount;
+    return;
+  }
+
+  // ── ACOUSTIC TORPEDO ──
+  if (state.weaponMode === 'acoustic') {
+    if (state.torpCount !== Infinity && state.torpCount <= 0) { addEvent('⚠ NO TORPEDOES', true); return; }
+    const _ah = state.periAngleH;
+    const _adx = -Math.sin(_ah), _adz = Math.cos(_ah);
+    const _aox = state.player.x + _adx * 1.5, _aoz = state.player.z + _adz * 1.5;
+    state.torpedoes.push({
+      ox: _aox, oy: state.player.y, oz: _aoz,
+      x:  _aox, y:  state.player.y, z:  _aoz,
+      dx: _adx, dy: 0, dz: _adz,
+      heading: Math.atan2(_adx, _adz),
+      speed: 0.22, progress: 0, frames: 0,
+      isAcoustic: true, lockTarget: null,
+      pingTimer: 50, pingRings: [], vy: 0
+    });
+    if (state.torpCount !== Infinity) state.torpCount--;
+    state.torpsFired++;
+    state.torpLastFired = Date.now();
+    state.muzzleFlash = 8;
+    if (state.silentRunning) revealPlayerToEnemy(420);
+    if (!state.battleStations) document.getElementById('btn-battlestations').click();
+    playTorpedoLaunch();
+    addEvent('◉ ACOUSTIC AWAY — PINGING FOR LOCK', false);
+    addEvent('▸ STAY QUIET — IT HUNTS BY SOUND', false);
     document.getElementById('torp-count').textContent = state.torpCount === Infinity ? '∞' : state.torpCount;
     return;
   }

@@ -3139,7 +3139,7 @@ function _steerHomingTorp(t) {
 function _updateAcousticTorp(t) {
   if (t.heading === undefined) t.heading = Math.atan2(t.dx, t.dz);
 
-  const PING_INTERVAL = 60; // ping every 2 seconds at 30fps
+  const PING_INTERVAL = 90; // ping every 3 seconds at 30fps
   t.pingTimer = (t.pingTimer || 0) + 1;
   t.pingRings = t.pingRings || [];
 
@@ -3147,8 +3147,7 @@ function _updateAcousticTorp(t) {
     t.pingTimer = 0;
     t.pingRings.push({ age: 0 });
 
-    // Acoustic score: noise level / (distance + falloff)
-    // Higher = torpedo prefers this target
+    // Acoustic score: noise level / (distance + falloff). Higher = torpedo prefers this target.
     var best = null, bestScore = 0;
     function _acScore(noise, ref, rx, ry, rz, type) {
       var d = Math.sqrt((rx-t.x)*(rx-t.x) + (rz-t.z)*(rz-t.z));
@@ -3156,10 +3155,8 @@ function _updateAcousticTorp(t) {
       if (s > bestScore) { bestScore = s; best = { type, ref, x:rx, y:ry, z:rz }; }
     }
 
-    // Enemy sub — moderate noise
+    // Enemy sub
     if (state.enemy.alive) _acScore(3.5, state.enemy, state.enemy.x, state.enemy.y, state.enemy.z, 'enemy');
-    // Player — loud unless silent running
-    _acScore(state.silentRunning ? 0.6 : 5.0, state.player, state.player.x, state.player.y, state.player.z, 'player');
     // Noisemakers — extremely loud, designed to attract torpedoes
     if (state.noisemakers) state.noisemakers.forEach(nm => _acScore(12.0, nm, nm.x, nm.y, nm.z, 'noisemaker'));
     // Surface ships
@@ -3168,6 +3165,23 @@ function _updateAcousticTorp(t) {
     if (state.whales) state.whales.forEach(w => { if (w.alive) _acScore(2.5, w, w.x, w.y, w.z, 'whale'); });
     // Megalodons
     if (state.megalodons) state.megalodons.forEach(m => { if (m.alive) _acScore(3.0, m, m.x, m.y, m.z, 'megalodon'); });
+    // Player — only considered beyond safe arming range, and quieter than enemy unless very close
+    // This prevents the torpedo immediately re-locking onto the firer
+    var _playerDist = Math.sqrt((state.player.x-t.x)*(state.player.x-t.x) + (state.player.z-t.z)*(state.player.z-t.z));
+    if (_playerDist > 15) {
+      _acScore(state.silentRunning ? 0.4 : 2.8, state.player, state.player.x, state.player.y, state.player.z, 'player');
+    }
+
+    // Hysteresis — only switch away from current target if new candidate is significantly louder.
+    // Prevents flip-flopping and stops torpedo from chasing the player unless they're dramatically closer/louder.
+    if (best && t.lockTarget && t.lockTarget.type !== best.type) {
+      if (t.lockTarget.ref) {
+        var _ctd = Math.sqrt((t.lockTarget.x-t.x)*(t.lockTarget.x-t.x) + (t.lockTarget.z-t.z)*(t.lockTarget.z-t.z));
+        var _ctNoise = {noisemaker:12.0,ship:4.5,enemy:3.5,megalodon:3.0,whale:2.5,player:state.silentRunning?0.4:2.8}[t.lockTarget.type] || 3.0;
+        var _ctScore = _ctNoise / (_ctd + 3);
+        if (bestScore < _ctScore * 2.5) { best = t.lockTarget; } // stick with current target
+      }
+    }
 
     // Update lock — report changes
     var prevType = t.lockTarget ? t.lockTarget.type : null;
@@ -4846,8 +4860,9 @@ function periFireTorpedo() {
       dx: _adx, dy: 0, dz: _adz,
       heading: Math.atan2(_adx, _adz),
       speed: 0.22, progress: 0, frames: 0,
-      isAcoustic: true, lockTarget: null,
-      pingTimer: 50, pingRings: [], vy: 0
+      isAcoustic: true,
+      lockTarget: state.enemy.alive ? { type:'enemy', ref:state.enemy, x:state.enemy.x, y:state.enemy.y, z:state.enemy.z } : null,
+      pingTimer: 0, pingRings: [], vy: 0
     });
     if (state.torpCount !== Infinity) state.torpCount--;
     state.torpsFired++;

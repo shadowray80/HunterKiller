@@ -294,6 +294,7 @@ const state = {
   depthCharges: [],
   shells: [],
   noisemakers: [],
+  deployedMines: [],
   countermeasures: 3,
   acousticLock: 0,
   whales: [],
@@ -1149,6 +1150,34 @@ function drawSonar() {
     sc.fillText('MEG', mp.x, mp.y - 6);
   });
 
+  // ── DEPLOYED MINE BLIPS ──
+  if (state.deployedMines) {
+    state.deployedMines.forEach(function(m) {
+      if (!m.alive) return;
+      var mp = mm(m.x, m.z);
+      if (m.type === 'drift') {
+        // Drift mine: soft pulse, rising indicator
+        var _dpulse = 0.5 + 0.5 * Math.sin(m.age * 0.08);
+        sc.beginPath(); sc.arc(mp.x, mp.y, 2.5 + _dpulse, 0, Math.PI*2);
+        sc.strokeStyle = `rgba(30,80,180,${0.5 + _dpulse*0.4})`; sc.lineWidth = 1; sc.stroke();
+        sc.beginPath(); sc.arc(mp.x, mp.y, 2, 0, Math.PI*2);
+        sc.fillStyle = '#1a3a80'; sc.shadowBlur = 5; sc.shadowColor = '#2244aa'; sc.fill(); sc.shadowBlur = 0;
+        sc.font = '5px Share Tech Mono'; sc.textAlign = 'center'; sc.textBaseline = 'alphabetic';
+        sc.fillStyle = 'rgba(60,100,200,0.7)'; sc.fillText('DRF', mp.x, mp.y - 4);
+      } else {
+        // Anchor mine: static with small cross
+        sc.beginPath(); sc.arc(mp.x, mp.y, 2.5, 0, Math.PI*2);
+        sc.fillStyle = '#0d2548'; sc.shadowBlur = 4; sc.shadowColor = '#1a3a6e'; sc.fill(); sc.shadowBlur = 0;
+        sc.strokeStyle = 'rgba(30,70,150,0.8)'; sc.lineWidth = 0.8; sc.stroke();
+        // Cross/spike marks
+        sc.beginPath();
+        sc.moveTo(mp.x-4, mp.y); sc.lineTo(mp.x+4, mp.y);
+        sc.moveTo(mp.x, mp.y-4); sc.lineTo(mp.x, mp.y+4);
+        sc.strokeStyle = 'rgba(30,70,150,0.6)'; sc.lineWidth = 0.8; sc.stroke();
+      }
+    });
+  }
+
   // ── SURFACE SHIP CONTACTS ──
   if (state.ships) state.ships.forEach(function(ship) {
     if (!ship.alive && !ship.sinking) return;
@@ -1917,6 +1946,7 @@ function update() {
   updateShips();
   updateShells();
   updateNoisemakers();
+  updateDeployedMines();
   updateDepthCharges();
   updateWhales();
   updateMegalodons();
@@ -2833,10 +2863,10 @@ function setScoreboard(on) {
 
 // ── WEAPON SELECT ──
 document.getElementById('peri-btn-weapon').addEventListener('click', () => {
-  const _modes = ['torpedo', 'guided', 'acoustic', 'mine'];
+  const _modes = ['torpedo', 'guided', 'acoustic', 'mine', 'dmine', 'amine'];
   state.weaponMode = _modes[(_modes.indexOf(state.weaponMode) + 1) % _modes.length];
   const btn = document.getElementById('peri-btn-weapon');
-  btn.classList.remove('mine-mode', 'guided-mode', 'acoustic-mode');
+  btn.classList.remove('mine-mode', 'guided-mode', 'acoustic-mode', 'dmine-mode', 'amine-mode');
   if (state.weaponMode === 'mine') {
     btn.innerHTML = '⬆<br><span class="peri-weapon-label">MINE</span>';
     btn.classList.add('mine-mode');
@@ -2849,6 +2879,14 @@ document.getElementById('peri-btn-weapon').addEventListener('click', () => {
     btn.innerHTML = '◉<br><span class="peri-weapon-label">ACOU</span>';
     btn.classList.add('acoustic-mode');
     addEvent('◉ WEAPON: ACOUSTIC TORPEDO — PINGS FOR NEAREST LOUD TARGET', false);
+  } else if (state.weaponMode === 'dmine') {
+    btn.innerHTML = '◌<br><span class="peri-weapon-label">DRFT</span>';
+    btn.classList.add('dmine-mode');
+    addEvent('◌ WEAPON: DRIFT MINE — RISES TO SURFACE, HUNTS SHIPS', false);
+  } else if (state.weaponMode === 'amine') {
+    btn.innerHTML = '⊕<br><span class="peri-weapon-label">ANCH</span>';
+    btn.classList.add('amine-mode');
+    addEvent('⊕ WEAPON: ANCHOR MINE — TETHERED, DETONATES ON CONTACT', false);
   } else {
     btn.innerHTML = '━━▶<br><span class="peri-weapon-label">TORP</span>';
     addEvent('▶ WEAPON: TORPEDO', false);
@@ -4031,6 +4069,66 @@ function renderPeriscope() {
   // ── DEPTH CHARGES ──
   drawDepthCharges();
 
+  // ── DEPLOYED MINES IN PERISCOPE ──
+  if (state.deployedMines) {
+    state.deployedMines.forEach(m => {
+      const mY = m.type === 'anchor' ? (m.currentY || m.floatY) : m.y;
+      const mp = projectPeriscope(m.x, mY, m.z);
+      if (!mp || mp.depth < 0.1 || mp.depth > 120) return;
+      const mR = Math.max(3, Math.min(14, 10 / Math.max(0.4, mp.depth * 0.22)));
+
+      // Anchor mine: draw tether chain to seabed
+      if (m.type === 'anchor') {
+        const fp = projectPeriscope(m.x, m.floorY, m.z);
+        if (fp && fp.depth > 0.1) {
+          ctx.beginPath();
+          ctx.moveTo(mp.sx, mp.sy + mR);
+          ctx.lineTo(fp.sx, fp.sy);
+          ctx.strokeStyle = 'rgba(60,80,110,0.55)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+
+      // Mine body — dark navy blue sphere
+      const grad = ctx.createRadialGradient(mp.sx - mR*0.3, mp.sy - mR*0.3, mR*0.1, mp.sx, mp.sy, mR);
+      grad.addColorStop(0, '#1e4080');
+      grad.addColorStop(0.5, '#0d2548');
+      grad.addColorStop(1, '#061428');
+      ctx.beginPath();
+      ctx.arc(mp.sx, mp.sy, mR, 0, Math.PI*2);
+      ctx.fillStyle = grad;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = '#1a3a6e';
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Spikes (horns) — classic contact mine look
+      const numSpikes = 6;
+      for (let s = 0; s < numSpikes; s++) {
+        const ang = (s / numSpikes) * Math.PI * 2;
+        const sx1 = mp.sx + Math.cos(ang) * mR;
+        const sy1 = mp.sy + Math.sin(ang) * mR;
+        const sx2 = mp.sx + Math.cos(ang) * (mR + mR * 0.55);
+        const sy2 = mp.sy + Math.sin(ang) * (mR + mR * 0.55);
+        ctx.beginPath();
+        ctx.moveTo(sx1, sy1);
+        ctx.lineTo(sx2, sy2);
+        ctx.strokeStyle = 'rgba(15,55,120,0.85)';
+        ctx.lineWidth = Math.max(0.8, mR * 0.15);
+        ctx.stroke();
+      }
+      // Rim highlight
+      ctx.beginPath();
+      ctx.arc(mp.sx, mp.sy, mR, 0, Math.PI*2);
+      ctx.strokeStyle = 'rgba(40,80,160,0.5)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    });
+  }
+
   // ── EXPLOSIONS IN PERISCOPE ──
   drawExplosions();
 
@@ -4891,6 +4989,39 @@ function periFireTorpedo() {
     state.muzzleFlash = 8;
     playTorpedoLaunch();
     addEvent('⬆ TORPEDO MINE AWAY — RISING', false);
+    return;
+  }
+
+  // ── DRIFT MINE — rises to surface, drifts, sinks ships ──
+  if (state.weaponMode === 'dmine') {
+    if (!state.deployedMines) state.deployedMines = [];
+    state.deployedMines.push({
+      x: state.player.x + (Math.random()-0.5)*0.5,
+      y: state.player.y,
+      z: state.player.z + (Math.random()-0.5)*0.5,
+      dx: (Math.random()-0.5)*0.003,
+      dz: (Math.random()-0.5)*0.003,
+      type: 'drift', alive: true, age: 0
+    });
+    addEvent('◌ DRIFT MINE DEPLOYED — RISING TO SURFACE', false);
+    addEvent('▸ WILL DETONATE ANY SHIP ON CONTACT', false);
+    return;
+  }
+
+  // ── ANCHOR MINE — tethered, detonates subs on proximity ──
+  if (state.weaponMode === 'amine') {
+    if (!state.deployedMines) state.deployedMines = [];
+    state.deployedMines.push({
+      x: state.player.x + (Math.random()-0.5)*0.3,
+      y: state.player.y,
+      z: state.player.z + (Math.random()-0.5)*0.3,
+      floatY: state.player.y,
+      floorY: 0,
+      currentY: state.player.y,
+      type: 'anchor', alive: true, age: 0
+    });
+    addEvent('⊕ ANCHOR MINE DEPLOYED — WATCH YOUR DEPTH', false);
+    addEvent('▸ PROXIMITY DETONATION — SUBS ONLY', false);
     return;
   }
 
@@ -7433,6 +7564,108 @@ function playDepthCharge(dist) {
   a.play().catch(function(){});
 }
 
+// ── DEPLOYED MINE UPDATE ──
+function updateDeployedMines() {
+  if (!state.deployedMines || !state.deployedMines.length) return;
+  state.deployedMines = state.deployedMines.filter(m => {
+    if (!m.alive) return false;
+    m.age++;
+
+    if (m.type === 'drift') {
+      // Rise slowly toward the surface
+      if (m.y < GRID.H - 0.4) {
+        m.y += 0.01;
+      } else {
+        m.y = GRID.H - 0.4;
+        // Surface drift
+        m.x += m.dx;
+        m.z += m.dz;
+        m.x = Math.max(1, Math.min(GRID.W-1, m.x));
+        m.z = Math.max(1, Math.min(GRID.D-1, m.z));
+
+        // Hit surface ships
+        if (state.ships) {
+          state.ships.forEach(ship => {
+            if (!m.alive || !ship.alive || ship.sinking) return;
+            const sdx = m.x-ship.x, sdz = m.z-ship.z;
+            if (Math.sqrt(sdx*sdx+sdz*sdz) < 4.0) {
+              ship.sinking = true; ship.sinkY = GRID.H; ship.sinkVel = 0; ship.tilt = 0;
+              playExplosionShip();
+              spawnExplosion(m.x, GRID.H, m.z, true);
+              spawnExplosion(m.x+(Math.random()-.5)*3, GRID.H, m.z+(Math.random()-.5)*3, true);
+              state.kills++; state.torpsHit++;
+              document.getElementById('kill-count').textContent = state.kills;
+              addEvent('⊛ DRIFT MINE — SHIP SUNK', false);
+              m.alive = false;
+            }
+          });
+        }
+        // Surface enemy sub
+        if (m.alive && state.enemy.alive && state.enemy.y > GRID.H - 2.5) {
+          const edx = m.x-state.enemy.x, edz = m.z-state.enemy.z;
+          if (Math.sqrt(edx*edx+edz*edz) < 3.0) {
+            state.enemy.hits++;
+            addScore(10); spawnBubblePuff(m.x, GRID.H, m.z);
+            state.enemy.bubbling = true;
+            if (state.enemy.hits >= 3) {
+              state.enemy.alive = false; state.enemy.hits = 0;
+              state.kills++; addScore(30); playExplosion(true);
+              spawnExplosion(m.x, GRID.H, m.z, true);
+              document.getElementById('kill-count').textContent = state.kills;
+              document.getElementById('enemy-status').textContent = 'DESTROYED';
+              addEvent('⊛ DRIFT MINE — BRAVO DESTROYED (+30)', false);
+              setTimeout(()=>respawnEnemy(), 5000);
+            } else {
+              playExplosion(false);
+              addEvent(`⊛ DRIFT MINE — BRAVO HIT ${state.enemy.hits}/3 (+10)`, false);
+            }
+            m.alive = false;
+          }
+        }
+      }
+
+    } else if (m.type === 'anchor') {
+      // Gentle bob on the chain
+      m.currentY = m.floatY + Math.sin(m.age * 0.04) * 0.2;
+
+      // Proximity check — player
+      if (Math.abs(state.player.x-m.x) < 2.5 && Math.abs(state.player.y-m.currentY) < 2.5 && Math.abs(state.player.z-m.z) < 2.5) {
+        spawnExplosion(m.x, m.currentY, m.z, false);
+        playExplosion(false);
+        applyHullDamage(25, '⚠ ANCHOR MINE — HULL BREACH');
+        addEvent('⚠ YOU HIT YOUR OWN MINE', true);
+        m.alive = false;
+        return false;
+      }
+      // Proximity check — enemy
+      if (m.alive && state.enemy.alive) {
+        const edx = state.enemy.x-m.x, edy = state.enemy.y-m.currentY, edz = state.enemy.z-m.z;
+        if (Math.abs(edx) < 2.5 && Math.abs(edy) < 2.5 && Math.abs(edz) < 2.5) {
+          spawnExplosion(m.x, m.currentY, m.z, false);
+          playExplosion(false);
+          spawnBubblePuff(m.x, m.currentY, m.z);
+          state.enemy.hits++; addScore(10); state.enemy.bubbling = true;
+          if (state.enemy.hits >= 3) {
+            state.enemy.alive = false; state.enemy.hits = 0;
+            state.kills++; addScore(30); playExplosion(true);
+            spawnExplosion(m.x, m.currentY, m.z, true);
+            document.getElementById('kill-count').textContent = state.kills;
+            document.getElementById('enemy-status').textContent = 'DESTROYED';
+            addEvent('⊛ ANCHOR MINE — BRAVO DESTROYED (+30)', false);
+            setTimeout(()=>respawnEnemy(), 5000);
+          } else {
+            addEvent(`⊛ ANCHOR MINE — BRAVO HIT ${state.enemy.hits}/3 (+10)`, false);
+          }
+          m.alive = false;
+          return false;
+        }
+      }
+    }
+
+    return m.alive !== false && m.age < 18000; // 10 min lifetime
+  });
+}
+
 function updateDepthCharges() {
   if (!state.depthCharges) state.depthCharges = [];
 
@@ -8124,6 +8357,29 @@ function renderSurfacePeriscope() {
       }
     });
     ctx.restore();
+  }
+
+  // ── DRIFT MINES AT SURFACE ──
+  if (state.deployedMines) {
+    state.deployedMines.forEach(m => {
+      if (!m.alive || m.y < GRID.H - 1.5) return; // only show near/at surface
+      const mp = projectSurface(m.x, GRID.H - 0.3, m.z);
+      if (!mp || mp.depth < 0.5 || mp.depth > 60) return;
+      const mR = Math.max(3, Math.min(10, 7 / Math.max(0.4, mp.depth * 0.18)));
+      const grad = ctx.createRadialGradient(mp.sx - mR*0.3, mp.sy - mR*0.3, mR*0.1, mp.sx, mp.sy, mR);
+      grad.addColorStop(0, '#1e4080');
+      grad.addColorStop(1, '#061428');
+      ctx.beginPath(); ctx.arc(mp.sx, mp.sy, mR, 0, Math.PI*2);
+      ctx.fillStyle = grad; ctx.shadowBlur = 5; ctx.shadowColor = '#1a3a6e';
+      ctx.fill(); ctx.shadowBlur = 0;
+      for (let s = 0; s < 6; s++) {
+        const ang = (s / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(mp.sx + Math.cos(ang)*mR, mp.sy + Math.sin(ang)*mR);
+        ctx.lineTo(mp.sx + Math.cos(ang)*(mR + mR*0.5), mp.sy + Math.sin(ang)*(mR + mR*0.5));
+        ctx.strokeStyle = 'rgba(15,55,120,0.8)'; ctx.lineWidth = Math.max(0.8, mR*0.15); ctx.stroke();
+      }
+    });
   }
 
   // ── SHIPS — 3D wireframe models ──

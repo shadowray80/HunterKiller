@@ -595,6 +595,8 @@ border-right: 1px solid rgba(0,180,220,0.2);
 #peri-btn-weapon.mine-mode    { color: #00ff9d; text-shadow: 0 0 6px #00ff9d; }
 #peri-btn-weapon.guided-mode  { color: #ffcc00; text-shadow: 0 0 8px #ffaa00; border-color: rgba(255,180,0,0.6); }
 #peri-btn-weapon.acoustic-mode { color: #00e5ff; text-shadow: 0 0 8px #00ccff; border-color: rgba(0,200,255,0.6); }
+#peri-btn-weapon.dmine-mode   { color: #4488ff; text-shadow: 0 0 8px #2255cc; border-color: rgba(50,100,220,0.6); }
+#peri-btn-weapon.amine-mode   { color: #3366cc; text-shadow: 0 0 6px #1a3a80; border-color: rgba(30,70,160,0.6); }
 #peri-btn-cm { color: var(--teal-dim); }
 
 /* Bearing compass strip + hull bar */

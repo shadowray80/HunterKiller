@@ -3326,8 +3326,34 @@ function updateEnemyAI() {
     }
   }
 
+  // ── CONTINUOUS MOVEMENT — BRAVO travels every frame along its current heading ──
+  // State machine only updates heading/target; this block does the actual moving.
+  if (en.aiState !== 'evade') {
+    var _bSpd = en.aiState === 'cover' ? 0.30 : en.aiState === 'flank' ? 0.27 : 0.22;
+    var _bnx = en.x + Math.sin(en.heading) * _bSpd;
+    var _bnz = en.z + Math.cos(en.heading) * _bSpd;
+    if (!isOccupied(_bnx, en.y, _bnz) && _bnx > 0.5 && _bnx < GRID.W-0.5 && _bnz > 0.5 && _bnz < GRID.D-0.5) {
+      en.x = _bnx; en.z = _bnz;
+    } else {
+      // Steer around walls — try a 45° offset, then give up and randomise heading
+      var _bh2 = en.heading + Math.PI * 0.4 * (Math.random() < 0.5 ? 1 : -1);
+      var _bnx2 = en.x + Math.sin(_bh2) * _bSpd;
+      var _bnz2 = en.z + Math.cos(_bh2) * _bSpd;
+      if (!isOccupied(_bnx2, en.y, _bnz2) && _bnx2 > 0.5 && _bnx2 < GRID.W-0.5 && _bnz2 > 0.5 && _bnz2 < GRID.D-0.5) {
+        en.x = _bnx2; en.z = _bnz2; en.heading = _bh2;
+      } else {
+        en.heading += (Math.random() - 0.5) * Math.PI; // unstick — full random turn
+      }
+    }
+    // Slow depth drift every 18 frames
+    if (_enemyMoveTimer % 18 === 0) {
+      var _bdy = Math.max(0.5, Math.min(GRID.H - 0.5, en.y + (Math.random() - 0.5) * 1.5));
+      if (!isOccupied(en.x, _bdy, en.z)) en.y = _bdy;
+    }
+  }
+
   // ── STATE: HUNT ──
-  // Move toward player aggressively, fire when LOS opens up
+  // Steer heading toward player — continuous movement handles travel
   if (en.aiState === 'hunt') {
     // Fire if we have LOS and are in range
     if (canFire && los && dist2d < 42) {
@@ -3343,32 +3369,25 @@ function updateEnemyAI() {
       }
       return;
     }
-    // Move toward player every 8 frames — much more active pursuit
-    if (_enemyMoveTimer % 8 === 0) {
+    // Update heading toward player every 12 frames via BFS
+    if (_enemyMoveTimer % 12 === 0) {
       var tx, tz;
       if (silentBlind) {
         if (state.enemyLastKnown) {
           tx = Math.round(state.enemyLastKnown.x);
           tz = Math.round(state.enemyLastKnown.z);
         } else {
-          tx = Math.max(1, Math.min(GRID.W-2, ex + Math.round((Math.random()-0.5)*10)));
-          tz = Math.max(1, Math.min(GRID.D-2, ez + Math.round((Math.random()-0.5)*10)));
+          // Patrol random waypoints while searching — covers the whole map
+          if (!en.patrolTarget || (Math.abs(en.x-en.patrolTarget.x) < 3 && Math.abs(en.z-en.patrolTarget.z) < 3)) {
+            en.patrolTarget = { x: 3+Math.floor(Math.random()*(GRID.W-6)), z: 3+Math.floor(Math.random()*(GRID.D-6)) };
+          }
+          tx = en.patrolTarget.x; tz = en.patrolTarget.z;
         }
       } else {
         tx = px; tz = pz;
       }
-      var tx2 = Math.max(1, Math.min(GRID.W-2, tx));
-      var tz2 = Math.max(1, Math.min(GRID.D-2, tz));
-      var next = bfsStep(ex, ez, tx2, tz2);
-      if (next) {
-        var ny = Math.max(0.5, Math.min(GRID.H-0.5, en.y + (Math.random()-0.5)*0.8));
-        var nx = en.x + (next.x - ex) * 0.95;
-        var nz2 = en.z + (next.z - ez) * 0.95;
-        if (!isOccupied(nx, ny, nz2)) {
-          en.x = nx; en.y = ny; en.z = nz2;
-          en.heading = Math.atan2(next.x-ex, next.z-ez);
-        }
-      }
+      var next = bfsStep(ex, ez, Math.max(1,Math.min(GRID.W-2,tx)), Math.max(1,Math.min(GRID.D-2,tz)));
+      if (next) en.heading = Math.atan2(next.x - ex, next.z - ez);
     }
     // Frequently switch to flank to cut off the player
     if (en.aiTimer === 0 && Math.random() < 0.55) {
@@ -3400,20 +3419,12 @@ function updateEnemyAI() {
     }
     // Timeout — give up and go back to hunting
     if (en.aiTimer === 0) { en.aiState = 'hunt'; en.aiTimer = 60; return; }
-    // Move toward cover every 6 frames — fast retreat
-    if (_enemyMoveTimer % 6 === 0) {
+    // Steer toward cover every 8 frames — continuous movement handles travel
+    if (_enemyMoveTimer % 8 === 0) {
       var ctx2 = Math.max(1, Math.min(GRID.W-2, tgt.x));
       var ctz = Math.max(1, Math.min(GRID.D-2, tgt.z));
       var cnext = bfsStep(ex, ez, ctx2, ctz);
-      if (cnext) {
-        var cny = Math.max(1.0, Math.min(GRID.H-1.0, en.y + (Math.random()-0.5)*1.0));
-        var cnx = en.x + (cnext.x - ex) * 0.95;
-        var cnz = en.z + (cnext.z - ez) * 0.95;
-        if (!isOccupied(cnx, cny, cnz)) {
-          en.x = cnx; en.y = cny; en.z = cnz;
-          en.heading = Math.atan2(cnext.x-ex, cnext.z-ez);
-        }
-      }
+      if (cnext) en.heading = Math.atan2(cnext.x - ex, cnext.z - ez);
     }
   }
 
@@ -3467,20 +3478,12 @@ function updateEnemyAI() {
     }
     // Timeout — go hunt
     if (en.aiTimer === 0) { en.aiState = 'hunt'; en.aiTimer = 30; return; }
-    // Move toward flank position every 8 frames — fast flanking run
-    if (_enemyMoveTimer % 8 === 0) {
+    // Steer toward flank position every 10 frames — continuous movement handles travel
+    if (_enemyMoveTimer % 10 === 0) {
       var ftx = Math.max(1, Math.min(GRID.W-2, ftgt.x));
       var ftz = Math.max(1, Math.min(GRID.D-2, ftgt.z));
       var fnext = bfsStep(ex, ez, ftx, ftz);
-      if (fnext) {
-        var fny = Math.max(0.5, Math.min(GRID.H-0.5, en.y + (Math.random()-0.5)*0.9));
-        var fnx = en.x + (fnext.x - ex) * 0.95;
-        var fnz = en.z + (fnext.z - ez) * 0.95;
-        if (!isOccupied(fnx, fny, fnz)) {
-          en.x = fnx; en.y = fny; en.z = fnz;
-          en.heading = Math.atan2(fnext.x-ex, fnext.z-ez);
-        }
-      }
+      if (fnext) en.heading = Math.atan2(fnext.x - ex, fnext.z - ez);
     }
   }
 

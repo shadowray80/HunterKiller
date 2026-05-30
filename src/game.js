@@ -6423,7 +6423,7 @@ function launchGame(planGrid) {
   }
 
   // ── CONTROL GUIDES — fade in over minimap + periscope, then fade out ──
-  ['control-guide-img', 'peri-guide-img'].forEach(id => {
+  ['control-guide-img', 'depth-guide-img', 'peri-guide-img'].forEach(id => {
     const _cg = document.getElementById(id);
     if (!_cg) return;
     _cg.style.transition = 'none';

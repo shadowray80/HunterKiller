@@ -14,7 +14,7 @@
   left: 0;
   width: 200px;
   height: 200px;
-  object-fit: contain;
+  object-fit: cover;
   background: rgba(0,10,20,0.96);
   border: 1px solid #0097a7;
   box-shadow: 0 0 16px rgba(0,229,255,0.25);

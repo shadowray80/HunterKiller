@@ -8,6 +8,22 @@
   bottom: calc(14px + env(safe-area-inset-bottom)) !important;
 }
 
+#control-guide-img {
+  position: absolute;
+  top: 15px;          /* sits over the canvas, below the TACTICAL·SONAR label */
+  left: 0;
+  width: 200px;
+  height: 200px;
+  object-fit: contain;
+  background: rgba(0,10,20,0.96);
+  border: 1px solid #0097a7;
+  box-shadow: 0 0 16px rgba(0,229,255,0.25);
+  pointer-events: none;   /* touch-through so movement still works */
+  opacity: 0;
+  transition: opacity 1s ease-in-out;
+  z-index: 5;
+}
+
 :root {
 --teal: #00e5ff;
 --teal-dim: #0097a7;

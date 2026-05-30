@@ -6421,6 +6421,23 @@ function launchGame(planGrid) {
   } else {
     setTacticalSonar(false);
   }
+
+  // ── CONTROL GUIDE — fade in over the minimap, then fade out ──
+  const _cg = document.getElementById('control-guide-img');
+  if (_cg) {
+    _cg.style.transition = 'none';
+    _cg.style.opacity = '0';
+    // Small delay so the sonar canvas is visible underneath first
+    setTimeout(() => {
+      _cg.style.transition = 'opacity 0.8s ease-in-out';
+      _cg.style.opacity = '1';
+      // Hold for 4 seconds then fade out
+      setTimeout(() => {
+        _cg.style.opacity = '0';
+      }, 4800);
+    }, 400);
+  }
+
   loop();
 }
 

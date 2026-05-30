@@ -302,6 +302,7 @@ const state = {
   periAngleH: 0,         // periscope horizontal bearing (radians)
   periAngleV: 0.1,       // periscope vertical tilt (radians, 0=horizon)
   periDragActive: false,
+  periZoom: 1,
   time: 0,
   events: [],
   camera: { rotX: 0.4, rotY: 0.4 },
@@ -3739,7 +3740,7 @@ function projectPeriscope(wx, wy, wz) {
   if (ffz <= 0.1) return null; // behind camera
 
   const FOV = 0.7; // radians half-angle
-  const fovScale = (W * 0.5) / Math.tan(FOV);
+  const fovScale = (W * 0.5) / Math.tan(FOV) * (state.periZoom || 1);
   const sx = W/2 - (fx / ffz) * fovScale;  // negated fx to unmirror
   const sy = H*0.44 - (ffy / ffz) * fovScale;
   return { sx, sy, depth: ffz };
@@ -4257,6 +4258,16 @@ function renderPeriscope() {
     sc.fillText(_lkLabel, scopeCX, scopeCY - _lockR - 7);
   }
 
+  // Zoom indicator
+  if (state.periZoom > 1) {
+    sc.font = 'bold 11px Share Tech Mono';
+    sc.textAlign = 'left';
+    sc.fillStyle = '#00e5ff';
+    sc.shadowBlur = 8; sc.shadowColor = '#00ccff';
+    sc.fillText(`×${state.periZoom} ZOOM`, scopeCX - scopeR * 0.92, scopeCY + scopeR * 0.82);
+    sc.shadowBlur = 0;
+  }
+
   // Tick marks
   for (let a = 0; a < 360; a += 10) {
     const rad = a * Math.PI/180;
@@ -4376,9 +4387,23 @@ function setupPeriDrag() {
   function end() { active = false; }
 
   const isNonCommand = () => state.viewMode !== 'command';
+
+  // Double-tap to toggle 3× zoom
+  let _lastTapT = 0, _lastTapX = 0, _lastTapY = 0;
   canvas.addEventListener('touchstart', e => {
-    if (isNonCommand() && e.touches.length===1)
-      start(e.touches[0].clientX, e.touches[0].clientY, e);
+    if (!isNonCommand() || e.touches.length !== 1) return;
+    const tx = e.touches[0].clientX, ty = e.touches[0].clientY;
+    const now = Date.now();
+    const dx = tx - _lastTapX, dy = ty - _lastTapY;
+    if (now - _lastTapT < 280 && Math.sqrt(dx*dx+dy*dy) < 60) {
+      // Double-tap — toggle zoom
+      state.periZoom = state.periZoom === 1 ? 3 : 1;
+      addEvent(state.periZoom === 3 ? '◎ ZOOM ×3' : '◎ ZOOM ×1', false);
+      _lastTapT = 0; // reset so triple-tap doesn't re-trigger
+      return;
+    }
+    _lastTapT = now; _lastTapX = tx; _lastTapY = ty;
+    start(tx, ty, e);
   }, {passive:true});
   canvas.addEventListener('touchmove', e => {
     if (isNonCommand() && e.touches.length===1 && active) {
@@ -4394,6 +4419,11 @@ function setupPeriDrag() {
     if (isNonCommand() && (e.buttons&1)) move(e.clientX, e.clientY);
   });
   canvas.addEventListener('mouseup', () => end());
+  canvas.addEventListener('dblclick', () => {
+    if (!isNonCommand()) return;
+    state.periZoom = state.periZoom === 1 ? 3 : 1;
+    addEvent(state.periZoom === 3 ? '◎ ZOOM ×3' : '◎ ZOOM ×1', false);
+  });
 }
 setupPeriDrag();
 
@@ -6383,6 +6413,7 @@ function launchGame(planGrid) {
   // Reset lives and game-over flag
   _gameOver = false;
   state.lives = 3;
+  state.periZoom = 1;
   updateLivesDisplay();
   state.hull = 100;
   document.getElementById('sys-hull').textContent = '100%';
@@ -8179,7 +8210,7 @@ function renderSurfacePeriscope() {
   const horizonY = pcy;
   const f = state.animFrame;
   const FOV = 0.8;
-  const fovScale = (W * 0.5) / Math.tan(FOV);
+  const fovScale = (W * 0.5) / Math.tan(FOV) * (state.periZoom || 1);
 
   // ── PROJECT SURFACE ──
   function projectSurface(wx, wy, wz) {

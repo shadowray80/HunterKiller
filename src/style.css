@@ -11,7 +11,7 @@
 #peri-guide-img {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: 44%;
   transform: translate(-50%, -50%);
   width: clamp(280px, 92vmin, 580px);
   height: auto;

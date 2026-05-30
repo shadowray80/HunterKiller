@@ -6422,8 +6422,8 @@ function launchGame(planGrid) {
     setTacticalSonar(false);
   }
 
-  // ── CONTROL GUIDES — fade in over minimap + periscope, then fade out ──
-  ['control-guide-img', 'depth-guide-img', 'peri-guide-img'].forEach(id => {
+  // ── CONTROL GUIDES — staggered fade sequence ──
+  function _showGuide(id, delayMs) {
     const _cg = document.getElementById(id);
     if (!_cg) return;
     _cg.style.transition = 'none';
@@ -6432,8 +6432,13 @@ function launchGame(planGrid) {
       _cg.style.transition = 'opacity 0.8s ease-in-out';
       _cg.style.opacity = '1';
       setTimeout(() => { _cg.style.opacity = '0'; }, 4800);
-    }, 400);
-  });
+    }, delayMs);
+  }
+  // Sub control + periscope guide: fade in at 400ms
+  _showGuide('control-guide-img', 400);
+  _showGuide('peri-guide-img', 400);
+  // Depth guide: follows after sub control is gone (~400 + 4800 + 1000 fade = 6200ms)
+  _showGuide('depth-guide-img', 6400);
 
   loop();
 }

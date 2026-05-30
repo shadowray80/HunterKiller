@@ -6422,21 +6422,18 @@ function launchGame(planGrid) {
     setTacticalSonar(false);
   }
 
-  // ── CONTROL GUIDE — fade in over the minimap, then fade out ──
-  const _cg = document.getElementById('control-guide-img');
-  if (_cg) {
+  // ── CONTROL GUIDES — fade in over minimap + periscope, then fade out ──
+  ['control-guide-img', 'peri-guide-img'].forEach(id => {
+    const _cg = document.getElementById(id);
+    if (!_cg) return;
     _cg.style.transition = 'none';
     _cg.style.opacity = '0';
-    // Small delay so the sonar canvas is visible underneath first
     setTimeout(() => {
       _cg.style.transition = 'opacity 0.8s ease-in-out';
       _cg.style.opacity = '1';
-      // Hold for 4 seconds then fade out
-      setTimeout(() => {
-        _cg.style.opacity = '0';
-      }, 4800);
+      setTimeout(() => { _cg.style.opacity = '0'; }, 4800);
     }, 400);
-  }
+  });
 
   loop();
 }

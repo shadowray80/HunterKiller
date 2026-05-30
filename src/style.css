@@ -23,7 +23,7 @@
 
 #control-guide-img {
   position: absolute;
-  top: 15px;          /* sits over the canvas, below the TACTICAL·SONAR label */
+  top: 0;
   left: 0;
   width: 200px;
   height: 200px;
@@ -737,7 +737,7 @@ position: relative;
 
 #depth-guide-img {
   position: absolute;
-  top: 15px;
+  top: 0;
   left: 0;
   width: 200px;
   height: 200px;

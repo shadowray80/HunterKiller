@@ -3327,22 +3327,24 @@ function updateEnemyAI() {
   }
 
   // ── STATE: HUNT ──
-  // Move toward player, fire when LOS opens up
+  // Move toward player aggressively, fire when LOS opens up
   if (en.aiState === 'hunt') {
     // Fire if we have LOS and are in range
-    if (canFire && los && dist2d < 28) {
+    if (canFire && los && dist2d < 42) {
       enemyFire();
-      // After firing, break for cover
+      // Only briefly break for cover — stay aggressive
       var cover = findNearestCover(en.x, en.z, state.player.x, state.player.z);
-      if (cover) {
+      if (cover && dist2d > 15) {
         en.aiState = 'cover';
         en.aiTarget = cover;
-        en.aiTimer = 180; // 3s timeout to reach cover
+        en.aiTimer = 120;
+      } else {
+        en.aiTimer = 30; // close range — stay in hunt, fire again soon
       }
       return;
     }
-    // Move toward player (or last known position when silent-blind) every ~30 frames
-    if (_enemyMoveTimer % 30 === 0) {
+    // Move toward player every 8 frames — much more active pursuit
+    if (_enemyMoveTimer % 8 === 0) {
       var tx, tz;
       if (silentBlind) {
         if (state.enemyLastKnown) {
@@ -3354,35 +3356,33 @@ function updateEnemyAI() {
         }
       } else {
         tx = px; tz = pz;
-        // If very close, back off slightly
-        if (dist2d < 5) { tx = ex + (ex-px)*2; tz = ez + (ez-pz)*2; }
       }
       var tx2 = Math.max(1, Math.min(GRID.W-2, tx));
       var tz2 = Math.max(1, Math.min(GRID.D-2, tz));
       var next = bfsStep(ex, ez, tx2, tz2);
       if (next) {
-        var ny = Math.max(0.6, Math.min(GRID.H-0.6, en.y + (Math.random()-0.5)*0.4));
-        var nx = en.x + (next.x - ex) * 0.85;
-        var nz2 = en.z + (next.z - ez) * 0.85;
+        var ny = Math.max(0.5, Math.min(GRID.H-0.5, en.y + (Math.random()-0.5)*0.8));
+        var nx = en.x + (next.x - ex) * 0.95;
+        var nz2 = en.z + (next.z - ez) * 0.95;
         if (!isOccupied(nx, ny, nz2)) {
           en.x = nx; en.y = ny; en.z = nz2;
           en.heading = Math.atan2(next.x-ex, next.z-ez);
         }
       }
     }
-    // Occasionally switch to flank mode to surprise the player
-    if (en.aiTimer === 0 && Math.random() < 0.3) {
+    // Frequently switch to flank to cut off the player
+    if (en.aiTimer === 0 && Math.random() < 0.55) {
       var fpos = findFlankPos(en.x, en.z, state.player.x, state.player.z);
       if (fpos) {
         en.aiState = 'flank';
         en.aiTarget = fpos;
-        en.aiTimer = 240;
-        en.flankDir = en.flankDir * -1; // alternate sides
+        en.aiTimer = 180;
+        en.flankDir = en.flankDir * -1;
       } else {
-        en.aiTimer = 120;
+        en.aiTimer = 40;
       }
     } else if (en.aiTimer === 0) {
-      en.aiTimer = 90 + Math.round(Math.random() * 60);
+      en.aiTimer = 30 + Math.round(Math.random() * 40);
     }
   }
 
@@ -3395,21 +3395,20 @@ function updateEnemyAI() {
     // Arrived at cover position
     if (dtx < 1.5 && dtz < 1.5) {
       en.aiState = 'ambush';
-      en.aiTimer = 300 + Math.round(Math.random() * 180); // wait 5-8s
+      en.aiTimer = 60 + Math.round(Math.random() * 90); // wait 1-3s then spring
       return;
     }
     // Timeout — give up and go back to hunting
     if (en.aiTimer === 0) { en.aiState = 'hunt'; en.aiTimer = 60; return; }
-    // Move toward cover every ~25 frames (faster retreat)
-    if (_enemyMoveTimer % 25 === 0) {
+    // Move toward cover every 6 frames — fast retreat
+    if (_enemyMoveTimer % 6 === 0) {
       var ctx2 = Math.max(1, Math.min(GRID.W-2, tgt.x));
       var ctz = Math.max(1, Math.min(GRID.D-2, tgt.z));
       var cnext = bfsStep(ex, ez, ctx2, ctz);
       if (cnext) {
-        // Vary depth while retreating — hug mid-depth to avoid depth charges
-        var cny = Math.max(1.5, Math.min(GRID.H-1.5, en.y + (Math.random()-0.5)*0.6));
-        var cnx = en.x + (cnext.x - ex) * 0.9;
-        var cnz = en.z + (cnext.z - ez) * 0.9;
+        var cny = Math.max(1.0, Math.min(GRID.H-1.0, en.y + (Math.random()-0.5)*1.0));
+        var cnx = en.x + (cnext.x - ex) * 0.95;
+        var cnz = en.z + (cnext.z - ez) * 0.95;
         if (!isOccupied(cnx, cny, cnz)) {
           en.x = cnx; en.y = cny; en.z = cnz;
           en.heading = Math.atan2(cnext.x-ex, cnext.z-ez);
@@ -3419,39 +3418,33 @@ function updateEnemyAI() {
   }
 
   // ── STATE: AMBUSH ──
-  // Lurk behind cover. Fire when player wanders close with LOS, or timeout and hunt
+  // Brief lurk, then spring — much shorter patience
   else if (en.aiState === 'ambush') {
-    // Opportunistic shot — fire if player comes within ambush range
-    if (canFire && los && dist2d < 20) {
+    // Opportunistic shot — wider ambush range, pounce early
+    if (canFire && los && dist2d < 38) {
       enemyFire();
-      // Re-cover after firing
       var ac = findNearestCover(en.x, en.z, state.player.x, state.player.z);
       en.aiState = 'cover';
       en.aiTarget = ac || {x: ex + (Math.random()-0.5)*4, z: ez + (Math.random()-0.5)*4};
-      en.aiTimer = 150;
+      en.aiTimer = 80;
       return;
     }
-    // Subtle depth variation while hiding
-    if (_enemyMoveTimer % 60 === 0) {
-      var hy = Math.max(1.0, Math.min(GRID.H-1.0, en.y + (Math.random()-0.5)*0.8));
+    // Depth variation while hiding
+    if (_enemyMoveTimer % 20 === 0) {
+      var hy = Math.max(0.8, Math.min(GRID.H-0.8, en.y + (Math.random()-0.5)*1.2));
       if (!isOccupied(en.x, hy, en.z)) en.y = hy;
     }
-    // Timeout — exit ambush and flank or hunt
+    // Short patience — exit ambush quickly
     if (en.aiTimer === 0) {
-      if (Math.random() < 0.5) {
-        var af = findFlankPos(en.x, en.z, state.player.x, state.player.z);
-        if (af) {
-          en.aiState = 'flank';
-          en.aiTarget = af;
-          en.aiTimer = 240;
-          en.flankDir = en.flankDir * -1;
-        } else {
-          en.aiState = 'hunt';
-          en.aiTimer = 90;
-        }
+      var af = findFlankPos(en.x, en.z, state.player.x, state.player.z);
+      if (af && Math.random() < 0.6) {
+        en.aiState = 'flank';
+        en.aiTarget = af;
+        en.aiTimer = 180;
+        en.flankDir = en.flankDir * -1;
       } else {
         en.aiState = 'hunt';
-        en.aiTimer = 90;
+        en.aiTimer = 40;
       }
     }
   }
@@ -3462,28 +3455,27 @@ function updateEnemyAI() {
     var ftgt = en.aiTarget;
     if (!ftgt) { en.aiState = 'hunt'; en.aiTimer = 60; return; }
     var fdtx = Math.abs(en.x - ftgt.x), fdtz = Math.abs(en.z - ftgt.z);
-    // Arrived at flank position — fire if LOS, then cover
+    // Arrived at flank position — fire if LOS, then press the attack
     if (fdtx < 2 && fdtz < 2) {
-      if (canFire && los && dist2d < 30) {
+      if (canFire && los && dist2d < 48) {
         enemyFire();
       }
-      var fc = findNearestCover(en.x, en.z, state.player.x, state.player.z);
-      en.aiState = 'cover';
-      en.aiTarget = fc || null;
-      en.aiTimer = 180;
+      // After flanking, go straight back to hunting — don't hide
+      en.aiState = 'hunt';
+      en.aiTimer = 30;
       return;
     }
-    // Timeout — just go hunt
-    if (en.aiTimer === 0) { en.aiState = 'hunt'; en.aiTimer = 60; return; }
-    // Move toward flank position every ~28 frames
-    if (_enemyMoveTimer % 28 === 0) {
+    // Timeout — go hunt
+    if (en.aiTimer === 0) { en.aiState = 'hunt'; en.aiTimer = 30; return; }
+    // Move toward flank position every 8 frames — fast flanking run
+    if (_enemyMoveTimer % 8 === 0) {
       var ftx = Math.max(1, Math.min(GRID.W-2, ftgt.x));
       var ftz = Math.max(1, Math.min(GRID.D-2, ftgt.z));
       var fnext = bfsStep(ex, ez, ftx, ftz);
       if (fnext) {
-        var fny = Math.max(0.6, Math.min(GRID.H-0.6, en.y + (Math.random()-0.5)*0.5));
-        var fnx = en.x + (fnext.x - ex) * 0.88;
-        var fnz = en.z + (fnext.z - ez) * 0.88;
+        var fny = Math.max(0.5, Math.min(GRID.H-0.5, en.y + (Math.random()-0.5)*0.9));
+        var fnx = en.x + (fnext.x - ex) * 0.95;
+        var fnz = en.z + (fnext.z - ez) * 0.95;
         if (!isOccupied(fnx, fny, fnz)) {
           en.x = fnx; en.y = fny; en.z = fnz;
           en.heading = Math.atan2(fnext.x-ex, fnext.z-ez);

@@ -6298,7 +6298,7 @@ var BATTLEGROUNDS = [
               g[z][x]=0;
             }
           }
-          hg = _smoothHg(hg, GW, GD, 2);
+          hg = _smoothHg(hg, GW, GD, 1);
           self._hGrid=hg; window._canyonHeightGrid=hg;
           window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;
           resolve(g);
@@ -6341,7 +6341,7 @@ var BATTLEGROUNDS = [
               g[z][x]=0;
             }
           }
-          hg = _smoothHg(hg, GW, GD, 2);
+          hg = _smoothHg(hg, GW, GD, 1);
           self._hGrid=hg; window._canyonHeightGrid=hg;
           window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;
           resolve(g);
@@ -6450,7 +6450,7 @@ var BATTLEGROUNDS = [
               g[z][x]=0;
             }
           }
-          hg = _smoothHg(hg, GW, GD, 2);
+          hg = _smoothHg(hg, GW, GD, 1);
           self._hGrid=hg;
           window._canyonHeightGrid=hg;
           window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;

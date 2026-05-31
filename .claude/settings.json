@@ -28,7 +28,8 @@
       "Bash(git merge *)",
       "PowerShell(Copy-Item \"F:\\\\HunterKiller\\\\Images\\\\Drop_off.png\" \"f:\\\\HunterKiller\\\\hsd\\\\public\\\\maps\\\\dropoff.png\" -Force)",
       "Bash(gh release *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(npm run *)"
     ],
     "additionalDirectories": [
       "F:\\HunterKiller\\Sounds",

@@ -77,6 +77,108 @@
   letter-spacing: 0.1em;
 }
 .mp-empty { font-size: 11px; color: rgba(0,229,255,0.35); padding: 8px 0; }
+
+/* Sessions list */
+.mp-section { padding: 14px 16px; border-bottom: 1px solid rgba(0,229,255,0.1); }
+#mp-create-btn {
+  width: 100%; padding: 11px; margin-bottom: 10px;
+  background: rgba(0,229,255,0.08); border: 1px solid rgba(0,229,255,0.4);
+  color: #00e5ff; font-family: inherit; font-size: 11px;
+  letter-spacing: 0.15em; cursor: pointer; border-radius: 3px;
+}
+.mp-session-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid rgba(0,229,255,0.07);
+}
+.mp-session-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.mp-session-code { font-size: 13px; letter-spacing: 0.1em; color: #ffcc00; }
+.mp-session-map  { font-size: 10px; color: #00e5ff; }
+.mp-session-mode { font-size: 9px; color: #0097a7; letter-spacing: 0.1em; }
+.mp-join-btn {
+  background: rgba(0,229,255,0.1); border: 1px solid rgba(0,229,255,0.4);
+  color: #00e5ff; font-family: inherit; font-size: 10px;
+  padding: 7px 14px; cursor: pointer; border-radius: 3px; letter-spacing: 0.1em;
+}
+
+/* Create game view */
+#mp-create-view { padding: 16px; overflow-y: auto; }
+#mp-map-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+.mp-map-btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 10px 12px; background: rgba(0,229,255,0.04);
+  border: 1px solid rgba(0,229,255,0.2); color: #00e5ff;
+  font-family: inherit; cursor: pointer; border-radius: 3px; text-align: left;
+}
+.mp-map-btn.selected { border-color: #00e5ff; background: rgba(0,229,255,0.12); }
+.mp-map-tag { font-size: 8px; color: #0097a7; letter-spacing: 0.15em; }
+.mp-map-name { font-size: 11px; letter-spacing: 0.08em; }
+#mp-mode-picker { display: flex; gap: 8px; margin-bottom: 16px; }
+.mp-mode-btn {
+  flex: 1; padding: 10px; background: rgba(0,229,255,0.04);
+  border: 1px solid rgba(0,229,255,0.2); color: #0097a7;
+  font-family: inherit; font-size: 10px; letter-spacing: 0.1em;
+  cursor: pointer; border-radius: 3px;
+}
+.mp-mode-btn.selected { border-color: #00e5ff; color: #00e5ff; background: rgba(0,229,255,0.1); }
+#mp-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.mp-option-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; letter-spacing: 0.1em; color: #0097a7;
+}
+.mp-option-row select {
+  background: rgba(0,229,255,0.08); border: 1px solid rgba(0,229,255,0.3);
+  color: #00e5ff; font-family: inherit; font-size: 12px; padding: 4px 8px;
+}
+#mp-create-actions { display: flex; gap: 10px; }
+#mp-create-cancel {
+  flex: 1; padding: 12px; background: transparent;
+  border: 1px solid rgba(0,229,255,0.2); color: #0097a7;
+  font-family: inherit; font-size: 11px; letter-spacing: 0.12em; cursor: pointer;
+}
+#mp-create-confirm {
+  flex: 2; padding: 12px; background: rgba(0,229,255,0.1);
+  border: 1px solid rgba(0,229,255,0.5); color: #00e5ff;
+  font-family: inherit; font-size: 11px; letter-spacing: 0.12em; cursor: pointer;
+}
+
+/* Waiting room */
+#mp-waiting-view { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+#mp-waiting-header { text-align: center; padding: 8px 0; }
+#mp-waiting-code { font-size: 28px; letter-spacing: 0.2em; color: #ffcc00; text-shadow: 0 0 12px #ffcc00; }
+#mp-waiting-map { font-size: 11px; color: #0097a7; margin-top: 4px; letter-spacing: 0.12em; }
+#mp-waiting-players { display: flex; gap: 12px; }
+.mp-team-col { flex: 1; }
+.mp-team-label { font-size: 9px; letter-spacing: 0.2em; margin-bottom: 8px; }
+.mp-team-col.alpha .mp-team-label { color: #4488ff; }
+.mp-team-col.bravo .mp-team-label { color: #ff4444; }
+.mp-waiting-player {
+  padding: 9px 10px; margin-bottom: 6px; border-radius: 3px;
+  border: 1px solid rgba(0,229,255,0.15); background: rgba(0,229,255,0.04);
+}
+.mp-waiting-player.ready { border-color: rgba(0,255,100,0.4); background: rgba(0,255,100,0.06); }
+.mp-waiting-player.me { border-color: rgba(0,229,255,0.4); }
+.mp-wp-name { display: block; font-size: 12px; letter-spacing: 0.08em; }
+.mp-wp-status { display: block; font-size: 9px; color: #0097a7; margin-top: 3px; }
+.mp-waiting-player.ready .mp-wp-status { color: #00ff66; }
+#mp-waiting-actions { display: flex; gap: 8px; margin-top: auto; }
+#mp-leave-btn {
+  padding: 12px 16px; background: transparent;
+  border: 1px solid rgba(255,80,80,0.3); color: rgba(255,80,80,0.7);
+  font-family: inherit; font-size: 10px; letter-spacing: 0.12em; cursor: pointer;
+}
+#mp-ready-btn {
+  flex: 1; padding: 12px; background: rgba(0,229,255,0.08);
+  border: 1px solid rgba(0,229,255,0.4); color: #00e5ff;
+  font-family: inherit; font-size: 12px; letter-spacing: 0.12em; cursor: pointer;
+}
+#mp-ready-btn.is-ready { background: rgba(0,255,100,0.1); border-color: rgba(0,255,100,0.5); color: #00ff66; }
+#mp-launch-btn {
+  flex: 1; padding: 12px; background: rgba(255,204,0,0.1);
+  border: 1px solid rgba(255,204,0,0.5); color: #ffcc00;
+  font-family: inherit; font-size: 12px; letter-spacing: 0.12em; cursor: pointer;
+}
+#mp-launch-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.status-ingame { color: #ff8800; }
 #intro-multi-btn {
   font-family: var(--mono);
   font-size: 9px;

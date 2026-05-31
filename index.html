@@ -36,32 +36,87 @@
   </div>
 </div>
 
-<!-- Multiplayer Lobby Screen -->
+<!-- Multiplayer Screen -->
 <div id="multiplayer-screen" style="display:none;">
+
+  <!-- Shared header -->
   <div id="mp-header">
     <button id="mp-back-btn">← BACK</button>
     <div id="mp-title">FLEET COMMAND</div>
     <div id="mp-ping-alert"></div>
   </div>
 
-  <div id="mp-identity">
-    <div id="mp-username-label">CALL SIGN</div>
-    <div id="mp-username-display">---</div>
-    <div id="mp-username-form">
-      <input id="mp-username-input" type="text" maxlength="12" placeholder="ENTER CALL SIGN" autocomplete="off" spellcheck="false">
-      <button id="mp-username-save">SET</button>
+  <!-- ── VIEW: LOBBY ── -->
+  <div id="mp-lobby-view">
+    <div id="mp-identity">
+      <div id="mp-username-label">CALL SIGN</div>
+      <div id="mp-username-display">---</div>
+      <div id="mp-username-form">
+        <input id="mp-username-input" type="text" maxlength="12" placeholder="ENTER CALL SIGN" autocomplete="off" spellcheck="false">
+        <button id="mp-username-save">SET</button>
+      </div>
+    </div>
+
+    <div class="mp-section">
+      <div class="mp-section-title">⚔ ACTIVE GAMES</div>
+      <button id="mp-create-btn">+ CREATE GAME</button>
+      <div id="mp-sessions-list"><div class="mp-empty">No open games</div></div>
+    </div>
+
+    <div class="mp-section">
+      <div class="mp-section-title">◉ ONLINE NOW</div>
+      <div id="mp-online-list"><div class="mp-empty">Connecting...</div></div>
     </div>
   </div>
 
-  <div id="mp-online-section">
-    <div class="mp-section-title">◉ ONLINE NOW</div>
-    <div id="mp-player-list"><div class="mp-empty">Connecting...</div></div>
+  <!-- ── VIEW: CREATE GAME ── -->
+  <div id="mp-create-view" style="display:none;">
+    <div class="mp-section-title">SELECT MAP</div>
+    <div id="mp-map-picker"></div>
+
+    <div class="mp-section-title" style="margin-top:16px;">GAME MODE</div>
+    <div id="mp-mode-picker">
+      <button class="mp-mode-btn selected" data-mode="ffa" onclick="window._mpSelectMode('ffa')">FREE FOR ALL</button>
+      <button class="mp-mode-btn" data-mode="teams" onclick="window._mpSelectMode('teams')">TEAMS</button>
+    </div>
+
+    <div id="mp-options">
+      <label class="mp-option-row">
+        <span>MAX PLAYERS</span>
+        <select id="mp-max-players">
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+        </select>
+      </label>
+      <label class="mp-option-row">
+        <span>AI FILL EMPTY SLOTS</span>
+        <input type="checkbox" id="mp-ai-fill">
+      </label>
+    </div>
+
+    <div id="mp-create-actions">
+      <button id="mp-create-cancel">CANCEL</button>
+      <button id="mp-create-confirm">CREATE GAME →</button>
+    </div>
   </div>
 
-  <div id="mp-scoreboard-section">
-    <div class="mp-section-title">⊛ SCOREBOARD</div>
-    <div id="mp-scoreboard-list"><div class="mp-empty">No games recorded yet</div></div>
+  <!-- ── VIEW: WAITING ROOM ── -->
+  <div id="mp-waiting-view" style="display:none;">
+    <div id="mp-waiting-header">
+      <div id="mp-waiting-code">HK-????</div>
+      <div id="mp-waiting-map"></div>
+    </div>
+    <div id="mp-waiting-players"></div>
+    <div id="mp-waiting-actions">
+      <button id="mp-leave-btn">LEAVE</button>
+      <button id="mp-ready-btn">READY UP</button>
+      <button id="mp-launch-btn" style="display:none;" disabled>LAUNCH →</button>
+    </div>
   </div>
+
 </div>
 
 <!-- Rules of Engagement Screen -->

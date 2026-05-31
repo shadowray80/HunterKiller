@@ -179,6 +179,20 @@
 }
 #mp-launch-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .status-ingame { color: #ff8800; }
+
+/* Launch countdown overlay */
+#mp-launch-overlay {
+  position: absolute; inset: 0; z-index: 10;
+  background: rgba(2,13,26,0.95);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 96px; letter-spacing: 0.1em;
+  color: #00e5ff; text-shadow: 0 0 40px #00e5ff, 0 0 80px #00e5ff;
+  animation: mp-pulse 0.9s ease-in-out infinite;
+}
+@keyframes mp-pulse {
+  0%,100% { opacity: 1; } 50% { opacity: 0.6; }
+}
 #intro-multi-btn {
   font-family: var(--mono);
   font-size: 9px;

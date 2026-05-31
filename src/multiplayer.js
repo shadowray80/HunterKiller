@@ -266,11 +266,38 @@ export async function launchSession() {
   await _launchGame(sess.map_id, sess.mode);
 }
 
+function _ping(vol = 0.7) {
+  const a = new Audio('/Sounds/sonar_ping_single.mp3');
+  a.volume = vol;
+  a.play().catch(() => {});
+}
+
 async function _launchGame(mapId, mode) {
   const bg = window.BATTLEGROUNDS?.find(b => b.id === mapId);
   if (!bg) { console.error('Map not found:', mapId); return; }
   _updatePresenceStatus('ingame');
+
+  // 3-ping countdown then launch
+  const overlay = document.getElementById('mp-launch-overlay');
+  if (overlay) { overlay.style.display = 'flex'; overlay.textContent = '3'; }
+  _ping(0.5);
+
+  await new Promise(r => setTimeout(r, 900));
+  if (overlay) overlay.textContent = '2';
+  _ping(0.65);
+
+  await new Promise(r => setTimeout(r, 900));
+  if (overlay) overlay.textContent = '1';
+  _ping(0.8);
+
+  await new Promise(r => setTimeout(r, 900));
+  if (overlay) { overlay.textContent = 'DIVE IN'; }
+  _ping(1.0);
+
+  await new Promise(r => setTimeout(r, 600));
+  if (overlay) overlay.style.display = 'none';
   document.getElementById('multiplayer-screen').style.display = 'none';
+
   if (bg.loadAsync) {
     const grid = await bg.loadAsync();
     window.launchGame(grid);

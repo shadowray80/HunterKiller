@@ -29,7 +29,8 @@
       "PowerShell(Copy-Item \"F:\\\\HunterKiller\\\\Images\\\\Drop_off.png\" \"f:\\\\HunterKiller\\\\hsd\\\\public\\\\maps\\\\dropoff.png\" -Force)",
       "Bash(gh release *)",
       "Bash(npm install *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(npm list *)"
     ],
     "additionalDirectories": [
       "F:\\HunterKiller\\Sounds",

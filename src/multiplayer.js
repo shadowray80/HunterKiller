@@ -26,8 +26,15 @@ const MP_MAPS = [
 
 // ── INIT ──
 export async function initMultiplayer() {
-  _user = await ensureAuth();
-  if (!_user) { console.error('Auth failed'); return; }
+  const result = await ensureAuth();
+  if (!result || result._authError) {
+    const msg = result?._authError || 'Unknown error';
+    const el = document.getElementById('mp-auth-error');
+    if (el) el.textContent = `⚠ AUTH FAILED: ${msg}`;
+    console.error('Auth failed:', msg);
+    return;
+  }
+  _user = result;
   _username = localStorage.getItem('hk_username') || null;
   const disp = document.getElementById('mp-username-display');
   if (disp) disp.textContent = _username || '---';

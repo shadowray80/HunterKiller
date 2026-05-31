@@ -6368,7 +6368,10 @@ var BATTLEGROUNDS = [
   }
 ];
 
-// Launch with current grid
+// Expose to window so multiplayer.js can access them
+window.BATTLEGROUNDS = BATTLEGROUNDS;
+
+// Launch with current grid — exposed to window for multiplayer
 function launchGame(planGrid) {
   stopIntroMusic();
   _sonarTerrainCache = null;
@@ -6485,6 +6488,7 @@ function launchGame(planGrid) {
 
   loop();
 }
+window.launchGame = launchGame; // expose for multiplayer
 
 // ── WHALES ──
 var WHALE_SPAWN_INTERVAL = 1800; // ~30s at 60fps

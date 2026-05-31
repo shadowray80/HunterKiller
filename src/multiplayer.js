@@ -279,8 +279,8 @@ async function _renderWaitingRoom() {
     readyBtn.classList.toggle('is-ready', _isReady);
   }
 
-  // Launch button — enabled when ≥2 players all ready
-  const allReady = players.length >= 2 && players.every(p => p.ready);
+  // Launch button — enabled when all players ready (at least 1)
+  const allReady = players.length >= 1 && players.every(p => p.ready);
   const launchBtn = document.getElementById('mp-launch-btn');
   if (launchBtn) launchBtn.disabled = !allReady;
 }

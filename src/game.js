@@ -1814,32 +1814,19 @@ function drawExplosions(projFn) {
 // ── HULL DAMAGE & DEATH ──
 var _imploding = false;
 var _gameOver = false;
-var _creakAudio = null;
+var _creakLastPlayed = 0;
 
 function _updateCreakSound() {
   var cf = getCrushFrac();
   var crushY = cf * GRID.H;
   var inCrushZone = cf > 0 && state.player.y < crushY && !_imploding && !_gameOver;
 
-  if (inCrushZone) {
-    if (!_creakAudio) {
-      _creakAudio = new Audio('/Sounds/submarine-creaking-sound.mp3');
-      _creakAudio.loop = true;
-      _creakAudio.volume = 0.01;
-      _creakAudio.play().catch(function(){});
-    }
-    // Louder the deeper below crush depth and the lower the hull
-    var depthSeverity = Math.min(1, (crushY - state.player.y) / Math.max(1, crushY));
-    var hullSeverity  = Math.min(1, (1 - state.hull / 100) * 1.4);
-    var target = Math.min(0.8, depthSeverity * 0.7 + hullSeverity * 0.3);
-    _creakAudio.volume += (target - _creakAudio.volume) * 0.04;
-  } else if (_creakAudio) {
-    _creakAudio.volume *= 0.93; // fade out
-    if (_creakAudio.volume < 0.01) {
-      _creakAudio.pause();
-      _creakAudio.currentTime = 0;
-      _creakAudio = null;
-    }
+  // Play a single creak when in crush zone — once on entry then every ~25s
+  if (inCrushZone && Date.now() - _creakLastPlayed > 25000) {
+    var a = new Audio('/Sounds/submarine-creak-single.mp3');
+    a.volume = Math.min(0.85, 0.3 + Math.min(1, (crushY - state.player.y) / Math.max(1, crushY)) * 0.55);
+    a.play().catch(function(){});
+    _creakLastPlayed = Date.now();
   }
 }
 function applyHullDamage(dmg, msg) {
@@ -6522,7 +6509,7 @@ function launchGame(planGrid) {
   _gameOver = false;
   state.lives = 3;
   state.periZoom = 1;
-  if (_creakAudio) { _creakAudio.pause(); _creakAudio = null; }
+  _creakLastPlayed = 0;
   updateLivesDisplay();
   state.hull = 100;
   document.getElementById('sys-hull').textContent = '100%';

@@ -1407,6 +1407,17 @@ function render() {
 
   // Draw subs
   drawSub(state.player, '#00e5ff', 'SUB ALPHA', false, 1.0);
+
+  // ── MULTIPLAYER REMOTE SUBS in command view ──
+  if (window._mpRemotePlayers) {
+    const _teamColors = { alpha: '#00e5ff', bravo: '#ff4444' };
+    Object.values(window._mpRemotePlayers).forEach(function(rp) {
+      if (!rp || rp.x === undefined) return;
+      const rpColor = _teamColors[rp.team] || '#00ff66';
+      drawSub({ x: rp.x, y: rp.y, z: rp.z, heading: rp.heading || 0 }, rpColor, rp.username || '?', false, 1.0);
+    });
+  }
+
   if (state.enemy.alive) {
     const effectiveAlpha = state.forceReveal ? 1.0 : state.revealAlpha;
     const showEnemySub = state.forceReveal || state.revealed || state.revealAlpha > 0;
@@ -4169,28 +4180,30 @@ function renderPeriscope() {
 
   // ── REMOTE PLAYERS in periscope ──
   if (window._mpRemotePlayers) {
+    const _periTeamColors = { alpha: ['0,229,255', '#00e5ff'], bravo: ['255,68,68', '#ff4444'] };
     Object.values(window._mpRemotePlayers).forEach(function(rp) {
       if (!rp || rp.x === undefined) return;
       const rproj = projectPeriscope(rp.x, rp.y, rp.z);
       if (!rproj || rproj.depth < 0.1 || rproj.depth > 200) return;
       const rs = Math.max(3, Math.min(14, 10 / Math.max(0.3, rproj.depth * 0.25)));
-      // Glowing green dot with call sign
+      const [rgb, hex] = _periTeamColors[rp.team] || ['0,255,100', '#00ff66'];
+      // Glowing dot
       ctx.beginPath(); ctx.arc(rproj.sx, rproj.sy, rs, 0, Math.PI*2);
-      ctx.fillStyle = 'rgba(0,255,100,0.9)';
-      ctx.shadowBlur = 18; ctx.shadowColor = '#00ff66';
+      ctx.fillStyle = `rgba(${rgb},0.9)`;
+      ctx.shadowBlur = 18; ctx.shadowColor = hex;
       ctx.fill(); ctx.shadowBlur = 0;
       // Trail
       for (let ti = 1; ti <= 4; ti++) {
         const trx = rp.x - Math.sin(rp.heading||0)*ti*0.4;
-        const trz = rp.z - (-Math.cos(rp.heading||0))*ti*0.4;
+        const trz = rp.z + Math.cos(rp.heading||0)*ti*0.4;
         const trp = projectPeriscope(trx, rp.y, trz);
         if (!trp || trp.depth < 0.1) continue;
         ctx.beginPath(); ctx.arc(trp.sx, trp.sy, Math.max(1, rs*(1-ti/5)), 0, Math.PI*2);
-        ctx.fillStyle = `rgba(0,200,80,${0.5-ti*0.1})`; ctx.fill();
+        ctx.fillStyle = `rgba(${rgb},${0.5-ti*0.1})`; ctx.fill();
       }
       // Call sign label
       ctx.font = 'bold 11px Share Tech Mono'; ctx.textAlign = 'center';
-      ctx.fillStyle = '#00ff66'; ctx.shadowBlur = 6; ctx.shadowColor = '#00ff66';
+      ctx.fillStyle = hex; ctx.shadowBlur = 6; ctx.shadowColor = hex;
       ctx.fillText(rp.username || '?', rproj.sx, rproj.sy - rs - 5);
       ctx.shadowBlur = 0;
     });
@@ -5092,22 +5105,20 @@ function drawPeriFwdSlider() {
 
   // ── REMOTE PLAYERS on minimap ──
   if (window._mpRemotePlayers) {
+    const _mmTeamColors = { alpha: '#00e5ff', bravo: '#ff4444' };
     Object.values(window._mpRemotePlayers).forEach(function(rp) {
       if (!rp || rp.x === undefined) return;
       var rpp = mm(rp.x, rp.z);
-      // Heading arrow
+      var rpCol = _mmTeamColors[rp.team] || '#00ff66';
       var rdx = Math.sin(rp.heading || 0) * 10, rdy = -Math.cos(rp.heading || 0) * 10;
-      c.strokeStyle = '#00ff66'; c.lineWidth = 1.2;
-      c.shadowBlur = 4; c.shadowColor = '#00ff66';
+      c.strokeStyle = rpCol; c.lineWidth = 1.2;
+      c.shadowBlur = 4; c.shadowColor = rpCol;
       c.beginPath(); c.moveTo(rpp.x, rpp.y); c.lineTo(rpp.x + rdx, rpp.y + rdy); c.stroke();
-      // Dot
       c.beginPath(); c.arc(rpp.x, rpp.y, 4, 0, Math.PI*2);
-      c.fillStyle = '#00ff66'; c.shadowBlur = 8; c.shadowColor = '#00ff66';
+      c.fillStyle = rpCol; c.shadowBlur = 8; c.shadowColor = rpCol;
       c.fill(); c.shadowBlur = 0;
-      // Call sign
       c.font = '6px Share Tech Mono'; c.textAlign = 'center';
-      c.fillStyle = 'rgba(0,255,100,0.85)';
-      c.fillText(rp.username || '?', rpp.x, rpp.y - 7);
+      c.fillStyle = rpCol; c.fillText(rp.username || '?', rpp.x, rpp.y - 7);
     });
   }
 }
@@ -9213,6 +9224,10 @@ document.getElementById('peri-btn-abort').addEventListener('click', function() {
   _imploding = false;
   // Save kills/deaths to Supabase if this was a multiplayer session
   if (window._mpEndGame) window._mpEndGame(state.kills, 3 - state.lives);
+  window._mpSendPos = null;
+  window._mpRemotePlayers = {};
+  const _tb = document.getElementById('mp-team-badge');
+  if (_tb) _tb.style.display = 'none';
   document.getElementById('periscope-overlay').classList.remove('active');
   document.getElementById('hud').style.display = 'none';
   document.getElementById('controls-wrap').style.display = 'none';

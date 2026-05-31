@@ -16,6 +16,14 @@ let _currentMode = 'ffa';
 // Remote players — read by game.js for rendering
 window._mpRemotePlayers = {};
 
+// ── TEAM CONFIG ──
+export const TEAMS = {
+  alpha: { name: 'WOLFPACK', color: '#00e5ff', glow: '#00ccff' },
+  bravo: { name: 'KRAKEN',   color: '#ff4444', glow: '#ff2020' }
+};
+let _myTeam = 'alpha';
+window._mpMyTeam = null; // set at game launch
+
 // ── MAPS AVAILABLE FOR MULTIPLAYER ──
 const MP_MAPS = [
   { id: 'canyon',   name: 'THE CANYON',       tag: 'TERRAIN',    hf: true  },
@@ -217,6 +225,10 @@ async function _enterWaitingRoom(code, asHost) {
   // Auto-assign teams after insert
   await _assignTeams(code);
 
+  // Fetch our team assignment
+  const { data: myRow } = await supabase.from('session_players').select('team').eq('session_id', code).eq('player_id', _user.id).maybeSingle();
+  if (myRow) _myTeam = myRow.team || 'alpha';
+
   document.getElementById('mp-waiting-code').textContent = code;
   document.getElementById('mp-launch-btn').style.display = asHost ? '' : 'none';
 
@@ -326,7 +338,7 @@ function _startGameSync(code) {
     if (!_gameChannel) return;
     _gameChannel.send({
       type: 'broadcast', event: 'pos',
-      payload: { id: _user.id, username: _username || '?', x, y, z, heading }
+      payload: { id: _user.id, username: _username || '?', x, y, z, heading, team: _myTeam }
     });
   };
 }
@@ -358,6 +370,19 @@ async function _launchGame(mapId, mode) {
   document.getElementById('multiplayer-screen').style.display = 'none';
 
   _startGameSync(_currentCode);
+  window._mpMyTeam = _myTeam;
+
+  // Show team badge in HUD
+  const teamInfo = TEAMS[_myTeam] || TEAMS.alpha;
+  setTimeout(() => {
+    const badge = document.getElementById('mp-team-badge');
+    if (badge) {
+      badge.textContent = `◈ ${teamInfo.name}`;
+      badge.style.color = teamInfo.color;
+      badge.style.textShadow = `0 0 8px ${teamInfo.glow}`;
+      badge.style.display = '';
+    }
+  }, 500);
 
   if (bg.loadAsync) {
     const grid = await bg.loadAsync();

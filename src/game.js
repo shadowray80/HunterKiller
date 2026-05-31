@@ -1410,10 +1410,10 @@ function render() {
 
   // ── MULTIPLAYER REMOTE SUBS in command view ──
   if (window._mpRemotePlayers) {
-    const _teamColors = { alpha: '#00e5ff', bravo: '#ff4444' };
+    const _teamColors = { alpha: '#22ee88', bravo: '#ff8833' };
     Object.values(window._mpRemotePlayers).forEach(function(rp) {
       if (!rp || rp.x === undefined) return;
-      const rpColor = _teamColors[rp.team] || '#00ff66';
+      const rpColor = _teamColors[rp.team] || '#22ee88';
       drawSub({ x: rp.x, y: rp.y, z: rp.z, heading: rp.heading || 0 }, rpColor, rp.username || '?', false, 1.0);
     });
   }
@@ -3847,6 +3847,57 @@ function projectPeriscope(wx, wy, wz) {
   return { sx, sy, depth: ffz };
 }
 
+// Draw a remote player's submarine in the periscope view using bow/stern projection
+function drawSubPeriscope(rp, color, glowColor) {
+  const center = projectPeriscope(rp.x, rp.y, rp.z);
+  if (!center || center.depth < 0.1 || center.depth > 180) return;
+
+  // Project bow and stern so we get the correct screen angle + apparent length
+  const fwdX = Math.sin(rp.heading || 0), fwdZ = Math.cos(rp.heading || 0);
+  const halfLen = 2.2;
+  const bowP  = projectPeriscope(rp.x + fwdX*halfLen, rp.y, rp.z + fwdZ*halfLen);
+  const sternP = projectPeriscope(rp.x - fwdX*halfLen, rp.y, rp.z - fwdZ*halfLen);
+  if (!bowP || !sternP || bowP.depth < 0.1 || sternP.depth < 0.1) return;
+
+  const dx = bowP.sx - sternP.sx, dy = bowP.sy - sternP.sy;
+  const screenAngle = Math.atan2(dy, dx);
+  const hw = Math.max(8, Math.sqrt(dx*dx + dy*dy) * 0.5);
+  const hh = Math.max(2.5, hw * 0.22);
+  const scale = Math.max(0.3, Math.min(3, 10 / Math.max(1, center.depth * 0.28)));
+
+  ctx.save();
+  ctx.translate(center.sx, center.sy);
+  ctx.rotate(screenAngle);
+
+  ctx.fillStyle = 'rgba(0,4,12,0.82)';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(0.8, 1.4 * scale);
+  ctx.shadowBlur = 14; ctx.shadowColor = glowColor;
+
+  // Hull — tapered ellipse
+  ctx.beginPath();
+  ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2);
+  ctx.fill(); ctx.stroke();
+
+  // Conning tower
+  const twW = hw * 0.18, twH = hh * 1.6, twX = hw * 0.1;
+  ctx.beginPath();
+  ctx.rect(twX - twW/2, -hh - twH + hh*0.3, twW, twH);
+  ctx.fill(); ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  // Call sign label above
+  const labelSize = Math.max(9, Math.min(13, 11 * Math.min(1.2, scale)));
+  ctx.font = `bold ${labelSize}px Share Tech Mono`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = color;
+  ctx.shadowBlur = 8; ctx.shadowColor = glowColor;
+  ctx.fillText(rp.username || '?', center.sx, center.sy - hh - 8 * scale);
+  ctx.shadowBlur = 0;
+}
+
 // Returns 0-1 reveal factor at world-space point (wx, wz) based on active silent ping rings.
 // A ring sweeps outward from the player; points glow on the wavefront and trail fades behind it.
 function silentRevealAlpha(wx, wz) {
@@ -4178,34 +4229,16 @@ function renderPeriscope() {
     }
   });
 
-  // ── REMOTE PLAYERS in periscope ──
+  // ── REMOTE PLAYERS in periscope — full submarine silhouette ──
   if (window._mpRemotePlayers) {
-    const _periTeamColors = { alpha: ['0,229,255', '#00e5ff'], bravo: ['255,68,68', '#ff4444'] };
+    const _periTeamColors = {
+      alpha: ['#22ee88', '#00cc66'],
+      bravo: ['#ff8833', '#ff6600']
+    };
     Object.values(window._mpRemotePlayers).forEach(function(rp) {
       if (!rp || rp.x === undefined) return;
-      const rproj = projectPeriscope(rp.x, rp.y, rp.z);
-      if (!rproj || rproj.depth < 0.1 || rproj.depth > 200) return;
-      const rs = Math.max(3, Math.min(14, 10 / Math.max(0.3, rproj.depth * 0.25)));
-      const [rgb, hex] = _periTeamColors[rp.team] || ['0,255,100', '#00ff66'];
-      // Glowing dot
-      ctx.beginPath(); ctx.arc(rproj.sx, rproj.sy, rs, 0, Math.PI*2);
-      ctx.fillStyle = `rgba(${rgb},0.9)`;
-      ctx.shadowBlur = 18; ctx.shadowColor = hex;
-      ctx.fill(); ctx.shadowBlur = 0;
-      // Trail
-      for (let ti = 1; ti <= 4; ti++) {
-        const trx = rp.x - Math.sin(rp.heading||0)*ti*0.4;
-        const trz = rp.z + Math.cos(rp.heading||0)*ti*0.4;
-        const trp = projectPeriscope(trx, rp.y, trz);
-        if (!trp || trp.depth < 0.1) continue;
-        ctx.beginPath(); ctx.arc(trp.sx, trp.sy, Math.max(1, rs*(1-ti/5)), 0, Math.PI*2);
-        ctx.fillStyle = `rgba(${rgb},${0.5-ti*0.1})`; ctx.fill();
-      }
-      // Call sign label
-      ctx.font = 'bold 11px Share Tech Mono'; ctx.textAlign = 'center';
-      ctx.fillStyle = hex; ctx.shadowBlur = 6; ctx.shadowColor = hex;
-      ctx.fillText(rp.username || '?', rproj.sx, rproj.sy - rs - 5);
-      ctx.shadowBlur = 0;
+      const [col, glow] = _periTeamColors[rp.team] || ['#22ee88', '#00cc66'];
+      drawSubPeriscope(rp, col, glow);
     });
   }
 
@@ -5105,7 +5138,7 @@ function drawPeriFwdSlider() {
 
   // ── REMOTE PLAYERS on minimap ──
   if (window._mpRemotePlayers) {
-    const _mmTeamColors = { alpha: '#00e5ff', bravo: '#ff4444' };
+    const _mmTeamColors = { alpha: '#22ee88', bravo: '#ff8833' };
     Object.values(window._mpRemotePlayers).forEach(function(rp) {
       if (!rp || rp.x === undefined) return;
       var rpp = mm(rp.x, rp.z);

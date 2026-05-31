@@ -18,9 +18,10 @@ window._mpRemotePlayers = {};
 
 // ── TEAM CONFIG ──
 export const TEAMS = {
-  alpha: { name: 'WOLFPACK', color: '#00e5ff', glow: '#00ccff' },
-  bravo: { name: 'KRAKEN',   color: '#ff4444', glow: '#ff2020' }
+  alpha: { name: 'WOLFPACK', color: '#22ee88', glow: '#00cc66' },  // green
+  bravo: { name: 'KRAKEN',   color: '#ff8833', glow: '#ff6600' }   // orange
 };
+// AI enemy (BRAVO) stays red — player teams use non-red colours
 let _myTeam = 'alpha';
 window._mpMyTeam = null; // set at game launch
 

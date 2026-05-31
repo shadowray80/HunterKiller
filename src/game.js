@@ -2207,8 +2207,8 @@ function update() {
   // Ping cooldown
   if (state.pingCooldown > 0) state.pingCooldown--;
 
-  // Bubble trail on damaged Bravo
-  if (state.enemy.alive && state.enemy.bubbling) {
+  // Bubble trail on damaged Bravo — hidden in silent running (would reveal position)
+  if (state.enemy.alive && state.enemy.bubbling && !state.silentRunning) {
     state.enemy.bubbleTimer = (state.enemy.bubbleTimer || 0) + 1;
     if (state.enemy.bubbleTimer % 50 === 0) spawnBubblePuff(state.enemy.x, state.enemy.y, state.enemy.z);
   }

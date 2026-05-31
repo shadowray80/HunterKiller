@@ -4115,6 +4115,18 @@ function renderPeriscope() {
       if (ep && ep.depth > 0.2) drawQueue.push({ depth: ep.depth, kind: 'enemy', ep });
     }
 
+    // Remote player subs (multiplayer)
+    if (window._mpRemotePlayers) {
+      const _rpRgb = { alpha: '34,238,136', bravo: '255,136,51' };
+      Object.values(window._mpRemotePlayers).forEach(function(rp) {
+        if (!rp || rp.x === undefined) return;
+        const rpe = projectPeriscope(rp.x, rp.y, rp.z);
+        if (rpe && rpe.depth > 0.2) {
+          drawQueue.push({ depth: rpe.depth, kind: 'remote', rp, rgb: _rpRgb[rp.team] || '34,238,136' });
+        }
+      });
+    }
+
     // Whales
     if (state.whales) state.whales.forEach(function(w) {
       if (!w.alive) return;
@@ -4181,6 +4193,8 @@ function renderPeriscope() {
           ctx.globalAlpha = 1;
           ctx.restore();
         }
+      } else if (item.kind === 'remote') {
+        drawPlayerSubPeri(item.rp, item.rgb, 1.0);
       } else if (item.kind === 'whale') {
         drawWhalePeri(item.w);
       } else if (item.kind === 'megalodon') {
@@ -4347,18 +4361,7 @@ function renderPeriscope() {
     });
   }
 
-  // ── REMOTE PLAYERS in periscope — full submarine silhouette ──
-  if (window._mpRemotePlayers) {
-    const _periTeamColors = {
-      alpha: ['#22ee88', '#00cc66'],
-      bravo: ['#ff8833', '#ff6600']
-    };
-    Object.values(window._mpRemotePlayers).forEach(function(rp) {
-      if (!rp || rp.x === undefined) return;
-      const [col, glow] = _periTeamColors[rp.team] || ['#22ee88', '#00cc66'];
-      drawSubPeriscope(rp, col, glow);
-    });
-  }
+  // Remote players are rendered via drawQueue (depth-sorted with terrain)
 
   // ── MUZZLE FLASH ──
   if (state.muzzleFlash > 0) {
@@ -7421,6 +7424,120 @@ function drawTyphoonPeri(alpha, projFn) {
 
   ctx.shadowBlur = 0; ctx.lineWidth = 0.7;
   ctx.restore();
+}
+
+// ── VIRGINIA CLASS 3D WIREFRAME — for remote player subs in periscope view ──
+function drawPlayerSubPeri(rp, rgb, alpha) {
+  const cosH = Math.cos(rp.heading || 0), sinH = Math.sin(rp.heading || 0);
+  const L = 2.8, B = 0.55, HH = 0.32;
+  const hl = L * 0.5, hb = B * 0.5;
+
+  function tp(lx, ly, lz) {
+    const wx = rp.x + lx * cosH + lz * sinH;
+    const wz = rp.z - lx * sinH + lz * cosH;
+    return projectPeriscope(wx, rp.y + ly, wz);
+  }
+  function line(a, b, a2) {
+    if (!a || !b) return;
+    const op = ((a2 !== undefined ? a2 : alpha)).toFixed(3);
+    ctx.strokeStyle = `rgba(${rgb},${op})`;
+    ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.shadowBlur = 8; ctx.shadowColor = `rgba(${rgb},0.8)`;
+
+  // Hull rings: stern → bow, each [lz, widthScale, heightScale]
+  const ringDefs = [
+    [-hl,       0.10, 0.10],
+    [-hl*0.72,  0.65, 0.65],
+    [-hl*0.30,  1.00, 1.00],
+    [ 0,        1.00, 1.00],
+    [ hl*0.38,  0.95, 0.90],
+    [ hl*0.70,  0.50, 0.45],
+    [ hl,       0.05, 0.05],
+  ];
+  const offsets = [
+    [ 0,    1,   0], [ 0.70, 0.70,0], [ 1,  0,  0], [ 0.70,-0.70,0],
+    [ 0,   -1,   0], [-0.70,-0.70,0], [-1,  0,  0], [-0.70, 0.70,0],
+  ];
+  const rings = ringDefs.map(([lz, xs, ys]) =>
+    offsets.map(([ox, oy]) => tp(ox * hb * xs, oy * HH * ys, lz))
+  );
+
+  ctx.lineWidth = 1.0;
+  rings.forEach(r => { for (let i=0;i<8;i++) line(r[i], r[(i+1)%8], alpha*0.8); });
+  ctx.lineWidth = 0.9;
+  for (let i=0; i<rings.length-1; i++) {
+    [0,2,4,6].forEach(k => line(rings[i][k], rings[i+1][k], alpha*0.85));
+    [1,3,5,7].forEach(k => line(rings[i][k], rings[i+1][k], alpha*0.40));
+  }
+
+  // ── SAIL — compact, swept back, 1/4 from bow ──
+  const sZ = hl*0.20, sHl = hl*0.16, sHb = hb*0.35;
+  const sBotY = HH*0.92, sTopY = HH*0.92 + L*0.22;
+  const sFL=tp(-sHb,sBotY,sZ+sHl), sFR=tp(sHb,sBotY,sZ+sHl);
+  const sAL=tp(-sHb,sBotY,sZ-sHl), sAR=tp(sHb,sBotY,sZ-sHl);
+  const sTL=tp(-sHb,sTopY,sZ+sHl*0.5), sTR=tp(sHb,sTopY,sZ+sHl*0.5);
+  const sTAL=tp(-sHb,sTopY*0.82,sZ-sHl), sTAR=tp(sHb,sTopY*0.82,sZ-sHl);
+  ctx.lineWidth = 1.1;
+  line(sFL,sFR); line(sAL,sAR); line(sFL,sAL); line(sFR,sAR);
+  line(sFL,sTL); line(sFR,sTR); line(sAL,sTAL); line(sAR,sTAR);
+  line(sTL,sTR); line(sTAL,sTAR); line(sTL,sTAL); line(sTR,sTAR);
+  // Periscope mast
+  const mBot=tp(0,sTopY,sZ+sHl*0.2), mTop=tp(0,sTopY+L*0.10,sZ+sHl*0.2);
+  ctx.lineWidth=0.8; line(mBot, mTop, alpha*0.8);
+
+  // ── FAIRWATER PLANES (horizontal fins from sail base) ──
+  ctx.lineWidth=0.9;
+  [-1,1].forEach(s => {
+    const fp1=tp(s*sHb,sBotY,sZ+sHl*0.4), fp2=tp(s*hb*2.2,sBotY-HH*0.1,sZ+sHl*0.1);
+    const fp3=tp(s*hb*1.8,sBotY-HH*0.1,sZ-sHl*0.3), fp4=tp(s*sHb,sBotY,sZ-sHl*0.2);
+    line(fp1,fp2); line(fp2,fp3); line(fp3,fp4); line(fp4,fp1,alpha*0.5);
+  });
+
+  // ── STERN CRUCIFORM ──
+  const stZ=-hl*0.58;
+  ctx.lineWidth=1.0;
+  [-1,1].forEach(s => {
+    const h1=tp(s*hb*0.75,0,stZ), h2=tp(s*hb*2.2,-HH*0.1,stZ-hl*0.16);
+    const h3=tp(s*hb*1.8,-HH*0.1,stZ-hl*0.28), h4=tp(s*hb*0.75,0,stZ-hl*0.10);
+    line(h1,h2); line(h2,h3); line(h3,h4); line(h4,h1,alpha*0.55);
+  });
+  const rv1=tp(0,HH*0.7,stZ), rv2=tp(0,HH*2.2,stZ-hl*0.20);
+  const rv3=tp(0,HH*1.8,stZ-hl*0.32), rv4=tp(0,HH*0.7,stZ-hl*0.10);
+  line(rv1,rv2); line(rv2,rv3); line(rv3,rv4); line(rv4,rv1,alpha*0.55);
+
+  // ── PUMP-JET PROPELLER ──
+  const hub=tp(0,0,-hl);
+  if (hub) {
+    const tip=tp(0.18,0,-hl);
+    const propR = tip ? Math.abs(tip.sx-hub.sx)*2.2+5 : 7;
+    const spin = state.animFrame * 0.12;
+    ctx.save(); ctx.translate(hub.sx, hub.sy);
+    for (let b=0;b<7;b++) {
+      ctx.save(); ctx.rotate(spin+b*Math.PI*2/7);
+      ctx.strokeStyle=`rgba(${rgb},${(alpha*0.5).toFixed(3)})`;
+      ctx.lineWidth=1.1;
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-propR); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.strokeStyle=`rgba(${rgb},${(alpha*0.8).toFixed(3)})`;
+    ctx.lineWidth=1; ctx.beginPath(); ctx.arc(0,0,2.5,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── LABEL ──
+  const labelPt = tp(0, sTopY+L*0.06, sZ);
+  if (labelPt) {
+    ctx.shadowBlur=0;
+    const ls=Math.max(0.5,Math.min(2,8/labelPt.depth));
+    ctx.font=`${Math.round(7*ls)}px Share Tech Mono`;
+    ctx.fillStyle=`rgba(${rgb},${alpha.toFixed(3)})`; ctx.textAlign='center';
+    ctx.fillText(rp.username||'?', labelPt.sx, labelPt.sy);
+  }
+
+  ctx.shadowBlur=0; ctx.restore();
 }
 
 // projFn defaults to projectPeriscope; pass projectSurface for the surface view.

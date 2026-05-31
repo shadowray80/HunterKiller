@@ -6564,7 +6564,12 @@ function launchGame(planGrid) {
   if (window._isHeightfield) {
     setTimeout(() => setTacticalSonar(true), 50);
   } else {
-    setTacticalSonar(false);
+    // Floor plan: show sonar-wrap briefly so control guides are visible,
+    // then hide it again after all guides have faded out (~13s)
+    document.getElementById('sonar-wrap').style.display = '';
+    setTimeout(() => {
+      if (!window._isHeightfield) setTacticalSonar(false);
+    }, 13000);
   }
 
   // ── CONTROL GUIDES — staggered fade sequence ──

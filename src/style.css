@@ -9,6 +9,7 @@
   display: flex; flex-direction: column;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
   overflow-y: auto;
+  z-index: 9999;   /* above canvas, HUD, everything */
 }
 #mp-header {
   display: flex; align-items: center; gap: 12px;
@@ -45,6 +46,9 @@
   font-family: inherit; font-size: 13px;
   padding: 8px 10px; border-radius: 3px; letter-spacing: 0.1em;
   text-transform: uppercase;
+  pointer-events: all;
+  -webkit-user-select: text; user-select: text;
+  touch-action: auto;
 }
 #mp-username-input::placeholder { color: rgba(0,229,255,0.3); }
 #mp-username-save {
@@ -74,10 +78,20 @@
 }
 .mp-empty { font-size: 11px; color: rgba(0,229,255,0.35); padding: 8px 0; }
 #intro-multi-btn {
-  background: rgba(255,204,0,0.08);
-  border-color: rgba(255,204,0,0.5);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  padding: 12px;
+  background: rgba(255,204,0,0.06);
+  border: 1px solid rgba(255,204,0,0.5);
   color: #ffcc00;
+  cursor: pointer;
+  text-align: center;
   text-shadow: 0 0 8px #ffcc00;
+  -webkit-tap-highlight-color: transparent;
+}
+#intro-multi-btn:active {
+  background: rgba(255,204,0,0.15);
 }
 
 #controls-wrap {

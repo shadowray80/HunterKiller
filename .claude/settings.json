@@ -9,7 +9,30 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(git pull *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(git reset *)",
+      "Bash(npx vite *)",
+      "Bash(git tag *)",
+      "Bash(node --input-type=module)",
+      "Bash(node -e \"const fs=require\\('fs'\\); const src=fs.readFileSync\\('src/game.js','utf8'\\); try { new Function\\(src\\); console.log\\('OK'\\); } catch\\(e\\) { console.error\\(e.message\\); }\")",
+      "Bash(git revert *)",
+      "Bash(ls \"f:\\\\HunterKiller\\\\sounds\")",
+      "Read(//f/HunterKiller/sounds/**)",
+      "Bash(Copy-Item \"F:\\\\HunterKiller\\\\Sounds\\\\underwater-ambience-loop.mp3\" \"f:\\\\HunterKiller\\\\hsd\\\\public\\\\Sounds\\\\underwater-ambience-loop.mp3\")",
+      "PowerShell(Copy-Item \"F:\\\\HunterKiller\\\\Sounds\\\\sonar_ping_single.mp3\" \"F:\\\\HunterKiller\\\\hsd\\\\public\\\\Sounds\\\\sonar_ping_single.mp3\")",
+      "Read(//f/HunterKiller/Images/**)",
+      "Bash(Select-String -Pattern \"Alert\")",
+      "PowerShell(Copy-Item \"F:\\\\HunterKiller\\\\Sounds\\\\grand_project-hollywood-blockbuster-action-scorpion-strike-short-2-513851.mp3\" \"f:\\\\HunterKiller\\\\hsd\\\\public\\\\Sounds\\\\intro_theme.mp3\" -Force)",
+      "Bash(git checkout *)",
+      "PowerShell(Copy-Item \"F:\\\\HunterKiller\\\\Images\\\\Abyss.png\" \"f:\\\\HunterKiller\\\\hsd\\\\public\\\\maps\\\\abyss.png\" -Force)",
+      "Bash(git merge *)",
+      "PowerShell(Copy-Item \"F:\\\\HunterKiller\\\\Images\\\\Drop_off.png\" \"f:\\\\HunterKiller\\\\hsd\\\\public\\\\maps\\\\dropoff.png\" -Force)",
+      "Bash(gh release *)",
+      "Bash(npm install *)"
+    ],
+    "additionalDirectories": [
+      "F:\\HunterKiller\\Sounds",
+      "F:\\HunterKiller\\Images"
     ]
   }
 }

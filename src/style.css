@@ -1,5 +1,85 @@
 ﻿  * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ── MULTIPLAYER LOBBY ── */
+#multiplayer-screen {
+  position: fixed; inset: 0;
+  background: #020d1a;
+  color: #00e5ff;
+  font-family: 'Share Tech Mono', monospace;
+  display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  overflow-y: auto;
+}
+#mp-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(0,229,255,0.2);
+}
+#mp-back-btn {
+  background: none; border: 1px solid rgba(0,229,255,0.3);
+  color: #00e5ff; font-family: inherit; font-size: 11px;
+  padding: 6px 12px; cursor: pointer; border-radius: 3px;
+}
+#mp-title {
+  font-size: 16px; letter-spacing: 0.2em;
+  text-shadow: 0 0 12px #00e5ff; flex: 1; text-align: center;
+}
+#mp-ping-alert {
+  font-size: 11px; color: #ffcc00; letter-spacing: 0.1em;
+  opacity: 0; transition: opacity 0.4s; text-align: right;
+  min-width: 140px;
+}
+#mp-identity {
+  padding: 16px;
+  border-bottom: 1px solid rgba(0,229,255,0.12);
+}
+#mp-username-label { font-size: 9px; letter-spacing: 0.2em; color: #0097a7; margin-bottom: 4px; }
+#mp-username-display {
+  font-size: 22px; letter-spacing: 0.15em;
+  text-shadow: 0 0 10px #00e5ff; margin-bottom: 10px;
+}
+#mp-username-form { display: flex; gap: 8px; }
+#mp-username-input {
+  flex: 1; background: rgba(0,229,255,0.06);
+  border: 1px solid rgba(0,229,255,0.3); color: #00e5ff;
+  font-family: inherit; font-size: 13px;
+  padding: 8px 10px; border-radius: 3px; letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+#mp-username-input::placeholder { color: rgba(0,229,255,0.3); }
+#mp-username-save {
+  background: rgba(0,229,255,0.1); border: 1px solid rgba(0,229,255,0.4);
+  color: #00e5ff; font-family: inherit; font-size: 11px;
+  padding: 8px 14px; cursor: pointer; border-radius: 3px;
+  letter-spacing: 0.1em;
+}
+#mp-online-section, #mp-scoreboard-section {
+  padding: 16px; border-bottom: 1px solid rgba(0,229,255,0.1);
+}
+.mp-section-title {
+  font-size: 9px; letter-spacing: 0.25em; color: #0097a7;
+  margin-bottom: 12px;
+}
+.mp-player-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid rgba(0,229,255,0.08);
+}
+.mp-player-name { flex: 1; font-size: 14px; letter-spacing: 0.1em; }
+.mp-player-status { font-size: 10px; color: #0097a7; min-width: 80px; text-align: right; }
+.mp-ping-btn {
+  background: rgba(255,204,0,0.1); border: 1px solid rgba(255,204,0,0.4);
+  color: #ffcc00; font-family: inherit; font-size: 10px;
+  padding: 5px 10px; cursor: pointer; border-radius: 3px;
+  letter-spacing: 0.1em;
+}
+.mp-empty { font-size: 11px; color: rgba(0,229,255,0.35); padding: 8px 0; }
+#intro-multi-btn {
+  background: rgba(255,204,0,0.08);
+  border-color: rgba(255,204,0,0.5);
+  color: #ffcc00;
+  text-shadow: 0 0 8px #ffcc00;
+}
+
 #controls-wrap {
   padding-bottom: env(safe-area-inset-bottom);
 }

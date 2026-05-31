@@ -32,6 +32,35 @@
     <button id="intro-choose-btn">◈ CHOOSE A BATTLEGROUND</button>
     <button id="intro-upload-btn">▲ UPLOAD A PLAN</button>
     <button id="intro-rules-btn">⊛ RULES OF ENGAGEMENT</button>
+    <button id="intro-multi-btn">⚡ MULTIPLAYER</button>
+  </div>
+</div>
+
+<!-- Multiplayer Lobby Screen -->
+<div id="multiplayer-screen" style="display:none;">
+  <div id="mp-header">
+    <button id="mp-back-btn">← BACK</button>
+    <div id="mp-title">FLEET COMMAND</div>
+    <div id="mp-ping-alert"></div>
+  </div>
+
+  <div id="mp-identity">
+    <div id="mp-username-label">CALL SIGN</div>
+    <div id="mp-username-display">---</div>
+    <div id="mp-username-form">
+      <input id="mp-username-input" type="text" maxlength="12" placeholder="ENTER CALL SIGN" autocomplete="off" spellcheck="false">
+      <button id="mp-username-save">SET</button>
+    </div>
+  </div>
+
+  <div id="mp-online-section">
+    <div class="mp-section-title">◉ ONLINE NOW</div>
+    <div id="mp-player-list"><div class="mp-empty">Connecting...</div></div>
+  </div>
+
+  <div id="mp-scoreboard-section">
+    <div class="mp-section-title">⊛ SCOREBOARD</div>
+    <div id="mp-scoreboard-list"><div class="mp-empty">No games recorded yet</div></div>
   </div>
 </div>
 

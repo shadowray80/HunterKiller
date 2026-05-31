@@ -385,8 +385,21 @@ async function _launchGame(mapId, mode) {
     }
   }, 500);
 
+  // Set heightfield globals — normally done by buildCard click handler in solo play
+  window._isHeightfield = !!bg.isHeightfield;
+  window._hfTerrainScale = bg.gridTerrainScale || undefined;
+  if (!bg.isHeightfield) {
+    // Clear any stale heightfield data from previous game
+    window._canyonHeightGrid = undefined;
+    window._hfGridW = undefined;
+    window._hfGridD = undefined;
+    window._hfGridH = undefined;
+  }
+
   if (bg.loadAsync) {
     const grid = await bg.loadAsync();
+    // loadAsync sets _canyonHeightGrid, _hfGridW/D/H — restore the cached hGrid too
+    if (bg._hGrid) window._canyonHeightGrid = bg._hGrid;
     window.launchGame(grid);
   } else {
     window.launchGame(bg.makeGrid());

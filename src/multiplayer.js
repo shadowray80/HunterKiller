@@ -325,11 +325,17 @@ function _startGameSync(code) {
   window._mpRemotePlayers = {};
   if (_gameChannel) supabase.removeChannel(_gameChannel);
 
+  if (!window._mpRemoteTorps) window._mpRemoteTorps = {};
   _gameChannel = supabase.channel(`game:${code}`);
   _gameChannel
     .on('broadcast', { event: 'pos' }, ({ payload }) => {
       if (payload.id !== _user?.id) {
         window._mpRemotePlayers[payload.id] = payload;
+      }
+    })
+    .on('broadcast', { event: 'torp' }, ({ payload }) => {
+      if (payload.owner !== _user?.id) {
+        window._mpRemoteTorps[payload.id] = Object.assign({}, payload, { progress: 0, age: 0 });
       }
     })
     .subscribe();
@@ -342,6 +348,24 @@ function _startGameSync(code) {
       payload: { id: _user.id, username: _username || '?', x, y, z, heading, team: _myTeam }
     });
   };
+
+  // Called by game.js when player fires a torpedo
+  window._mpBroadcastTorp = function(t) {
+    if (!_gameChannel || !t) return;
+    _gameChannel.send({
+      type: 'broadcast', event: 'torp',
+      payload: {
+        id: `${_user.id}_${Date.now()}_${Math.random().toString(36).substr(2,4)}`,
+        owner: _user.id, team: _myTeam,
+        ox: t.ox, oy: t.oy, oz: t.oz,
+        x: t.x, y: t.y, z: t.z,
+        dx: t.dx, dy: t.dy || 0, dz: t.dz,
+        speed: t.speed,
+        isHoming: !!t.isHoming, isMine: !!t.isMine
+      }
+    });
+  };
+
 }
 
 async function _launchGame(mapId, mode) {

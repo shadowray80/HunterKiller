@@ -1949,6 +1949,33 @@ function update() {
     window._mpSendPos(state.player.x, state.player.y, state.player.z, state.periAngleH);
   }
 
+  // ── MULTIPLAYER REMOTE TORPEDOES — update positions + hit detection ──
+  if (window._mpRemoteTorps) {
+    Object.keys(window._mpRemoteTorps).forEach(function(tid) {
+      var rt = window._mpRemoteTorps[tid];
+      if (!rt) return;
+      rt.x += rt.dx * rt.speed;
+      rt.y += (rt.dy || 0) * rt.speed;
+      rt.z += rt.dz * rt.speed;
+      rt.progress = (rt.progress || 0) + rt.speed;
+      rt.age = (rt.age || 0) + 1;
+      // Remove if out of bounds or expired
+      if (rt.age > 800 || rt.x<0||rt.x>GRID.W||rt.z<0||rt.z>GRID.D) {
+        delete window._mpRemoteTorps[tid]; return;
+      }
+      // Hit on local player
+      if (rt.progress > 3.5 &&
+          Math.abs(rt.x-state.player.x)<2.0 &&
+          Math.abs(rt.y-state.player.y)<2.0 &&
+          Math.abs(rt.z-state.player.z)<2.0) {
+        applyHullDamage(20, '⚠ DIRECT HIT — HULL BREACH');
+        playExplosion(false);
+        spawnExplosion(rt.x, rt.y, rt.z, false);
+        delete window._mpRemoteTorps[tid];
+      }
+    });
+  }
+
   // ── SURFACED HULL REPAIR ──
   if (state.viewMode === 'surfaced' && state.hull < 100 && !_imploding) {
     if (state.time % 60 === 0) {
@@ -3847,54 +3874,86 @@ function projectPeriscope(wx, wy, wz) {
   return { sx, sy, depth: ffz };
 }
 
-// Draw a remote player's submarine in the periscope view using bow/stern projection
+// Draw a remote player's submarine in the periscope — full Virginia-class silhouette
 function drawSubPeriscope(rp, color, glowColor) {
   const center = projectPeriscope(rp.x, rp.y, rp.z);
-  if (!center || center.depth < 0.1 || center.depth > 180) return;
+  if (!center || center.depth < 0.1 || center.depth > 200) return;
 
-  // Project bow and stern so we get the correct screen angle + apparent length
   const fwdX = Math.sin(rp.heading || 0), fwdZ = Math.cos(rp.heading || 0);
-  const halfLen = 2.2;
-  const bowP  = projectPeriscope(rp.x + fwdX*halfLen, rp.y, rp.z + fwdZ*halfLen);
-  const sternP = projectPeriscope(rp.x - fwdX*halfLen, rp.y, rp.z - fwdZ*halfLen);
+  const bowP   = projectPeriscope(rp.x + fwdX*2.5, rp.y, rp.z + fwdZ*2.5);
+  const sternP = projectPeriscope(rp.x - fwdX*2.5, rp.y, rp.z - fwdZ*2.5);
   if (!bowP || !sternP || bowP.depth < 0.1 || sternP.depth < 0.1) return;
 
   const dx = bowP.sx - sternP.sx, dy = bowP.sy - sternP.sy;
   const screenAngle = Math.atan2(dy, dx);
-  const hw = Math.max(8, Math.sqrt(dx*dx + dy*dy) * 0.5);
-  const hh = Math.max(2.5, hw * 0.22);
-  const scale = Math.max(0.3, Math.min(3, 10 / Math.max(1, center.depth * 0.28)));
+  const sc = Math.max(0.3, Math.min(3.5, Math.sqrt(dx*dx+dy*dy) / 18));
+
+  const colFill = 'rgba(0,4,12,0.78)';
+  const lw = Math.max(0.7, 1.2 * Math.min(1, sc));
 
   ctx.save();
   ctx.translate(center.sx, center.sy);
   ctx.rotate(screenAngle);
+  ctx.shadowBlur = 12; ctx.shadowColor = glowColor;
+  ctx.strokeStyle = color; ctx.fillStyle = colFill; ctx.lineWidth = lw;
 
-  ctx.fillStyle = 'rgba(0,4,12,0.82)';
-  ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(0.8, 1.4 * scale);
-  ctx.shadowBlur = 14; ctx.shadowColor = glowColor;
+  const hw = sc*9, hh = sc*2.5;
 
-  // Hull — tapered ellipse
+  // Hull
   ctx.beginPath();
-  ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2);
-  ctx.fill(); ctx.stroke();
+  ctx.moveTo(hw, 0);
+  ctx.bezierCurveTo(hw,-hh*0.8, hw*0.6,-hh,   0,-hh);
+  ctx.bezierCurveTo(-hw*0.5,-hh, -hw*0.8,-hh*0.7, -hw,-hh*0.3);
+  ctx.bezierCurveTo(-hw*0.85,hh*0.3, -hw*0.5,hh, 0,hh);
+  ctx.bezierCurveTo(hw*0.6,hh, hw,hh*0.8, hw,0);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
 
-  // Conning tower
-  const twW = hw * 0.18, twH = hh * 1.6, twX = hw * 0.1;
+  // Deck ridge
   ctx.beginPath();
-  ctx.rect(twX - twW/2, -hh - twH + hh*0.3, twW, twH);
-  ctx.fill(); ctx.stroke();
+  ctx.moveTo(hw*0.8,-hh*0.7); ctx.bezierCurveTo(hw*0.2,-hh*1.05, -hw*0.3,-hh*1.05, -hw*0.7,-hh*0.6);
+  ctx.strokeStyle = color; ctx.lineWidth = lw*0.6; ctx.globalAlpha = 0.5; ctx.stroke(); ctx.globalAlpha = 1;
 
-  ctx.shadowBlur = 0;
+  // Sail
+  ctx.strokeStyle = color; ctx.lineWidth = lw;
+  ctx.beginPath();
+  ctx.moveTo(hw*0.18,-hh);
+  ctx.lineTo(hw*0.12,-hh-hh*2.5);
+  ctx.bezierCurveTo(hw*0.12,-hh-hh*3, hw*0.38,-hh-hh*2.8, hw*0.38,-hh-hh*2.5);
+  ctx.lineTo(hw*0.35,-hh);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+
+  // Mast
+  ctx.beginPath(); ctx.moveTo(hw*0.26,-hh-hh*2.5); ctx.lineTo(hw*0.26,-hh-hh*3.8);
+  ctx.strokeStyle = color; ctx.lineWidth = lw*0.6; ctx.stroke();
+
+  // Stern fins
+  [-1,1].forEach(s => {
+    ctx.beginPath();
+    ctx.moveTo(-hw*0.72, s*hh*0.75); ctx.lineTo(-hw*1.1, s*hh*2.2);
+    ctx.lineTo(-hw, s*hh*1.8); ctx.lineTo(-hw*0.62, s*hh);
+    ctx.closePath(); ctx.fillStyle='rgba(0,4,12,0.5)'; ctx.fill();
+    ctx.strokeStyle=color; ctx.lineWidth=lw*0.8; ctx.stroke();
+  });
+
+  // Prop
+  ctx.save(); ctx.translate(-hw*1.05, 0);
+  const pSpin = state.animFrame * 0.15;
+  for (let b=0;b<5;b++) {
+    ctx.save(); ctx.rotate(pSpin + b*Math.PI*2/5);
+    ctx.beginPath(); ctx.ellipse(0,-hh*0.9,hh*0.22,hh*0.9,0.2,0,Math.PI*2);
+    ctx.fillStyle=color; ctx.globalAlpha=0.4; ctx.fill(); ctx.restore();
+  }
+  ctx.beginPath(); ctx.arc(0,0,hh*0.3,0,Math.PI*2);
+  ctx.fillStyle=color; ctx.globalAlpha=0.7; ctx.fill();
   ctx.restore();
 
-  // Call sign label above
-  const labelSize = Math.max(9, Math.min(13, 11 * Math.min(1.2, scale)));
-  ctx.font = `bold ${labelSize}px Share Tech Mono`;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = color;
-  ctx.shadowBlur = 8; ctx.shadowColor = glowColor;
-  ctx.fillText(rp.username || '?', center.sx, center.sy - hh - 8 * scale);
+  ctx.shadowBlur = 0; ctx.restore();
+
+  // Label
+  ctx.font = `bold ${Math.max(8,Math.round(11*Math.min(1.2,sc)))}px Share Tech Mono`;
+  ctx.textAlign = 'center'; ctx.fillStyle = color;
+  ctx.shadowBlur = 7; ctx.shadowColor = glowColor;
+  ctx.fillText(rp.username || '?', center.sx, center.sy - sc*14 - 5);
   ctx.shadowBlur = 0;
 }
 
@@ -4228,6 +4287,26 @@ function renderPeriscope() {
       lastSx = tp.sx; lastSy = tp.sy;
     }
   });
+
+  // ── REMOTE TORPEDOES in periscope ──
+  if (window._mpRemoteTorps) {
+    const _rtColors = { alpha: '#22ee88', bravo: '#ff8833' };
+    Object.values(window._mpRemoteTorps).forEach(function(rt) {
+      if (!rt) return;
+      for (let i = 0; i <= 10; i++) {
+        const tx = rt.x - rt.dx*i*0.4, ty = rt.y - (rt.dy||0)*i*0.4, tz = rt.z - rt.dz*i*0.4;
+        const tp = projectPeriscope(tx, ty, tz);
+        if (!tp || tp.depth < 0.05) continue;
+        const fade = 1 - i/10;
+        const dotR = Math.max(1, Math.min(10, (i===0?7:4)*fade/Math.max(0.3,tp.depth*0.3)));
+        const col = _rtColors[rt.team] || '#22ee88';
+        ctx.beginPath(); ctx.arc(tp.sx, tp.sy, dotR, 0, Math.PI*2);
+        if (i===0) { ctx.fillStyle=col; ctx.shadowBlur=16; ctx.shadowColor=col; }
+        else { ctx.fillStyle=`rgba(100,200,100,${fade*0.7})`; ctx.shadowBlur=4; }
+        ctx.fill(); ctx.shadowBlur=0;
+      }
+    });
+  }
 
   // ── REMOTE PLAYERS in periscope — full submarine silhouette ──
   if (window._mpRemotePlayers) {
@@ -5179,6 +5258,7 @@ function periFireTorpedo() {
       isHoming: true, lockStrength: Math.max(0.35, state.acousticLock),
       lockedTargetRef: _tRef, lockedTargetType: _tType
     });
+    if (window._mpBroadcastTorp) window._mpBroadcastTorp(state.torpedoes[state.torpedoes.length-1]);
     if (state.torpCount !== Infinity) state.torpCount--;
     state.torpsFired++;
     state.torpLastFired = Date.now();
@@ -5229,6 +5309,7 @@ function periFireTorpedo() {
       x:  state.player.x, y:  state.player.y, z:  state.player.z,
       dx: 0, dy: 1, dz: 0, speed: 0.15, progress: 0, isMine: true
     });
+    if (window._mpBroadcastTorp) window._mpBroadcastTorp(state.torpedoes[state.torpedoes.length-1]);
     if (state.torpCount !== Infinity) state.torpCount--;
     state.torpsFired++;
     state.torpLastFired = Date.now();
@@ -5316,6 +5397,7 @@ function periFireTorpedo() {
 
   state.torpedoes.push({ ox, oy, oz, x:ox, y:oy, z:oz,
     dx:ndx/nlen, dy:ndy/nlen, dz:ndz/nlen, speed:0.3, progress:0 });
+  if (window._mpBroadcastTorp) window._mpBroadcastTorp(state.torpedoes[state.torpedoes.length-1]);
   if (state.torpCount !== Infinity) state.torpCount--;
   state.torpsFired++;
   document.getElementById('torp-count').textContent = state.torpCount === Infinity ? '∞' : state.torpCount;

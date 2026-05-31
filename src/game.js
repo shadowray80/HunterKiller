@@ -9152,6 +9152,8 @@ document.getElementById('upload-back-btn').addEventListener('click', function() 
 document.getElementById('peri-btn-abort').addEventListener('click', function() {
   _gameOver = true;
   _imploding = false;
+  // Save kills/deaths to Supabase if this was a multiplayer session
+  if (window._mpEndGame) window._mpEndGame(state.kills, 3 - state.lives);
   document.getElementById('periscope-overlay').classList.remove('active');
   document.getElementById('hud').style.display = 'none';
   document.getElementById('controls-wrap').style.display = 'none';

@@ -180,6 +180,60 @@
 #mp-launch-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .status-ingame { color: #ff8800; }
 
+/* Standalone leaderboard screen */
+#leaderboard-screen {
+  position: fixed; inset: 0; background: #020d1a;
+  color: #00e5ff; font-family: 'Share Tech Mono', monospace;
+  display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  z-index: 9999; overflow-y: auto;
+}
+#lb-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid rgba(0,229,255,0.2);
+}
+#lb-header button {
+  background: none; border: 1px solid rgba(0,229,255,0.3);
+  color: #00e5ff; font-family: inherit; font-size: 11px;
+  padding: 6px 12px; cursor: pointer; border-radius: 3px;
+}
+#lb-title {
+  flex: 1; text-align: center; font-size: 15px;
+  letter-spacing: 0.2em; text-shadow: 0 0 10px #00e5ff;
+}
+#lb-content, #mp-leaderboard { padding: 0 16px 16px; }
+
+/* Leaderboard table */
+.lb-header, .lb-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 52px 52px 48px 48px;
+  gap: 6px; align-items: center;
+  padding: 8px 4px;
+  font-size: 11px; letter-spacing: 0.06em;
+}
+.lb-header {
+  color: #0097a7; font-size: 9px; letter-spacing: 0.15em;
+  border-bottom: 1px solid rgba(0,229,255,0.2);
+  margin-bottom: 4px;
+}
+.lb-row { border-bottom: 1px solid rgba(0,229,255,0.07); }
+.lb-row.lb-me { color: #ffcc00; }
+.lb-rank { color: #0097a7; font-size: 10px; }
+.lb-row:nth-child(2) .lb-rank { color: #ffd700; }
+.lb-row:nth-child(3) .lb-rank { color: #c0c0c0; }
+.lb-row:nth-child(4) .lb-rank { color: #cd7f32; }
+.lb-name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-stat { text-align: right; color: #0097a7; }
+.lb-row .lb-stat:first-of-type { color: #00e5ff; } /* kills column */
+
+/* Home screen leaderboard button */
+#intro-lb-btn {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em;
+  padding: 12px; background: transparent;
+  border: 1px solid rgba(0,229,255,0.25); color: rgba(0,229,255,0.6);
+  cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent;
+}
+
 /* Launch countdown overlay */
 #mp-launch-overlay {
   position: absolute; inset: 0; z-index: 10;

@@ -1,11 +1,23 @@
 import './game.js';
-import { initMultiplayer, setUsername, showCreateGame, createGame, toggleReady, launchSession, leaveSession } from './multiplayer.js';
+import { initMultiplayer, setUsername, showCreateGame, createGame, toggleReady, launchSession, leaveSession, renderLeaderboard } from './multiplayer.js';
 
 // ── MULTIPLAYER ──
 document.getElementById('intro-multi-btn').addEventListener('click', async () => {
   document.getElementById('intro-screen').style.display = 'none';
   document.getElementById('multiplayer-screen').style.display = '';
   await initMultiplayer();
+  renderLeaderboard('mp-leaderboard');
+});
+
+// Standalone leaderboard from home screen
+document.getElementById('intro-lb-btn').addEventListener('click', async () => {
+  document.getElementById('intro-screen').style.display = 'none';
+  document.getElementById('leaderboard-screen').style.display = '';
+  renderLeaderboard('lb-content');
+});
+document.getElementById('lb-back-btn').addEventListener('click', () => {
+  document.getElementById('leaderboard-screen').style.display = 'none';
+  document.getElementById('intro-screen').style.display = '';
 });
 
 document.getElementById('mp-back-btn').addEventListener('click', () => {

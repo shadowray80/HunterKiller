@@ -348,4 +348,54 @@ function _listenForPings() {
     }).subscribe();
 }
 
+// ── END GAME — save kills/deaths to Supabase ──
+export async function mpEndGame(kills, deaths) {
+  if (!_currentCode || !_user) return;
+  await supabase.from('session_players')
+    .update({ kills, deaths })
+    .eq('session_id', _currentCode)
+    .eq('player_id', _user.id);
+  _currentCode = null;
+}
+
+// Hook called from game.js via window._mpEndGame
+window._mpEndGame = mpEndGame;
+
+// ── LEADERBOARD ──
+export async function fetchLeaderboard() {
+  const { data, error } = await supabase
+    .from('leaderboard')
+    .select('*')
+    .order('total_kills', { ascending: false })
+    .limit(20);
+  if (error) { console.error('Leaderboard error:', error); return []; }
+  return data || [];
+}
+
+export async function renderLeaderboard(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = '<div class="mp-empty">Loading...</div>';
+  const rows = await fetchLeaderboard();
+  if (!rows.length) { el.innerHTML = '<div class="mp-empty">No games recorded yet</div>'; return; }
+  el.innerHTML = `
+    <div class="lb-header">
+      <span class="lb-rank">#</span>
+      <span class="lb-name">CALL SIGN</span>
+      <span class="lb-stat">KILLS</span>
+      <span class="lb-stat">DEATHS</span>
+      <span class="lb-stat">K/D</span>
+      <span class="lb-stat">GAMES</span>
+    </div>
+    ${rows.map((r, i) => `
+      <div class="lb-row ${r.player_id === _user?.id ? 'lb-me' : ''}">
+        <span class="lb-rank">${i + 1}</span>
+        <span class="lb-name">${r.username}</span>
+        <span class="lb-stat">${r.total_kills}</span>
+        <span class="lb-stat">${r.total_deaths}</span>
+        <span class="lb-stat">${r.kd_ratio}</span>
+        <span class="lb-stat">${r.games_played}</span>
+      </div>`).join('')}`;
+}
+
 export { _user, _username };

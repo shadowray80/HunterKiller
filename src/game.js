@@ -9154,11 +9154,6 @@ document.getElementById('intro-choose-btn').addEventListener('click', function()
   document.getElementById('battleground-screen').style.display = 'flex';
 });
 
-document.getElementById('intro-upload-btn').addEventListener('click', function() {
-  document.getElementById('intro-screen').style.display = 'none';
-  document.getElementById('upload-screen').style.display = 'flex';
-  try { drawPreview(FLOOR_PLAN); } catch(e) {}
-});
 
 document.getElementById('bg-back-btn').addEventListener('click', function() {
   document.getElementById('battleground-screen').style.display = 'none';

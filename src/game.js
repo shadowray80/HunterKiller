@@ -1933,6 +1933,11 @@ function update() {
   }
   _updateCreakSound();
 
+  // ── MULTIPLAYER POSITION BROADCAST ──
+  if (window._mpSendPos && state.time % 3 === 0) {
+    window._mpSendPos(state.player.x, state.player.y, state.player.z, state.periAngleH);
+  }
+
   // ── SURFACED HULL REPAIR ──
   if (state.viewMode === 'surfaced' && state.hull < 100 && !_imploding) {
     if (state.time % 60 === 0) {
@@ -4162,6 +4167,35 @@ function renderPeriscope() {
     }
   });
 
+  // ── REMOTE PLAYERS in periscope ──
+  if (window._mpRemotePlayers) {
+    Object.values(window._mpRemotePlayers).forEach(function(rp) {
+      if (!rp || rp.x === undefined) return;
+      const rproj = projectPeriscope(rp.x, rp.y, rp.z);
+      if (!rproj || rproj.depth < 0.1 || rproj.depth > 200) return;
+      const rs = Math.max(3, Math.min(14, 10 / Math.max(0.3, rproj.depth * 0.25)));
+      // Glowing green dot with call sign
+      ctx.beginPath(); ctx.arc(rproj.sx, rproj.sy, rs, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(0,255,100,0.9)';
+      ctx.shadowBlur = 18; ctx.shadowColor = '#00ff66';
+      ctx.fill(); ctx.shadowBlur = 0;
+      // Trail
+      for (let ti = 1; ti <= 4; ti++) {
+        const trx = rp.x - Math.sin(rp.heading||0)*ti*0.4;
+        const trz = rp.z - (-Math.cos(rp.heading||0))*ti*0.4;
+        const trp = projectPeriscope(trx, rp.y, trz);
+        if (!trp || trp.depth < 0.1) continue;
+        ctx.beginPath(); ctx.arc(trp.sx, trp.sy, Math.max(1, rs*(1-ti/5)), 0, Math.PI*2);
+        ctx.fillStyle = `rgba(0,200,80,${0.5-ti*0.1})`; ctx.fill();
+      }
+      // Call sign label
+      ctx.font = 'bold 11px Share Tech Mono'; ctx.textAlign = 'center';
+      ctx.fillStyle = '#00ff66'; ctx.shadowBlur = 6; ctx.shadowColor = '#00ff66';
+      ctx.fillText(rp.username || '?', rproj.sx, rproj.sy - rs - 5);
+      ctx.shadowBlur = 0;
+    });
+  }
+
   // ── MUZZLE FLASH ──
   if (state.muzzleFlash > 0) {
     state.muzzleFlash--;
@@ -5055,6 +5089,27 @@ function drawPeriFwdSlider() {
   // Player dot (on top of arrow)
   c.beginPath(); c.arc(ppx.x, ppx.y, 3.5, 0, Math.PI*2);
   c.fillStyle='#00e5ff'; c.shadowBlur=8; c.shadowColor='#00e5ff'; c.fill(); c.shadowBlur=0;
+
+  // ── REMOTE PLAYERS on minimap ──
+  if (window._mpRemotePlayers) {
+    Object.values(window._mpRemotePlayers).forEach(function(rp) {
+      if (!rp || rp.x === undefined) return;
+      var rpp = mm(rp.x, rp.z);
+      // Heading arrow
+      var rdx = Math.sin(rp.heading || 0) * 10, rdy = -Math.cos(rp.heading || 0) * 10;
+      c.strokeStyle = '#00ff66'; c.lineWidth = 1.2;
+      c.shadowBlur = 4; c.shadowColor = '#00ff66';
+      c.beginPath(); c.moveTo(rpp.x, rpp.y); c.lineTo(rpp.x + rdx, rpp.y + rdy); c.stroke();
+      // Dot
+      c.beginPath(); c.arc(rpp.x, rpp.y, 4, 0, Math.PI*2);
+      c.fillStyle = '#00ff66'; c.shadowBlur = 8; c.shadowColor = '#00ff66';
+      c.fill(); c.shadowBlur = 0;
+      // Call sign
+      c.font = '6px Share Tech Mono'; c.textAlign = 'center';
+      c.fillStyle = 'rgba(0,255,100,0.85)';
+      c.fillText(rp.username || '?', rpp.x, rpp.y - 7);
+    });
+  }
 }
 
 // ── PERISCOPE FIRE ──

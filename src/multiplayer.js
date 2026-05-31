@@ -5,12 +5,16 @@ let _user = null;
 let _username = null;
 let _lobbyChannel = null;
 let _sessionChannel = null;
+let _gameChannel = null;
 let _onlineUsers = {};
 let _currentCode = null;
 let _isHost = false;
 let _isReady = false;
 let _currentMap = null;
 let _currentMode = 'ffa';
+
+// Remote players — read by game.js for rendering
+window._mpRemotePlayers = {};
 
 // ── MAPS AVAILABLE FOR MULTIPLAYER ──
 const MP_MAPS = [
@@ -304,6 +308,29 @@ function _ping(vol = 0.7) {
   a.play().catch(() => {});
 }
 
+function _startGameSync(code) {
+  window._mpRemotePlayers = {};
+  if (_gameChannel) supabase.removeChannel(_gameChannel);
+
+  _gameChannel = supabase.channel(`game:${code}`);
+  _gameChannel
+    .on('broadcast', { event: 'pos' }, ({ payload }) => {
+      if (payload.id !== _user?.id) {
+        window._mpRemotePlayers[payload.id] = payload;
+      }
+    })
+    .subscribe();
+
+  // Called by game.js every 3 frames
+  window._mpSendPos = function(x, y, z, heading) {
+    if (!_gameChannel) return;
+    _gameChannel.send({
+      type: 'broadcast', event: 'pos',
+      payload: { id: _user.id, username: _username || '?', x, y, z, heading }
+    });
+  };
+}
+
 async function _launchGame(mapId, mode) {
   const bg = window.BATTLEGROUNDS?.find(b => b.id === mapId);
   if (!bg) { console.error('Map not found:', mapId); return; }
@@ -330,12 +357,20 @@ async function _launchGame(mapId, mode) {
   if (overlay) overlay.style.display = 'none';
   document.getElementById('multiplayer-screen').style.display = 'none';
 
+  _startGameSync(_currentCode);
+
   if (bg.loadAsync) {
     const grid = await bg.loadAsync();
     window.launchGame(grid);
   } else {
     window.launchGame(bg.makeGrid());
   }
+
+  // Force show minimap so movement controls work immediately
+  setTimeout(() => {
+    const sw = document.getElementById('sonar-wrap');
+    if (sw) sw.style.display = '';
+  }, 400);
 }
 
 export async function leaveSession() {
@@ -361,10 +396,16 @@ export async function setUsername(name) {
 }
 
 // ── PING ──
-window._mpPing = async function(targetId) {
-  await supabase.channel(`ping:${targetId}`).send({
-    type: 'broadcast', event: 'ping',
-    payload: { from: _user.id, username: _username || 'UNKNOWN' }
+window._mpPing = function(targetId) {
+  const ch = supabase.channel(`ping:${targetId}`);
+  ch.subscribe(status => {
+    if (status === 'SUBSCRIBED') {
+      ch.send({
+        type: 'broadcast', event: 'ping',
+        payload: { from: _user?.id, username: _username || 'UNKNOWN' }
+      });
+      setTimeout(() => supabase.removeChannel(ch), 1500);
+    }
   });
 };
 

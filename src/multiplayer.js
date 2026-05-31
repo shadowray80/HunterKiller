@@ -21,7 +21,7 @@ const MP_MAPS = [
   { id: 'bungalow', name: 'THE BUNGALOW',      tag: 'FLOOR PLAN', hf: false },
   { id: 'museum',   name: 'THE MUSEUM',        tag: 'FLOOR PLAN', hf: false },
   { id: 'office',   name: 'THE OFFICE BLOCK',  tag: 'FLOOR PLAN', hf: false },
-  { id: 'ravine',   name: 'SUNKEN RAVINE',     tag: 'OPEN OCEAN', hf: false },
+  { id: 'house',    name: 'THE HOUSE',          tag: 'DEFAULT',    hf: false },
 ];
 
 // ── INIT ──

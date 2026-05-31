@@ -338,6 +338,16 @@ function _startGameSync(code) {
         window._mpRemoteTorps[payload.id] = Object.assign({}, payload, { progress: 0, age: 0 });
       }
     })
+    .on('broadcast', { event: 'hit' }, ({ payload }) => {
+      if (payload.target === _user?.id && window._applyHullDamage) {
+        window._applyHullDamage(payload.damage, '⚠ DIRECT HIT — HULL BREACH');
+        // Spawn visual explosion at hit location if position provided
+        if (payload.hx !== undefined && window.spawnExplosion) {
+          window.spawnExplosion(payload.hx, payload.hy, payload.hz, false);
+        }
+        if (window.playExplosion) window.playExplosion(false);
+      }
+    })
     .subscribe();
 
   // Called by game.js every 3 frames
@@ -363,6 +373,15 @@ function _startGameSync(code) {
         speed: t.speed,
         isHoming: !!t.isHoming, isMine: !!t.isMine
       }
+    });
+  };
+
+  // Broadcast a hit on a remote player — they receive and apply hull damage
+  window._mpBroadcastHit = function(targetId, damage, hx, hy, hz) {
+    if (!_gameChannel) return;
+    _gameChannel.send({
+      type: 'broadcast', event: 'hit',
+      payload: { target: targetId, damage, hx, hy, hz, from: _user?.id }
     });
   };
 

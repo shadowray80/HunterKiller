@@ -2091,6 +2091,22 @@ function update() {
 
     // Hit enemy (armed after travelling minimum safe distance)
     const travelDist = (t.isHoming || t.isAcoustic) ? t.progress : Math.sqrt((t.x-t.ox)*(t.x-t.ox)+(t.y-t.oy)*(t.y-t.oy)+(t.z-t.oz)*(t.z-t.oz));
+
+    // ── HIT MULTIPLAYER REMOTE PLAYERS ──
+    if (travelDist > 3.5 && !t.isEnemy && window._mpRemotePlayers) {
+      for (const rpId of Object.keys(window._mpRemotePlayers)) {
+        const rp = window._mpRemotePlayers[rpId];
+        if (!rp || rp.x === undefined) continue;
+        if (Math.abs(t.x-rp.x)<2.2 && Math.abs(t.y-rp.y)<2.2 && Math.abs(t.z-rp.z)<2.2) {
+          spawnExplosion(t.x, t.y, t.z, false);
+          playExplosion(false);
+          spawnBubblePuff(t.x, t.y, t.z);
+          addEvent('⊛ DIRECT HIT — PLAYER TARGET', false);
+          if (window._mpBroadcastHit) window._mpBroadcastHit(rpId, 20, t.x, t.y, t.z);
+          return false;
+        }
+      }
+    }
     // OBB check — oriented along enemy heading to match hull footprint
     var _ehDx = t.x - state.enemy.x, _ehDy = t.y - state.enemy.y, _ehDz = t.z - state.enemy.z;
     var _ehCos = Math.cos(state.enemy.heading), _ehSin = Math.sin(state.enemy.heading);
@@ -3874,86 +3890,109 @@ function projectPeriscope(wx, wy, wz) {
   return { sx, sy, depth: ffz };
 }
 
-// Draw a remote player's submarine in the periscope — full Virginia-class silhouette
+// Draw a remote player's submarine — Victor III profile (long slim hull, small sail)
 function drawSubPeriscope(rp, color, glowColor) {
   const center = projectPeriscope(rp.x, rp.y, rp.z);
   if (!center || center.depth < 0.1 || center.depth > 200) return;
 
   const fwdX = Math.sin(rp.heading || 0), fwdZ = Math.cos(rp.heading || 0);
-  const bowP   = projectPeriscope(rp.x + fwdX*2.5, rp.y, rp.z + fwdZ*2.5);
-  const sternP = projectPeriscope(rp.x - fwdX*2.5, rp.y, rp.z - fwdZ*2.5);
+  const bowP   = projectPeriscope(rp.x + fwdX*3.0, rp.y, rp.z + fwdZ*3.0);
+  const sternP = projectPeriscope(rp.x - fwdX*3.0, rp.y, rp.z - fwdZ*3.0);
   if (!bowP || !sternP || bowP.depth < 0.1 || sternP.depth < 0.1) return;
 
-  const dx = bowP.sx - sternP.sx, dy = bowP.sy - sternP.sy;
-  const screenAngle = Math.atan2(dy, dx);
-  const sc = Math.max(0.3, Math.min(3.5, Math.sqrt(dx*dx+dy*dy) / 18));
+  const ddx = bowP.sx - sternP.sx, ddy = bowP.sy - sternP.sy;
+  const screenAngle = Math.atan2(ddy, ddx);
+  const halfScreen = Math.sqrt(ddx*ddx + ddy*ddy) * 0.5;
+  const sc = Math.max(0.4, Math.min(4, halfScreen / 10));
 
-  const colFill = 'rgba(0,4,12,0.78)';
-  const lw = Math.max(0.7, 1.2 * Math.min(1, sc));
+  const L = sc * 22;   // half-hull length
+  const H = sc * 2.8;  // half-hull height — slim 8:1 ratio like Victor III
+  const lw = Math.max(0.6, sc * 0.9);
 
   ctx.save();
   ctx.translate(center.sx, center.sy);
   ctx.rotate(screenAngle);
-  ctx.shadowBlur = 12; ctx.shadowColor = glowColor;
-  ctx.strokeStyle = color; ctx.fillStyle = colFill; ctx.lineWidth = lw;
+  ctx.shadowBlur = 10; ctx.shadowColor = glowColor;
+  ctx.strokeStyle = color; ctx.fillStyle = 'rgba(0,4,12,0.82)'; ctx.lineWidth = lw;
 
-  const hw = sc*9, hh = sc*2.5;
-
-  // Hull
+  // ── HULL — teardrop: rounded bow, tapered stern ──
   ctx.beginPath();
-  ctx.moveTo(hw, 0);
-  ctx.bezierCurveTo(hw,-hh*0.8, hw*0.6,-hh,   0,-hh);
-  ctx.bezierCurveTo(-hw*0.5,-hh, -hw*0.8,-hh*0.7, -hw,-hh*0.3);
-  ctx.bezierCurveTo(-hw*0.85,hh*0.3, -hw*0.5,hh, 0,hh);
-  ctx.bezierCurveTo(hw*0.6,hh, hw,hh*0.8, hw,0);
+  ctx.moveTo(L, 0);
+  ctx.bezierCurveTo(L, -H,        L*0.7, -H*1.1,  L*0.1, -H);
+  ctx.lineTo(-L*0.75, -H*0.8);
+  ctx.bezierCurveTo(-L*0.9,-H*0.5, -L, -H*0.15, -L, 0);
+  ctx.bezierCurveTo(-L, H*0.15, -L*0.9, H*0.5, -L*0.75, H*0.8);
+  ctx.lineTo(L*0.1, H);
+  ctx.bezierCurveTo(L*0.7, H*1.1, L, H, L, 0);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // ── DECK CENTRELINE ──
+  ctx.beginPath();
+  ctx.moveTo(L*0.85, 0); ctx.lineTo(-L*0.9, 0);
+  ctx.strokeStyle = color; ctx.lineWidth = lw*0.35; ctx.globalAlpha = 0.35; ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // ── SAIL — small, upright, 1/3 from bow ──
+  const sailX = L * 0.28;
+  const sailW = L * 0.10;
+  const sailH = H * 2.2;
+  ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.fillStyle = 'rgba(0,4,12,0.82)';
+  ctx.beginPath();
+  ctx.moveTo(sailX - sailW*0.5, -H);
+  ctx.lineTo(sailX - sailW*0.3, -H - sailH);
+  ctx.lineTo(sailX + sailW*0.7, -H - sailH * 0.95);
+  ctx.lineTo(sailX + sailW*0.5, -H);
   ctx.closePath(); ctx.fill(); ctx.stroke();
 
-  // Deck ridge
+  // Periscope mast
   ctx.beginPath();
-  ctx.moveTo(hw*0.8,-hh*0.7); ctx.bezierCurveTo(hw*0.2,-hh*1.05, -hw*0.3,-hh*1.05, -hw*0.7,-hh*0.6);
-  ctx.strokeStyle = color; ctx.lineWidth = lw*0.6; ctx.globalAlpha = 0.5; ctx.stroke(); ctx.globalAlpha = 1;
+  ctx.moveTo(sailX, -H - sailH);
+  ctx.lineTo(sailX, -H - sailH * 1.55);
+  ctx.strokeStyle = color; ctx.lineWidth = lw * 0.5; ctx.stroke();
 
-  // Sail
-  ctx.strokeStyle = color; ctx.lineWidth = lw;
-  ctx.beginPath();
-  ctx.moveTo(hw*0.18,-hh);
-  ctx.lineTo(hw*0.12,-hh-hh*2.5);
-  ctx.bezierCurveTo(hw*0.12,-hh-hh*3, hw*0.38,-hh-hh*2.8, hw*0.38,-hh-hh*2.5);
-  ctx.lineTo(hw*0.35,-hh);
-  ctx.closePath(); ctx.fill(); ctx.stroke();
-
-  // Mast
-  ctx.beginPath(); ctx.moveTo(hw*0.26,-hh-hh*2.5); ctx.lineTo(hw*0.26,-hh-hh*3.8);
-  ctx.strokeStyle = color; ctx.lineWidth = lw*0.6; ctx.stroke();
-
-  // Stern fins
-  [-1,1].forEach(s => {
+  // ── STERN CRUCIFORM FINS ──
+  ctx.lineWidth = lw * 0.8;
+  [-1, 1].forEach(s => {
     ctx.beginPath();
-    ctx.moveTo(-hw*0.72, s*hh*0.75); ctx.lineTo(-hw*1.1, s*hh*2.2);
-    ctx.lineTo(-hw, s*hh*1.8); ctx.lineTo(-hw*0.62, s*hh);
-    ctx.closePath(); ctx.fillStyle='rgba(0,4,12,0.5)'; ctx.fill();
-    ctx.strokeStyle=color; ctx.lineWidth=lw*0.8; ctx.stroke();
+    ctx.moveTo(-L*0.65, s*H*0.7);
+    ctx.lineTo(-L*0.9,  s*H*2.0);
+    ctx.lineTo(-L*0.85, s*H*1.6);
+    ctx.lineTo(-L*0.58, s*H);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,4,12,0.5)'; ctx.fill();
+    ctx.strokeStyle = color; ctx.stroke();
   });
+  // Vertical rudder
+  ctx.beginPath();
+  ctx.moveTo(-L*0.6, -H*0.6);
+  ctx.lineTo(-L*0.92, -H*1.8);
+  ctx.lineTo(-L*0.92, H*1.8);
+  ctx.lineTo(-L*0.6,  H*0.6);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(0,4,12,0.5)'; ctx.fill();
+  ctx.strokeStyle = color; ctx.lineWidth = lw*0.8; ctx.stroke();
 
-  // Prop
-  ctx.save(); ctx.translate(-hw*1.05, 0);
-  const pSpin = state.animFrame * 0.15;
-  for (let b=0;b<5;b++) {
+  // ── PROPELLER ──
+  ctx.save(); ctx.translate(-L*1.02, 0);
+  const pSpin = state.animFrame * 0.16;
+  for (let b = 0; b < 5; b++) {
     ctx.save(); ctx.rotate(pSpin + b*Math.PI*2/5);
-    ctx.beginPath(); ctx.ellipse(0,-hh*0.9,hh*0.22,hh*0.9,0.2,0,Math.PI*2);
-    ctx.fillStyle=color; ctx.globalAlpha=0.4; ctx.fill(); ctx.restore();
+    ctx.beginPath(); ctx.ellipse(0, -H*0.85, H*0.2, H*0.85, 0.15, 0, Math.PI*2);
+    ctx.fillStyle = color; ctx.globalAlpha = 0.38; ctx.fill(); ctx.restore();
   }
-  ctx.beginPath(); ctx.arc(0,0,hh*0.3,0,Math.PI*2);
-  ctx.fillStyle=color; ctx.globalAlpha=0.7; ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, H*0.28, 0, Math.PI*2);
+  ctx.fillStyle = color; ctx.globalAlpha = 0.75; ctx.fill();
   ctx.restore();
 
   ctx.shadowBlur = 0; ctx.restore();
 
-  // Label
-  ctx.font = `bold ${Math.max(8,Math.round(11*Math.min(1.2,sc)))}px Share Tech Mono`;
+  // ── CALL SIGN ──
+  const fs = Math.max(8, Math.round(10 * Math.min(1.3, sc)));
+  ctx.font = `bold ${fs}px Share Tech Mono`;
   ctx.textAlign = 'center'; ctx.fillStyle = color;
   ctx.shadowBlur = 7; ctx.shadowColor = glowColor;
-  ctx.fillText(rp.username || '?', center.sx, center.sy - sc*14 - 5);
+  ctx.fillText(rp.username || '?', center.sx, center.sy - H - sc*12 - 4);
   ctx.shadowBlur = 0;
 }
 
@@ -6675,6 +6714,9 @@ function launchGame(planGrid) {
   loop();
 }
 window.launchGame = launchGame; // expose for multiplayer
+window._applyHullDamage = function(dmg, msg) { applyHullDamage(dmg, msg); };
+window.spawnExplosion = spawnExplosion;
+window.playExplosion = playExplosion;
 
 // ── WHALES ──
 var WHALE_SPAWN_INTERVAL = 1800; // ~30s at 60fps

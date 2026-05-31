@@ -3144,28 +3144,88 @@ function findFlankPos(ex, ez, px, pz) {
   return {x: fx, z: fz};
 }
 
-// Fire a torpedo at the player from the enemy
+// ── ENEMY WEAPONS ──
+var _enemyMineCooldown = 0;
+
 function enemyFire() {
   var edx = state.player.x - state.enemy.x;
   var edy = state.player.y - state.enemy.y;
   var edz = state.player.z - state.enemy.z;
   var elen = Math.sqrt(edx*edx + edy*edy + edz*edz) || 1;
+  var dist2d = Math.sqrt(edx*edx + edz*edz);
   var off = 2.0;
-  state.torpedoes.push({
-    ox: state.enemy.x + edx/elen*off, oy: state.enemy.y + edy/elen*off, oz: state.enemy.z + edz/elen*off,
-    x:  state.enemy.x + edx/elen*off, y:  state.enemy.y + edy/elen*off, z:  state.enemy.z + edz/elen*off,
-    dx: edx/elen, dy: edy/elen, dz: edz/elen,
-    speed: 0.09, progress: 0, isEnemy: true
-  });
+  var ox = state.enemy.x + edx/elen*off;
+  var oy = state.enemy.y + edy/elen*off;
+  var oz = state.enemy.z + edz/elen*off;
+
+  // Weapon selection — situational random
+  var rand = Math.random();
+  var weapon;
+  if (!state.silentRunning && rand < 0.22 && dist2d > 15) {
+    weapon = 'acoustic'; // acoustic when player is loud and far
+  } else if (rand < 0.45 && dist2d > 10) {
+    weapon = 'guided';   // guided homing from range
+  } else {
+    weapon = 'torpedo';  // fast direct shot
+  }
+
+  if (weapon === 'guided' || weapon === 'acoustic') {
+    var spd = weapon === 'guided' ? 0.28 : 0.18;
+    var lk  = weapon === 'guided' ? 0.85 : 0.5;
+    state.torpedoes.push({
+      ox, oy, oz, x: ox, y: oy, z: oz,
+      dx: edx/elen, dy: edy/elen, dz: edz/elen,
+      heading: Math.atan2(edx/elen, edz/elen),
+      speed: spd, progress: 0, frames: 0,
+      isHoming: true, isEnemy: true,
+      lockStrength: lk,
+      lockedTargetRef: state.player, lockedTargetType: 'PLAYER'
+    });
+    addEvent(weapon === 'guided'
+      ? '⚠ BRAVO FIRED GUIDED TORPEDO — EVADE!'
+      : '⚠ BRAVO FIRED ACOUSTIC TORPEDO — STAY QUIET!', true);
+  } else {
+    state.torpedoes.push({
+      ox, oy, oz, x: ox, y: oy, z: oz,
+      dx: edx/elen, dy: edy/elen, dz: edz/elen,
+      speed: 0.09, progress: 0, isEnemy: true
+    });
+    addEvent('⚠ TORPEDO IN THE WATER!', true);
+  }
+
   state.enemyLastFired = Date.now();
   state.timesDetected++;
-  // Torpedo launch noise reveals Bravo's position briefly on the minimap
   if (state.silentRunning) {
     state.revealTimer = Math.max(state.revealTimer, 180);
     state.revealAlpha = 1.0;
     state.enemySilentAlpha = Math.max(state.enemySilentAlpha, 1.0);
   }
-  addEvent('⚠ TORPEDO IN THE WATER!', true);
+}
+
+function enemyLayMine() {
+  if (!state.deployedMines) state.deployedMines = [];
+  var en = state.enemy;
+  var deep = en.y < GRID.H * 0.4;
+
+  if (deep) {
+    // Anchor mine — tethered at current depth
+    state.deployedMines.push({
+      x: en.x, z: en.z,
+      y: en.y, floatY: en.y, floorY: 0, currentY: en.y,
+      type: 'anchor', alive: true, age: 0
+    });
+    addEvent('⚠ BRAVO DEPLOYED ANCHOR MINE', true);
+  } else {
+    // Drift mine — rises to surface
+    state.deployedMines.push({
+      x: en.x, y: en.y, z: en.z,
+      dx: (Math.random()-0.5)*0.003,
+      dz: (Math.random()-0.5)*0.003,
+      type: 'drift', alive: true, age: 0
+    });
+    addEvent('⚠ BRAVO DEPLOYED DRIFT MINE — SURFACE THREAT', true);
+  }
+  _enemyMineCooldown = Date.now();
 }
 
 // ── GUIDED TORPEDO HOMING PHYSICS ──
@@ -3581,6 +3641,13 @@ function updateEnemyAI() {
         en.x = _pnx; en.z = _pnz;
       }
     }
+  }
+
+  // ── MINE LAYING — BRAVO occasionally drops mines while hunting or flanking ──
+  if ((en.aiState === 'hunt' || en.aiState === 'flank') &&
+      _enemyMoveTimer % 300 === 0 && Math.random() < 0.4 &&
+      Date.now() - _enemyMineCooldown > 30000) {
+    enemyLayMine();
   }
 }
 
@@ -4067,7 +4134,7 @@ function renderPeriscope() {
           ctx.shadowBlur = 3; ctx.shadowColor = '#0080cc';
         }
       } else if (t.isAcoustic) {
-        // Cyan sonar torpedo
+        // Cyan sonar torpedo (player)
         if (i === 0) {
           ctx.fillStyle = `rgba(0,230,255,${fade})`;
           ctx.shadowBlur = 22; ctx.shadowColor = '#00e5ff';
@@ -4077,6 +4144,18 @@ function renderPeriscope() {
         } else {
           ctx.fillStyle = `rgba(0,100,160,${fade * 0.6})`;
           ctx.shadowBlur = 3; ctx.shadowColor = '#006699';
+        }
+      } else if (t.isEnemy && t.isHoming) {
+        // Enemy guided/acoustic — red homing trail
+        if (i === 0) {
+          ctx.fillStyle = `rgba(255,50,50,${fade})`;
+          ctx.shadowBlur = 22; ctx.shadowColor = '#ff2020';
+        } else if (i < 5) {
+          ctx.fillStyle = `rgba(220,30,30,${fade * 0.9})`;
+          ctx.shadowBlur = 8; ctx.shadowColor = '#dd1010';
+        } else {
+          ctx.fillStyle = `rgba(160,0,0,${fade * 0.6})`;
+          ctx.shadowBlur = 3; ctx.shadowColor = '#880000';
         }
       } else if (i === 0) {
         ctx.fillStyle = `rgba(255,240,80,${fade})`;

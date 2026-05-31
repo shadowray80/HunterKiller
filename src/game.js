@@ -6249,6 +6249,31 @@ var BATTLEGROUNDS = [
       return g;
     }
   },
+  // ── HEIGHTFIELD SMOOTHING — box blur to remove terrain spikes ──────
+  // Preserves large features (mountains, ridges) but kills isolated spikes
+
+// Smooths heightgrid with N passes of a 3×3 box blur
+function _smoothHg(hg, GW, GD, passes) {
+  for (var p = 0; p < passes; p++) {
+    var out = [];
+    for (var z = 0; z < GD; z++) {
+      out[z] = [];
+      for (var x = 0; x < GW; x++) {
+        var sum = 0, count = 0;
+        for (var dz = -1; dz <= 1; dz++) {
+          for (var dx = -1; dx <= 1; dx++) {
+            var nz = z+dz, nx = x+dx;
+            if (nz >= 0 && nz < GD && nx >= 0 && nx < GW) { sum += hg[nz][nx]; count++; }
+          }
+        }
+        out[z][x] = sum / count;
+      }
+    }
+    hg = out;
+  }
+  return hg;
+}
+
   // ── CANYON HEIGHTFIELD ─────────────────────────────────────────────
   {
     id: 'canyon', name: 'THE CANYON',
@@ -6276,6 +6301,7 @@ var BATTLEGROUNDS = [
               g[z][x]=0;
             }
           }
+          hg = _smoothHg(hg, GW, GD, 2);
           self._hGrid=hg; window._canyonHeightGrid=hg;
           window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;
           resolve(g);
@@ -6318,6 +6344,7 @@ var BATTLEGROUNDS = [
               g[z][x]=0;
             }
           }
+          hg = _smoothHg(hg, GW, GD, 2);
           self._hGrid=hg; window._canyonHeightGrid=hg;
           window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;
           resolve(g);
@@ -6426,6 +6453,7 @@ var BATTLEGROUNDS = [
               g[z][x]=0;
             }
           }
+          hg = _smoothHg(hg, GW, GD, 2);
           self._hGrid=hg;
           window._canyonHeightGrid=hg;
           window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;

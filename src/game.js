@@ -1935,11 +1935,13 @@ function update() {
 
   // ── SURFACED HULL REPAIR ──
   if (state.viewMode === 'surfaced' && state.hull < 100 && !_imploding) {
-    if (state.time % 180 === 0) {
-      state.hull = Math.min(100, state.hull + 1);
+    if (state.time % 60 === 0) {
+      const _prev = state.hull;
+      state.hull = Math.min(100, state.hull + 3);
       document.getElementById('sys-hull').textContent = state.hull + '%';
       document.getElementById('peri-hull').textContent = state.hull + '%';
-      if (state.hull % 10 === 0) addEvent('▸ HULL REPAIR — ' + state.hull + '%', false);
+      if (Math.floor(_prev / 10) < Math.floor(state.hull / 10))
+        addEvent('▸ HULL REPAIR — ' + state.hull + '%', false);
     }
     // Ships become aggressive when player is surfaced
     if (state.time % 240 === 0 && state.ships) {

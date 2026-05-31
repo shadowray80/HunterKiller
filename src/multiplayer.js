@@ -145,7 +145,13 @@ window._mpSelectMode = function(mode) {
 };
 
 export async function createGame() {
-  if (!_currentMap) { alert('Pick a map first'); return; }
+  if (!_currentMap) { _setCreateStatus('⚠ SELECT A MAP FIRST'); return; }
+  if (!_user) { _setCreateStatus('⚠ NOT SIGNED IN — TRY AGAIN'); return; }
+
+  const btn = document.getElementById('mp-create-confirm');
+  if (btn) btn.textContent = 'CREATING...';
+  _setCreateStatus('');
+
   const maxP = parseInt(document.getElementById('mp-max-players').value) || 4;
   const aiFill = document.getElementById('mp-ai-fill').checked;
   const code = 'HK-' + Math.random().toString(36).substr(2, 4).toUpperCase();
@@ -154,9 +160,28 @@ export async function createGame() {
     id: code, map_id: _currentMap, mode: _currentMode,
     max_players: maxP, ai_fill: aiFill, host_id: _user.id, status: 'waiting'
   });
-  if (error) { console.error(error); return; }
+
+  if (btn) btn.textContent = 'CREATE GAME →';
+
+  if (error) {
+    console.error('Create session error:', error);
+    _setCreateStatus(`⚠ ${error.message}`);
+    return;
+  }
 
   await _enterWaitingRoom(code, true);
+}
+
+function _setCreateStatus(msg) {
+  let el = document.getElementById('mp-create-status');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'mp-create-status';
+    el.style.cssText = 'color:#ff6644;font-size:11px;padding:8px 0;letter-spacing:0.1em;';
+    const actions = document.getElementById('mp-create-actions');
+    if (actions) actions.before(el);
+  }
+  el.textContent = msg;
 }
 
 // ── JOIN GAME ──

@@ -5996,6 +5996,28 @@ thresholdSlider.addEventListener('input', () => {
   processAndPreview();
 });
 
+// 2-pass 3×3 box blur — removes terrain spikes, preserves mountains
+function _smoothHg(hg, GW, GD, passes) {
+  for (var p = 0; p < passes; p++) {
+    var out = [];
+    for (var z = 0; z < GD; z++) {
+      out[z] = [];
+      for (var x = 0; x < GW; x++) {
+        var sum = 0, count = 0;
+        for (var dz = -1; dz <= 1; dz++) {
+          for (var dx = -1; dx <= 1; dx++) {
+            var nz = z+dz, nx = x+dx;
+            if (nz >= 0 && nz < GD && nx >= 0 && nx < GW) { sum += hg[nz][nx]; count++; }
+          }
+        }
+        out[z][x] = sum / count;
+      }
+    }
+    hg = out;
+  }
+  return hg;
+}
+
 // ── PRE-BUILT BATTLEGROUND MAPS ──
 // Each makeGrid() returns a 48-row x 64-col array (0=open, 1=wall)
 var BATTLEGROUNDS = [
@@ -6249,31 +6271,6 @@ var BATTLEGROUNDS = [
       return g;
     }
   },
-  // ── HEIGHTFIELD SMOOTHING — box blur to remove terrain spikes ──────
-  // Preserves large features (mountains, ridges) but kills isolated spikes
-
-// Smooths heightgrid with N passes of a 3×3 box blur
-function _smoothHg(hg, GW, GD, passes) {
-  for (var p = 0; p < passes; p++) {
-    var out = [];
-    for (var z = 0; z < GD; z++) {
-      out[z] = [];
-      for (var x = 0; x < GW; x++) {
-        var sum = 0, count = 0;
-        for (var dz = -1; dz <= 1; dz++) {
-          for (var dx = -1; dx <= 1; dx++) {
-            var nz = z+dz, nx = x+dx;
-            if (nz >= 0 && nz < GD && nx >= 0 && nx < GW) { sum += hg[nz][nx]; count++; }
-          }
-        }
-        out[z][x] = sum / count;
-      }
-    }
-    hg = out;
-  }
-  return hg;
-}
-
   // ── CANYON HEIGHTFIELD ─────────────────────────────────────────────
   {
     id: 'canyon', name: 'THE CANYON',

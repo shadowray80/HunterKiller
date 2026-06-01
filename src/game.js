@@ -1102,6 +1102,56 @@ function drawSonar() {
     sc.fillRect(ep2.x+6, ep2.y-6, 3, 12*(1-depFrac2));
   });
 
+  // ── CAMPAIGN: SONAR BUOYS on minimap ──
+  if (window._campaignSonarBuoys) {
+    window._campaignSonarBuoys.forEach(function(b) {
+      var bp = mm(b.x, b.z);
+      var effR = state.silentRunning ? b.radius * 0.4 : b.radius;
+      var rPx = effR * scale;
+      // Detection zone circle
+      sc.beginPath(); sc.arc(bp.x, bp.y, rPx, 0, Math.PI*2);
+      sc.strokeStyle = 'rgba(255,160,0,0.22)'; sc.lineWidth = 1; sc.stroke();
+      // Buoy dot
+      sc.beginPath(); sc.arc(bp.x, bp.y, 3, 0, Math.PI*2);
+      sc.fillStyle = 'rgba(255,160,0,0.9)';
+      sc.shadowBlur = 5; sc.shadowColor = '#ffa000'; sc.fill(); sc.shadowBlur = 0;
+      // Web spokes
+      sc.strokeStyle = 'rgba(255,160,0,0.45)'; sc.lineWidth = 0.5;
+      for (var i = 0; i < 4; i++) {
+        var a = (i / 4) * Math.PI;
+        sc.beginPath();
+        sc.moveTo(bp.x + Math.cos(a)*3, bp.y + Math.sin(a)*3);
+        sc.lineTo(bp.x + Math.cos(a)*7, bp.y + Math.sin(a)*7);
+        sc.stroke();
+      }
+    });
+  }
+
+  // ── CAMPAIGN: WAYPOINTS A-D on minimap ──
+  if (window._campaignWaypoints) {
+    window._campaignWaypoints.forEach(function(wp) {
+      var wpp = mm(wp.x, wp.z);
+      sc.beginPath(); sc.arc(wpp.x, wpp.y, 5, 0, Math.PI*2);
+      sc.strokeStyle = 'rgba(0,200,255,0.55)'; sc.lineWidth = 1; sc.stroke();
+      sc.font = '7px Share Tech Mono'; sc.fillStyle = '#00e5ff';
+      sc.textAlign = 'center'; sc.fillText(wp.id, wpp.x, wpp.y + 2.5);
+    });
+  }
+
+  // ── CAMPAIGN: EXIT BEACON E on minimap (pulsing green) ──
+  if (window._campaignExitBeacon && !window._campaignExitBeacon._reached) {
+    var eb = window._campaignExitBeacon;
+    var ep = mm(eb.x, eb.z);
+    var pulse = 0.5 + 0.5 * Math.sin(state.time * 0.08);
+    sc.beginPath(); sc.arc(ep.x, ep.y, 7 + pulse*3, 0, Math.PI*2);
+    sc.strokeStyle = 'rgba(0,255,100,' + (0.25 * pulse) + ')'; sc.lineWidth = 1; sc.stroke();
+    sc.beginPath(); sc.arc(ep.x, ep.y, 4, 0, Math.PI*2);
+    sc.fillStyle = 'rgba(0,255,100,0.95)';
+    sc.shadowBlur = 8; sc.shadowColor = '#00ff64'; sc.fill(); sc.shadowBlur = 0;
+    sc.font = '7px Share Tech Mono'; sc.fillStyle = '#00ff64';
+    sc.textAlign = 'center'; sc.fillText('E', ep.x, ep.y + 2.5);
+  }
+
   // ── ENEMY PING RINGS on minimap ──
   state.enemyPings.forEach(p => {
     const ep = mm(p.wx, p.wz);
@@ -1454,6 +1504,13 @@ function render() {
   state.extraEnemies.forEach(function(xe) {
     if (xe.alive) drawSub(xe, '#ff6432', xe.name, false, 1.0);
   });
+
+  // Draw campaign sonar buoys
+  if (window._campaignSonarBuoys) {
+    window._campaignSonarBuoys.forEach(function(b) { drawSonarBuoyPeri(b); });
+  }
+  // Draw exit beacon
+  if (window._campaignExitBeacon) drawExitBeaconPeri();
 
   // Draw whales
   if (state.whales) state.whales.forEach(function(w){ drawWhale(w); });
@@ -1933,6 +1990,8 @@ function update() {
   // ── ENEMY AI — state machine (movement + firing) ──
   if (state.enemy.alive) updateEnemyAI();
   if (state.extraEnemies.length) updateExtraEnemiesAI();
+  if (window._campaignSonarBuoys) updateCampaignBuoys();
+  if (window._campaignExitBeacon) checkExitBeacon();
 
   // Update cooldowns
   // Update fire button every frame using real time
@@ -6918,6 +6977,151 @@ function updateExtraEnemiesAI() {
 }
 window.spawnExplosion = spawnExplosion;
 window.playExplosion = playExplosion;
+
+// ── CAMPAIGN MISSION SYSTEMS ──
+
+function updateCampaignBuoys() {
+  var buoys = window._campaignSonarBuoys;
+  if (!buoys) return;
+  buoys.forEach(function(b) {
+    // Slow drift
+    b._ang = (b._ang || 0) + 0.0015;
+    b.x = b._ox + Math.sin(b._ang) * 2.5;
+    b.z = b._oz + Math.cos(b._ang * 0.73) * 2.0;
+
+    var dx = state.player.x - b.x;
+    var dz = state.player.z - b.z;
+    var dist = Math.sqrt(dx*dx + dz*dz);
+    var effR = state.silentRunning ? b.radius * 0.4 : b.radius;
+
+    if (dist < effR && !_gameOver) {
+      var now = state.time;
+      if (!b._lastAlert || now - b._lastAlert > 200) {
+        b._lastAlert = now;
+        revealPlayerToEnemy(600);
+        state.timesDetected++;
+        addScore(-20);
+        addEvent('⚠ SONAR BUOY — CONTACT DETECTED — EVADE!', true);
+        if (!state.battleStations) document.getElementById('btn-battlestations').click();
+      }
+    }
+  });
+}
+
+function checkExitBeacon() {
+  var eb = window._campaignExitBeacon;
+  if (!eb || eb._reached || _gameOver) return;
+  var dx = state.player.x - eb.x;
+  var dz = state.player.z - eb.z;
+  if (Math.sqrt(dx*dx + dz*dz) < (eb.radius || 6)) {
+    eb._reached = true;
+    addScore(200);
+    addEvent('⊙ EXIT ZONE REACHED — MISSION ACCOMPLISHED', false);
+    setTimeout(function() {
+      if (window._onCampaignMissionComplete) window._onCampaignMissionComplete();
+    }, 2000);
+  }
+}
+
+function drawSonarBuoyPeri(b) {
+  var pp = projectPeriscope(b.x, b.y, b.z);
+  if (!pp || pp.depth < 0.3 || pp.depth > 60) return;
+  var sc2 = Math.max(0.4, Math.min(3.0, 10 / pp.depth));
+  var alpha = Math.max(0, 1 - pp.depth / 50) * 0.9;
+  if (alpha < 0.05) return;
+
+  ctx.save();
+  ctx.translate(pp.sx, pp.sy);
+  ctx.globalAlpha = alpha;
+
+  var r = 14 * sc2;
+  var col = 'rgba(255,160,0,';
+  ctx.shadowBlur = 8; ctx.shadowColor = 'rgba(255,140,0,0.6)';
+
+  // Outer sphere ring
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2);
+  ctx.strokeStyle = col + '0.5)'; ctx.lineWidth = 1.0; ctx.stroke();
+
+  // Horizontal latitude rings (flattened ellipses)
+  ctx.strokeStyle = col + '0.6)'; ctx.lineWidth = 0.8;
+  [-0.6, 0, 0.6].forEach(function(yf) {
+    var yr = r * yf;
+    var xr = Math.sqrt(Math.max(0, r*r - yr*yr));
+    ctx.beginPath(); ctx.ellipse(0, yr, xr, xr * 0.22, 0, 0, Math.PI*2); ctx.stroke();
+  });
+
+  // Spider web radial spokes
+  ctx.strokeStyle = col + '0.4)'; ctx.lineWidth = 0.6;
+  for (var j = 0; j < 6; j++) {
+    var a = (j / 6) * Math.PI * 2 + state.time * 0.008;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r * 0.25, Math.sin(a) * r * 0.07);
+    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r * 0.22);
+    ctx.stroke();
+  }
+
+  // Detection zone sphere (shows when player is near)
+  var pdx = state.player.x - b.x, pdz = state.player.z - b.z;
+  var pdist = Math.sqrt(pdx*pdx + pdz*pdz);
+  var effR = state.silentRunning ? b.radius * 0.4 : b.radius;
+  if (pdist < effR * 2.5) {
+    var fovScale = (W * 0.5) / Math.tan(0.7) * (state.periZoom || 1);
+    var sphereR = (effR / pp.depth) * fovScale;
+    var inZone = pdist < effR;
+    ctx.beginPath(); ctx.arc(0, 0, sphereR, 0, Math.PI*2);
+    ctx.fillStyle = inZone ? 'rgba(255,40,0,0.1)' : 'rgba(255,160,0,0.04)';
+    ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, sphereR, 0, Math.PI*2);
+    ctx.strokeStyle = inZone ? 'rgba(255,40,0,0.5)' : 'rgba(255,160,0,0.18)';
+    ctx.lineWidth = inZone ? 2 : 1; ctx.stroke();
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.font = Math.round(7 * sc2) + 'px Share Tech Mono';
+  ctx.fillStyle = 'rgba(255,160,0,0.85)';
+  ctx.textAlign = 'center';
+  ctx.fillText('BUOY', 0, -r - 5);
+  ctx.restore();
+}
+
+function drawExitBeaconPeri() {
+  var eb = window._campaignExitBeacon;
+  if (!eb || eb._reached) return;
+  var pp = projectPeriscope(eb.x, GRID.H * 0.35, eb.z);
+  if (!pp || pp.depth < 0.3 || pp.depth > 90) return;
+  var sc2 = Math.max(0.5, Math.min(2.5, 8 / pp.depth));
+  var alpha = Math.max(0, 1 - pp.depth / 80);
+  if (alpha < 0.05) return;
+
+  var pulse = 0.5 + 0.5 * Math.sin(state.time * 0.08);
+  ctx.save();
+  ctx.translate(pp.sx, pp.sy);
+  ctx.globalAlpha = alpha;
+  ctx.shadowBlur = 18; ctx.shadowColor = 'rgba(0,255,100,0.7)';
+
+  // Vertical beam
+  ctx.strokeStyle = 'rgba(0,255,100,' + (0.55 + 0.45 * pulse) + ')';
+  ctx.lineWidth = 2.2 * sc2;
+  ctx.beginPath(); ctx.moveTo(0, 12 * sc2); ctx.lineTo(0, -45 * sc2); ctx.stroke();
+
+  // Pulsing rings
+  for (var i = 0; i < 3; i++) {
+    var rr = (7 + i * 9 + pulse * 6) * sc2;
+    ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(0,255,100,' + ((1 - i * 0.3) * 0.4 * pulse) + ')';
+    ctx.lineWidth = 1; ctx.stroke();
+  }
+
+  // Core dot
+  ctx.beginPath(); ctx.arc(0, 0, 4 * sc2, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,255,100,0.95)'; ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.font = Math.round(9 * sc2) + 'px Share Tech Mono';
+  ctx.fillStyle = '#00ff64'; ctx.textAlign = 'center';
+  ctx.fillText('EXIT ZONE', 0, -48 * sc2);
+  ctx.restore();
+}
 
 // ── WHALES ──
 var WHALE_SPAWN_INTERVAL = 1800; // ~30s at 60fps

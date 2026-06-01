@@ -13,30 +13,47 @@ const MISSIONS = [
     subtitle: 'Mission 1 — Stealth Transit',
     mapId: 'thegap',
     isHeightfield: true,
+    objectiveType: 'navigate',
     briefingImg: '/Images/TheGap_MissionBriefing.png',
     briefing:
       'CLASSIFICATION: TOP SECRET\n' +
       'GIUK GAP — NORTH ATLANTIC OCEAN\n\n' +
+      'OBJECTIVE: Navigate from Entry Zone A to Exit Zone E.\n\n' +
       'A vast continental shelf stretches out before open ocean. Enemy forces have seeded the area with sonar buoys and conduct regular air patrols. Your objective is simple: pass through undetected.\n\n' +
       'ENVIRONMENT\n' +
       'Open, exposed terrain. Long sightlines for sonar and sensors. Sparse geological features for cover. Deep drop-offs at the shelf edge.\n\n' +
       'KEY LOCATIONS\n' +
-      'A — Entry Zone (Deployment)\n' +
-      'B — Sonar Buoy Fields (Avoid)\n' +
-      'C — Shelf Ridge (Cover / Ambush)\n' +
-      'D — Deep Drop-Off (Major Depth Change)\n' +
-      'E — Exit Zone (Extraction)\n\n' +
+      'A — Entry Zone (your start position)\n' +
+      'B — Sonar Buoy Fields (avoid detection spheres)\n' +
+      'C — Shelf Ridge (use for cover)\n' +
+      'D — Deep Drop-Off (major depth change)\n' +
+      'E — EXIT ZONE (reach this to complete the mission)\n\n' +
       'TACTICAL NOTES\n' +
-      'The Gap is an exercise in stealth and route planning. The open terrain offers little natural cover, and sonar buoy fields create constant risk of detection. Use the shelf ridges and scattered rock formations to break sonar line of sight.\n\n' +
+      'Avoid the sonar buoy detection spheres — entering one triggers ships and enemy subs. Use Silent Running to shrink buoy detection range. You can engage enemy subs but every kill raises the alert level.\n\n' +
       'RECOMMENDED APPROACH\n' +
-      '· Remain below thermocline\n' +
-      '· Navigate along shelf ridges\n' +
-      '· Avoid buoy fields (B)\n' +
-      '· Maintain low speed in open areas\n\n' +
-      'THREATS: Sonar buoy fields · Patrol aircraft · Long range sonar · Exposed terrain\n\n' +
-      'Stay deep. Stay quiet. Reach the exit zone.',
-    killTarget: 1,
-    enemyCount: { cadet: 1, captain: 1, commander: 1 },
+      '· Stay silent (STANDARD STEAMING button)\n' +
+      '· Hug the shelf ridges (C) for cover\n' +
+      '· Avoid all buoy fields (B)\n' +
+      '· Reach the green EXIT beacon (E)\n\n' +
+      'THREATS: Sonar buoy fields · Patrol aircraft · Depth charges · Enemy submarines',
+    // Navigate: mission complete when reaching exit beacon, not by kill count
+    killTarget: 0,
+    enemyCount: { cadet: 1, captain: 1, commander: 2 },
+    // Waypoints shown on minimap
+    waypoints: [
+      { id: 'A', x: 14, z: 16 },
+      { id: 'C', x: 38, z: 52 },
+      { id: 'D', x: 82, z: 82 },
+    ],
+    // Sonar buoys: _ox/_oz are home positions, x/z drift from them
+    sonarBuoys: [
+      { _ox: 28, _oz: 22, x: 28, z: 22, y: 8, radius: 11 },
+      { _ox: 55, _oz: 18, x: 55, z: 18, y: 6, radius: 10 },
+      { _ox: 48, _oz: 47, x: 48, z: 47, y: 9, radius: 12 },
+      { _ox: 72, _oz: 62, x: 72, z: 62, y: 7, radius: 10 },
+      { _ox: 88, _oz: 76, x: 88, z: 76, y: 8, radius: 11 },
+    ],
+    exitBeacon: { x: 112, z: 108, radius: 6 },
   },
   {
     index: 1,
@@ -295,21 +312,56 @@ function launchMission(missionIndex, difficulty) {
   window._campaignMode = true;
   window._campaignBriefingImg = mission.briefingImg;
 
-  window._onEnemySubKill = function () {
-    _missionKillCount++;
-    if (_missionKillCount >= _killTarget) {
-      window._onEnemySubKill = null;
-      setTimeout(function () { completeMission(missionIndex, difficulty); }, 2000);
-    }
-  };
+  // Set mission-specific gameplay data
+  window._campaignWaypoints = mission.waypoints || null;
+  window._campaignSonarBuoys = mission.sonarBuoys
+    ? mission.sonarBuoys.map(function(b) { return Object.assign({}, b, { _ang: Math.random() * Math.PI * 2 }); })
+    : null;
+  window._campaignExitBeacon = mission.exitBeacon
+    ? Object.assign({}, mission.exitBeacon, { _reached: false })
+    : null;
+
+  var isNavigate = mission.objectiveType === 'navigate';
+
+  // Navigate mission: complete when exit beacon reached
+  if (isNavigate) {
+    window._onEnemySubKill = null;
+    window._onCampaignMissionComplete = function () {
+      window._onCampaignMissionComplete = null;
+      completeMission(missionIndex, difficulty);
+    };
+  } else {
+    // Destroy mission: complete when kill target reached
+    window._onCampaignMissionComplete = null;
+    window._onEnemySubKill = function () {
+      _missionKillCount++;
+      if (_missionKillCount >= _killTarget) {
+        window._onEnemySubKill = null;
+        setTimeout(function () { completeMission(missionIndex, difficulty); }, 2000);
+      }
+    };
+  }
 
   window._onCampaignGameOver = function () {
     window._onCampaignGameOver = null;
     window._onEnemySubKill = null;
+    window._onCampaignMissionComplete = null;
     window._campaignMode = false;
     window._campaignBriefingImg = null;
+    window._campaignWaypoints = null;
+    window._campaignSonarBuoys = null;
+    window._campaignExitBeacon = null;
     setTimeout(function () { showMissionFailed(missionIndex, difficulty); }, 100);
   };
+
+  // Show mission objective bar
+  var objBar = document.getElementById('campaign-objective-bar');
+  if (objBar) {
+    objBar.textContent = isNavigate
+      ? '⊙ OBJECTIVE: NAVIGATE A → E · AVOID SONAR BUOYS · REACH EXIT ZONE'
+      : '⊙ OBJECTIVE: DESTROY ALL ENEMY CONTACTS';
+    objBar.style.display = '';
+  }
 
   hideAllCampaignScreens();
   document.getElementById('intro-screen').style.display = 'none';
@@ -335,6 +387,12 @@ function launchMission(missionIndex, difficulty) {
 function completeMission(missionIndex, difficulty) {
   window._campaignMode = false;
   window._campaignBriefingImg = null;
+  window._campaignWaypoints = null;
+  window._campaignSonarBuoys = null;
+  window._campaignExitBeacon = null;
+  window._onCampaignMissionComplete = null;
+  var ob = document.getElementById('campaign-objective-bar');
+  if (ob) ob.style.display = 'none';
   if (window._endMissionClean) window._endMissionClean();
 
   _save = loadSave();

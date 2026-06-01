@@ -2487,13 +2487,12 @@ pointer-events: none;
 /* ── MISSION BRIEFING OVERLAY (in-game, inside periscope-overlay) ── */
 #mission-briefing-overlay {
   position: absolute;
-  top: calc(env(safe-area-inset-top) + 53px);
-  left: 0; right: 0;
-  bottom: 236px;
-  z-index: 5;
+  inset: 0;
+  z-index: 6;
   background: rgba(2,13,26,0.94);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  pointer-events: all;
   display: none;
 }
 #mbo-img {
@@ -2502,5 +2501,6 @@ pointer-events: none;
   display: block;
 }
 /* Controls float above the briefing image */
-#peri-combat-btns { z-index: 10; }
-#peri-actions     { z-index: 10; }
+#peri-top-row     { z-index: 20; }
+#peri-combat-btns { z-index: 15; }
+#peri-actions     { z-index: 15; }

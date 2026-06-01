@@ -2487,16 +2487,16 @@ pointer-events: none;
 /* ── MISSION BRIEFING OVERLAY (in-game, inside periscope-overlay) ── */
 #mission-briefing-overlay {
   position: absolute;
-  inset: 0;
+  top: calc(env(safe-area-inset-top) + 160px);
+  left: 0; right: 0;
+  bottom: 236px;
   z-index: 6;
   background: rgba(2,13,26,0.94);
   pointer-events: all;
   display: none;
-  padding-top: calc(env(safe-area-inset-top) + 160px);
-  padding-bottom: 240px;
-  box-sizing: border-box;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
 }
 #mbo-img {
   max-width: 100%;

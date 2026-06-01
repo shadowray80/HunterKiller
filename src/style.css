@@ -2278,12 +2278,12 @@ pointer-events: none;
 }
 .cpb-img {
   width: 100%;
-  max-height: 110px;
-  object-fit: cover;
-  object-position: center top;
+  height: auto;
   display: block;
-  opacity: 0.7;
+  opacity: 0.85;
   flex-shrink: 0;
+  border-bottom: 1px solid rgba(0,229,255,0.15);
+  margin-bottom: 4px;
 }
 .cpb-intel {
   padding: 14px 16px;

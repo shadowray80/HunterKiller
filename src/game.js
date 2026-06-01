@@ -3152,7 +3152,7 @@ document.getElementById('peri-btn-battlestations').addEventListener('click', () 
       btn.textContent = 'TOP SECRET';
     } else {
       document.getElementById('mbo-img').src = window._campaignBriefingImg;
-      ov.style.display = 'block';
+      ov.style.display = 'flex';
       btn.textContent = 'CLOSE';
     }
   } else {

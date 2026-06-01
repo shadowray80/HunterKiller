@@ -1505,13 +1505,6 @@ function render() {
     if (xe.alive) drawSub(xe, '#ff6432', xe.name, false, 1.0);
   });
 
-  // Draw campaign sonar buoys
-  if (window._campaignSonarBuoys) {
-    window._campaignSonarBuoys.forEach(function(b) { drawSonarBuoyPeri(b); });
-  }
-  // Draw exit beacon
-  if (window._campaignExitBeacon) drawExitBeaconPeri();
-
   // Draw whales
   if (state.whales) state.whales.forEach(function(w){ drawWhale(w); });
 
@@ -2192,7 +2185,7 @@ function update() {
     var _ehLong = _ehDx * _ehSin + _ehDz * _ehCos;
     var _ehLat  = _ehDx * _ehCos - _ehDz * _ehSin;
     if (travelDist > 3.5 && !t.isEnemy && state.enemy.alive &&
-        Math.abs(_ehLong) < 1.85 && Math.abs(_ehLat) < 0.8 && Math.abs(_ehDy) < 0.9) {
+        Math.abs(_ehLong) < 2.8 && Math.abs(_ehLat) < 1.4 && Math.abs(_ehDy) < 1.4) {
       state.enemy.hits++;
       state.torpsHit++;
       addScore(10);
@@ -2226,7 +2219,7 @@ function update() {
         var _xcos = Math.cos(_xe.heading), _xsin = Math.sin(_xe.heading);
         var _xlong = _xdx * _xsin + _xdz * _xcos;
         var _xlat  = _xdx * _xcos - _xdz * _xsin;
-        if (Math.abs(_xlong) < 1.85 && Math.abs(_xlat) < 0.8 && Math.abs(_xdy) < 0.9) {
+        if (Math.abs(_xlong) < 2.8 && Math.abs(_xlat) < 1.4 && Math.abs(_xdy) < 1.4) {
           _xe.hits++;
           state.torpsHit++;
           addScore(10);
@@ -4370,6 +4363,12 @@ function renderPeriscope() {
     ctx.fillStyle = ptColor(p.type, Math.min(1, alpha), p.yFrac);
     ctx.fillRect(pp.sx - s * 0.5, pp.sy - s * 0.5, s, s);
   });
+
+  // ── CAMPAIGN: SONAR BUOYS + EXIT BEACON ──
+  if (window._campaignSonarBuoys) {
+    window._campaignSonarBuoys.forEach(function(b) { drawSonarBuoyPeri(b); });
+  }
+  if (window._campaignExitBeacon) drawExitBeaconPeri();
 
   // ── WIREFRAME OVERLAY (toggleable with ◈ LINES button, or revealed by silent ping) ──
   const _doWireframe = state.showWireframe || (state.silentRunning && state.silentPings.length > 0);
@@ -6893,6 +6892,13 @@ function launchGame(planGrid) {
 }
 window.launchGame = launchGame; // expose for multiplayer
 window._applyHullDamage = function(dmg, msg) { applyHullDamage(dmg, msg); };
+window._setPlayerSpawn = function(x, z) {
+  state.player.x = x;
+  state.player.z = z;
+  state.player.y = GRID.H * 0.45;
+  if (typeof centreOnPlayer === 'function') centreOnPlayer();
+};
+
 window._endMissionClean = function() {
   _gameOver = true;
   _imploding = false;

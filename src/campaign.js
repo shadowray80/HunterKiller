@@ -374,12 +374,16 @@ function launchMission(missionIndex, difficulty) {
       window._pendingGrid = mapGrid;
       window.launchGame(mapGrid);
       if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
+      var spawnWP = mission.waypoints && mission.waypoints.find(function(w) { return w.id === 'A'; });
+      if (spawnWP && window._setPlayerSpawn) window._setPlayerSpawn(spawnWP.x, spawnWP.z);
     });
   } else {
     window._isHeightfield = false;
     window._pendingGrid = null;
     window.launchGame(bg.makeGrid());
     if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
+    var spawnWP = mission.waypoints && mission.waypoints.find(function(w) { return w.id === 'A'; });
+    if (spawnWP && window._setPlayerSpawn) window._setPlayerSpawn(spawnWP.x, spawnWP.z);
   }
 }
 

@@ -732,7 +732,7 @@
     <!-- Combat buttons above the control panel -->
     <div id="peri-combat-btns">
       <button class="peri-top-btn" id="peri-btn-reveal-peri">STANDARD<br>STEAMING</button>
-      <button class="peri-top-btn" id="peri-btn-battlestations">🚨 RED ALERT</button>
+      <button class="peri-top-btn" id="peri-btn-battlestations">TOP SECRET</button>
       <button class="peri-top-btn" id="peri-btn-tactical">◉ STATUS</button>
       <button class="peri-top-btn" id="peri-btn-ping-peri">◎ PING</button>
       <button class="peri-top-btn" id="peri-btn-cm">◈ CM 3</button>
@@ -819,6 +819,17 @@
       <div id="depth-gauge-label">DEPTH</div>
       <canvas id="depth-gauge-canvas" width="44" height="155"></canvas>
     </div>
+  </div>
+</div>
+
+<!-- Mission Briefing Overlay (campaign in-game) -->
+<div id="mission-briefing-overlay" style="display:none">
+  <div class="mbo-header">
+    <span class="mbo-label">⊙ TOP SECRET — MISSION BRIEFING</span>
+    <button id="mbo-close-btn" class="mbo-close-btn">✕ CLOSE</button>
+  </div>
+  <div class="mbo-img-wrap">
+    <img id="mbo-img" src="" alt="Mission Briefing">
   </div>
 </div>
 

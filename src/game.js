@@ -3144,7 +3144,20 @@ function playSiren() {
 
 
 document.getElementById('peri-btn-battlestations').addEventListener('click', () => {
-  document.getElementById('btn-battlestations').click();
+  if (window._campaignBriefingImg) {
+    var ov = document.getElementById('mission-briefing-overlay');
+    if (ov.style.display === 'flex') {
+      ov.style.display = 'none';
+    } else {
+      document.getElementById('mbo-img').src = window._campaignBriefingImg;
+      ov.style.display = 'flex';
+    }
+  } else {
+    document.getElementById('btn-battlestations').click();
+  }
+});
+document.getElementById('mbo-close-btn').addEventListener('click', () => {
+  document.getElementById('mission-briefing-overlay').style.display = 'none';
 });
 
 document.getElementById('peri-alert-btn').addEventListener('click', () => {

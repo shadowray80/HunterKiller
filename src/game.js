@@ -3146,18 +3146,18 @@ function playSiren() {
 document.getElementById('peri-btn-battlestations').addEventListener('click', () => {
   if (window._campaignBriefingImg) {
     var ov = document.getElementById('mission-briefing-overlay');
-    if (ov.style.display === 'flex') {
+    var btn = document.getElementById('peri-btn-battlestations');
+    if (ov.style.display === 'block') {
       ov.style.display = 'none';
+      btn.textContent = 'TOP SECRET';
     } else {
       document.getElementById('mbo-img').src = window._campaignBriefingImg;
-      ov.style.display = 'flex';
+      ov.style.display = 'block';
+      btn.textContent = 'CLOSE';
     }
   } else {
     document.getElementById('btn-battlestations').click();
   }
-});
-document.getElementById('mbo-close-btn').addEventListener('click', () => {
-  document.getElementById('mission-briefing-overlay').style.display = 'none';
 });
 
 document.getElementById('peri-alert-btn').addEventListener('click', () => {

@@ -2484,49 +2484,21 @@ pointer-events: none;
   flex-shrink: 0;
 }
 
-/* ── MISSION BRIEFING OVERLAY (in-game) ── */
+/* ── MISSION BRIEFING OVERLAY (in-game, inside periscope-overlay) ── */
 #mission-briefing-overlay {
-  position: fixed; inset: 0;
-  z-index: 9990;
-  background: rgba(2,13,26,0.97);
-  display: none;
-  flex-direction: column;
-  font-family: var(--mono);
-}
-.mbo-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: max(12px, calc(env(safe-area-inset-top) + 8px)) 16px 10px;
-  border-bottom: 1px solid rgba(0,229,255,0.2);
-  flex-shrink: 0;
-}
-.mbo-label {
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  color: var(--teal);
-  text-shadow: 0 0 8px var(--teal);
-}
-.mbo-close-btn {
-  background: none;
-  border: 1px solid rgba(0,229,255,0.3);
-  color: var(--teal);
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  padding: 6px 14px;
-  cursor: pointer;
-  border-radius: 3px;
-}
-.mbo-close-btn:active { background: rgba(0,229,255,0.1); }
-.mbo-img-wrap {
-  flex: 1;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: rgba(2,13,26,0.94);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 12px;
+  display: none;
 }
 #mbo-img {
   width: 100%;
   height: auto;
   display: block;
 }
+/* Controls float above the briefing image */
+#peri-combat-btns { position: relative; z-index: 10; }
+#peri-actions     { position: relative; z-index: 10; }

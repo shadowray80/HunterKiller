@@ -1871,6 +1871,7 @@ function gameOver() {
     document.getElementById('controls-wrap').style.display = 'none';
     document.getElementById('sonar-wrap').style.display = 'none';
     document.getElementById('canvas').style.display = 'none';
+    if (window._onCampaignGameOver) { window._onCampaignGameOver(); return; }
     document.getElementById('intro-screen').style.display = '';
     restartIntroMusic();
   }, 2500);
@@ -2130,6 +2131,7 @@ function update() {
         document.getElementById('enemy-status').textContent = 'DESTROYED';
         addEvent('⊛ DIRECT HIT — BRAVO DESTROYED (+30)', false);
         setTimeout(()=>respawnEnemy(),5000);
+        if (window._onEnemySubKill) window._onEnemySubKill();
       } else {
         playExplosion(false);
         addEvent(`⊛ BRAVO HIT ${state.enemy.hits}/3 — LEAKING BUBBLES (+10)`, false);
@@ -3684,6 +3686,7 @@ function updateEnemyAI() {
           addEvent('⊛ BRAVO DROVE INTO TERRAIN — DESTROYED (+50)', false);
           setTimeout(function() { addEvent('▸ "THEY TURNED INTO THE MOUNTAIN"', false); }, 1800);
           setTimeout(function() { respawnEnemy(); }, 7000);
+          if (window._onEnemySubKill) window._onEnemySubKill();
           return;
         }
         en.x = _pnx; en.z = _pnz;
@@ -6542,6 +6545,49 @@ var BATTLEGROUNDS = [
       });
     }
   },
+  // ── THE GAP — continental shelf, ChatGPT-generated heightfield ──────
+  {
+    id: 'thegap', name: 'THE GAP',
+    desc: 'Continental shelf — open water, sonar buoy fields, shelf drop-off',
+    tag: 'CAMPAIGN',
+    isHeightfield: true,
+    gridW: 128, gridD: 128, gridH: 20,
+    _hGrid: null,
+    makeGrid: function() {
+      var R=128,C=128,z,x; var g=[];
+      for(z=0;z<R;z++){g[z]=[];for(x=0;x<C;x++)g[z][x]=0;}
+      return g;
+    },
+    loadAsync: function() {
+      var self = this;
+      var GW=self.gridW, GD=self.gridD;
+      return new Promise(function(resolve) {
+        function buildHg(px) {
+          var g=[],hg=[];
+          for(var z=0;z<GD;z++){
+            g[z]=[]; hg[z]=[];
+            for(var x=0;x<GW;x++){
+              var idx=(z*GW+x)*4;
+              hg[z][x]=px ? px[idx] : 0;
+              g[z][x]=0;
+            }
+          }
+          hg = _smoothHg(hg, GW, GD, 1);
+          self._hGrid=hg; window._canyonHeightGrid=hg;
+          window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;
+          resolve(g);
+        }
+        var img = new Image();
+        img.onload = function() {
+          var tmp=document.createElement('canvas'); tmp.width=GW; tmp.height=GD;
+          var tc=tmp.getContext('2d'); tc.drawImage(img,0,0,GW,GD);
+          buildHg(tc.getImageData(0,0,GW,GD).data);
+        };
+        img.onerror = function() { buildHg(null); };
+        img.src='/maps/TheGap.png';
+      });
+    }
+  },
   // ── THE DROP OFF — volcanic mountains breaking the surface ──────────
   {
     id: 'dropoff', name: 'THE DROP OFF',
@@ -6654,7 +6700,7 @@ function launchGame(planGrid) {
 
   // Reset lives and game-over flag
   _gameOver = false;
-  state.lives = 3;
+  state.lives = window._campaignLives || 3;
   state.periZoom = 1;
   _creakLastPlayed = 0;
   updateLivesDisplay();
@@ -6718,6 +6764,15 @@ function launchGame(planGrid) {
 }
 window.launchGame = launchGame; // expose for multiplayer
 window._applyHullDamage = function(dmg, msg) { applyHullDamage(dmg, msg); };
+window._endMissionClean = function() {
+  _gameOver = true;
+  _imploding = false;
+  document.getElementById('periscope-overlay').classList.remove('active');
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('controls-wrap').style.display = 'none';
+  document.getElementById('sonar-wrap').style.display = 'none';
+  document.getElementById('canvas').style.display = 'none';
+};
 window.spawnExplosion = spawnExplosion;
 window.playExplosion = playExplosion;
 
@@ -8051,6 +8106,7 @@ function updateDeployedMines() {
               document.getElementById('enemy-status').textContent = 'DESTROYED';
               addEvent('⊛ DRIFT MINE — BRAVO DESTROYED (+30)', false);
               setTimeout(()=>respawnEnemy(), 5000);
+              if (window._onEnemySubKill) window._onEnemySubKill();
             } else {
               playExplosion(false);
               addEvent(`⊛ DRIFT MINE — BRAVO HIT ${state.enemy.hits}/3 (+10)`, false);
@@ -8092,6 +8148,7 @@ function updateDeployedMines() {
             document.getElementById('enemy-status').textContent = 'DESTROYED';
             addEvent('⊛ ANCHOR MINE — BRAVO DESTROYED (+30)', false);
             setTimeout(()=>respawnEnemy(), 5000);
+            if (window._onEnemySubKill) window._onEnemySubKill();
           } else {
             addEvent(`⊛ ANCHOR MINE — BRAVO HIT ${state.enemy.hits}/3 (+10)`, false);
           }

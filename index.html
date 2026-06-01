@@ -31,8 +31,190 @@
     </div>
     <button id="intro-choose-btn">◈ CHOOSE A BATTLEGROUND</button>
     <button id="intro-rules-btn">⊛ RULES OF ENGAGEMENT</button>
+    <button id="intro-campaign-btn">⊙ CAMPAIGN</button>
     <button id="intro-multi-btn">⚡ MULTIPLAYER</button>
     <button id="intro-lb-btn">⊛ LEADERBOARD</button>
+  </div>
+</div>
+
+<!-- ══ CAMPAIGN SCREENS ══ -->
+
+<!-- Campaign Home -->
+<div id="campaign-screen" style="display:none">
+  <div class="cp-header">
+    <button id="cp-back-btn" class="cp-back-btn">← BACK</button>
+    <div class="cp-header-title">CAMPAIGN</div>
+  </div>
+
+  <div class="cp-body">
+    <div class="cp-title-block">
+      <div class="cp-main-title">OPERATION HUNTER KILLER</div>
+      <div id="cp-progress-label" class="cp-progress-label">MISSION 1 OF 6</div>
+    </div>
+
+    <div class="cp-mission-grid" id="cp-mission-grid">
+      <div class="cp-mission-tile cp-tile-current" id="cp-tile-0">
+        <div class="cp-tile-num">01</div>
+        <div class="cp-tile-name">THE GAP</div>
+        <div class="cp-tile-code">NEPTUNE</div>
+      </div>
+      <div class="cp-mission-tile" id="cp-tile-1">
+        <div class="cp-tile-num">02</div>
+        <div class="cp-tile-name">THE COURIER</div>
+        <div class="cp-tile-code">CARDINAL</div>
+      </div>
+      <div class="cp-mission-tile" id="cp-tile-2">
+        <div class="cp-tile-num">03</div>
+        <div class="cp-tile-name">THE TRENCH</div>
+        <div class="cp-tile-code">STYX</div>
+      </div>
+      <div class="cp-mission-tile" id="cp-tile-3">
+        <div class="cp-tile-num">04</div>
+        <div class="cp-tile-name">SILENT HUNTER</div>
+        <div class="cp-tile-code">PREDATOR</div>
+      </div>
+      <div class="cp-mission-tile" id="cp-tile-4">
+        <div class="cp-tile-num">05</div>
+        <div class="cp-tile-name">GHOST SHIP</div>
+        <div class="cp-tile-code">SPECTRE</div>
+      </div>
+      <div class="cp-mission-tile" id="cp-tile-5">
+        <div class="cp-tile-num">06</div>
+        <div class="cp-tile-name">LAUNCH AUTHORITY</div>
+        <div class="cp-tile-code">ARMAGEDDON</div>
+      </div>
+    </div>
+
+    <div class="cp-actions">
+      <button id="cp-new-btn" class="cp-btn-primary">⊙ NEW CAMPAIGN</button>
+      <button id="cp-continue-btn" class="cp-btn-primary" style="display:none">▶ CONTINUE</button>
+      <div class="cp-code-row">
+        <input id="cp-code-input" class="cp-code-input" type="text" maxlength="12" placeholder="ENTER CODE" autocomplete="off" spellcheck="false">
+        <button id="cp-code-btn" class="cp-btn-secondary">GO</button>
+      </div>
+      <div id="cp-code-error" class="cp-code-error" style="display:none"></div>
+    </div>
+
+    <!-- TEST: jump buttons — remove before final release -->
+    <div id="cp-test-zone" class="cp-test-zone">
+      <div class="cp-test-label">⚙ TEST JUMP TO MISSION</div>
+      <div class="cp-test-btns">
+        <button class="cp-test-btn" data-mission="0">M1</button>
+        <button class="cp-test-btn" data-mission="1">M2</button>
+        <button class="cp-test-btn" data-mission="2">M3</button>
+        <button class="cp-test-btn" data-mission="3">M4</button>
+        <button class="cp-test-btn" data-mission="4">M5</button>
+        <button class="cp-test-btn" data-mission="5">M6</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Difficulty Select -->
+<div id="campaign-difficulty-screen" style="display:none">
+  <div class="cp-header">
+    <button id="cpd-back-btn" class="cp-back-btn">← BACK</button>
+    <div class="cp-header-title">DIFFICULTY</div>
+  </div>
+  <div class="cp-body cp-body-center">
+    <div id="cpd-mission-label" class="cpd-mission-label">MISSION 1 — THE GAP</div>
+    <div class="cpd-options">
+      <button class="cpd-opt" data-diff="cadet">
+        <div class="cpd-opt-label" style="color:#00ff9d">CADET</div>
+        <div class="cpd-opt-desc">5 lives · Hull repairs faster · Enemy fires less</div>
+      </button>
+      <button class="cpd-opt" data-diff="captain">
+        <div class="cpd-opt-label" style="color:#00e5ff">CAPTAIN</div>
+        <div class="cpd-opt-desc">3 lives · Standard difficulty</div>
+      </button>
+      <button class="cpd-opt" data-diff="commander">
+        <div class="cpd-opt-label" style="color:#ff4444">COMMANDER</div>
+        <div class="cpd-opt-desc">2 lives · Multiple enemies · More aggressive AI</div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Mission Briefing -->
+<div id="campaign-briefing-screen" style="display:none">
+  <div class="cp-header">
+    <button id="cpb-back-btn" class="cp-back-btn">← ABORT</button>
+    <div id="cpb-mission-name" class="cp-header-title">THE GAP</div>
+  </div>
+  <div class="cp-body cpb-body">
+    <img id="cpb-mission-img" class="cpb-img" src="" alt="">
+    <div class="cpb-intel">
+      <div id="cpb-codename" class="cpb-codename">OPERATION: NEPTUNE</div>
+      <div id="cpb-subtitle" class="cpb-subtitle">Mission 1 — Stealth Transit</div>
+      <div id="cpb-briefing-text" class="cpb-text"></div>
+    </div>
+    <div class="cpb-footer">
+      <div class="cpb-badges">
+        <span id="cpb-difficulty-badge" class="cpb-badge"></span>
+        <span id="cpb-lives-badge" class="cpb-badge">3 LIVES</span>
+      </div>
+      <button id="cpb-launch-btn" class="cp-btn-launch">▶ DIVE IN</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mission Result (complete) -->
+<div id="campaign-result-screen" style="display:none">
+  <div class="cp-header">
+    <div class="cp-header-title">MISSION COMPLETE</div>
+  </div>
+  <div class="cp-body cp-body-center">
+    <div class="cpr-badge">◉</div>
+    <div id="cpr-codename" class="cpr-codename">OPERATION: NEPTUNE — COMPLETE</div>
+    <div class="cpr-code-unlock">
+      <div class="cpr-code-label">CODE UNLOCKED</div>
+      <div id="cpr-code" class="cpr-code-val">NEPTUNE</div>
+    </div>
+    <div class="cpr-next-block">
+      <div class="cpr-next-label">NEXT MISSION</div>
+      <div id="cpr-next-name" class="cpr-next-name">THE COURIER</div>
+      <div id="cpr-next-subtitle" class="cpr-next-subtitle">Mission 2 — Extraction</div>
+    </div>
+    <div class="cpr-actions">
+      <button id="cpr-next-btn" class="cp-btn-primary">NEXT MISSION →</button>
+      <button id="cpr-menu-btn" class="cp-btn-secondary">← CAMPAIGN MENU</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mission Failed -->
+<div id="campaign-failed-screen" style="display:none">
+  <div class="cp-header">
+    <div class="cp-header-title cp-title-fail">MISSION FAILED</div>
+  </div>
+  <div class="cp-body cp-body-center">
+    <div class="cpf-badge">⚠</div>
+    <div class="cpf-label">ALL SUBMARINES LOST</div>
+    <div id="cpf-mission-name" class="cpf-mission-name">THE GAP</div>
+    <div class="cpf-text">The enemy has the advantage. Regroup and try again, Commander.</div>
+    <div class="cpr-actions">
+      <button id="cpf-retry-btn" class="cp-btn-primary">↺ RETRY MISSION</button>
+      <button id="cpf-menu-btn" class="cp-btn-secondary">← CAMPAIGN MENU</button>
+    </div>
+  </div>
+</div>
+
+<!-- Campaign Victory (3 slides) -->
+<div id="campaign-victory-screen" style="display:none">
+  <div class="cpv-slide-num-wrap">
+    <span id="cpv-slide-num">1 / 3</span>
+  </div>
+  <div class="cpv-body">
+    <img id="cpv-img" class="cpv-img" src="/Images/Sub_Surface.png" alt="">
+    <div class="cpv-content">
+      <div id="cpv-title" class="cpv-title">MISSION ACCOMPLISHED</div>
+      <div id="cpv-text" class="cpv-text"></div>
+    </div>
+  </div>
+  <div class="cpv-nav">
+    <button id="cpv-prev" class="cp-btn-secondary" disabled>← PREV</button>
+    <button id="cpv-next" class="cp-btn-primary">NEXT →</button>
+    <button id="cpv-finish" class="cp-btn-primary" style="display:none">⊙ RETURN TO HOME</button>
   </div>
 </div>
 

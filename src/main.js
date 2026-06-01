@@ -1,4 +1,5 @@
 import './game.js';
+import './campaign.js';
 import { initMultiplayer, setUsername, showCreateGame, createGame, toggleReady, launchSession, leaveSession, renderLeaderboard } from './multiplayer.js';
 
 // ── MULTIPLAYER ──

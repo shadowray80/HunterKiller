@@ -309,6 +309,7 @@ const state = {
   animFrame: 0,
   moveTimer: 0,
   enemyMoveTimer: 0,
+  extraEnemies: [],
 };
 
 // ── WAYPOINT MISSION ──
@@ -1089,6 +1090,18 @@ function drawSonar() {
       `<span style="color:#0097a7">BEARING — &nbsp;RANGE — &nbsp;DEPTH —</span>`;
   }
 
+  // ── EXTRA ENEMY BLIPS on minimap ──
+  state.extraEnemies.forEach(function(xe) {
+    if (!xe.alive) return;
+    var ep2 = mm(xe.x, xe.z);
+    sc.beginPath(); sc.arc(ep2.x, ep2.y, 4, 0, Math.PI*2);
+    sc.fillStyle='rgba(255,100,50,0.9)';
+    sc.shadowBlur=8; sc.shadowColor='#ff6432'; sc.fill(); sc.shadowBlur=0;
+    var depFrac2 = xe.y / GRID.H;
+    sc.fillStyle='rgba(255,100,50,0.6)';
+    sc.fillRect(ep2.x+6, ep2.y-6, 3, 12*(1-depFrac2));
+  });
+
   // ── ENEMY PING RINGS on minimap ──
   state.enemyPings.forEach(p => {
     const ep = mm(p.wx, p.wz);
@@ -1436,6 +1449,11 @@ function render() {
     }
     drawSub(state.enemy, '#ff4444', 'BRAVO', !showEnemySub, effectiveAlpha);
   }
+
+  // Draw extra campaign enemies
+  state.extraEnemies.forEach(function(xe) {
+    if (xe.alive) drawSub(xe, '#ff6432', xe.name, false, 1.0);
+  });
 
   // Draw whales
   if (state.whales) state.whales.forEach(function(w){ drawWhale(w); });
@@ -1914,6 +1932,7 @@ function update() {
 
   // ── ENEMY AI — state machine (movement + firing) ──
   if (state.enemy.alive) updateEnemyAI();
+  if (state.extraEnemies.length) updateExtraEnemiesAI();
 
   // Update cooldowns
   // Update fire button every frame using real time
@@ -2137,6 +2156,38 @@ function update() {
         addEvent(`⊛ BRAVO HIT ${state.enemy.hits}/3 — LEAKING BUBBLES (+10)`, false);
       }
       return false;
+    }
+
+    // Hit extra campaign enemies (CHARLIE, DELTA, ECHO)
+    if (travelDist > 3.5 && !t.isEnemy && state.extraEnemies.length) {
+      for (var _xi = 0; _xi < state.extraEnemies.length; _xi++) {
+        var _xe = state.extraEnemies[_xi];
+        if (!_xe.alive) continue;
+        var _xdx = t.x - _xe.x, _xdy = t.y - _xe.y, _xdz = t.z - _xe.z;
+        var _xcos = Math.cos(_xe.heading), _xsin = Math.sin(_xe.heading);
+        var _xlong = _xdx * _xsin + _xdz * _xcos;
+        var _xlat  = _xdx * _xcos - _xdz * _xsin;
+        if (Math.abs(_xlong) < 1.85 && Math.abs(_xlat) < 0.8 && Math.abs(_xdy) < 0.9) {
+          _xe.hits++;
+          state.torpsHit++;
+          addScore(10);
+          spawnBubblePuff(t.x, t.y, t.z);
+          _xe.bubbling = true; _xe.bubbleTimer = 0;
+          if (_xe.hits >= 3) {
+            _xe.alive = false; _xe.hits = 0;
+            state.kills++; addScore(30);
+            playExplosion(true);
+            spawnExplosion(t.x, t.y, t.z, true);
+            document.getElementById('kill-count').textContent = state.kills;
+            addEvent('⊛ DIRECT HIT — ' + _xe.name + ' DESTROYED (+30)', false);
+            if (window._onEnemySubKill) window._onEnemySubKill();
+          } else {
+            playExplosion(false);
+            addEvent('⊛ ' + _xe.name + ' HIT ' + _xe.hits + '/3 — LEAKING BUBBLES (+10)', false);
+          }
+          return false;
+        }
+      }
     }
 
     // Hit whale
@@ -6698,6 +6749,9 @@ function launchGame(planGrid) {
   state.wpMission.triggerIn = Infinity;
   setTimeout(spawnSquid, 8000);
 
+  // Reset extra enemies
+  state.extraEnemies = [];
+
   // Reset lives and game-over flag
   _gameOver = false;
   state.lives = window._campaignLives || 3;
@@ -6773,6 +6827,74 @@ window._endMissionClean = function() {
   document.getElementById('sonar-wrap').style.display = 'none';
   document.getElementById('canvas').style.display = 'none';
 };
+
+// Spawn N extra enemy subs for campaign multi-enemy missions
+window._spawnExtraEnemies = function(n) {
+  var names = ['CHARLIE', 'DELTA', 'ECHO'];
+  for (var i = 0; i < n; i++) {
+    var pos = getEnemySpawn();
+    state.extraEnemies.push({
+      x: pos.x, y: GRID.H * 0.4, z: pos.z,
+      heading: Math.random() * Math.PI * 2,
+      alive: true, hits: 0,
+      bubbling: false, bubbleTimer: 0,
+      aiTimer: Math.floor(Math.random() * 180),
+      lastFired: Date.now() + 8000 + i * 3000,
+      name: names[i] || ('ECHO' + i),
+    });
+  }
+};
+
+// Simplified AI for extra campaign enemies
+function updateExtraEnemiesAI() {
+  state.extraEnemies.forEach(function(en) {
+    if (!en.alive) return;
+    var dx = state.player.x - en.x, dz = state.player.z - en.z;
+    var dist = Math.sqrt(dx*dx + dz*dz);
+
+    // Steer toward player
+    var tgt = Math.atan2(dx, dz);
+    var hd = tgt - en.heading;
+    while (hd > Math.PI) hd -= Math.PI * 2;
+    while (hd < -Math.PI) hd += Math.PI * 2;
+    en.heading += hd * 0.025;
+
+    // Move
+    var spd = 0.19;
+    var nx = en.x + Math.sin(en.heading) * spd;
+    var nz = en.z + Math.cos(en.heading) * spd;
+    var gnx = Math.round(nx), gnz = Math.round(nz);
+    if (gnx >= 1 && gnx < GRID.W-1 && gnz >= 1 && gnz < GRID.D-1 &&
+        !(FLOOR_PLAN[gnz] && FLOOR_PLAN[gnz][gnx])) {
+      en.x = nx; en.z = nz;
+    } else {
+      en.heading += Math.PI * 0.45 + Math.random() * 0.3;
+    }
+
+    // Keep in mid-depth
+    en.y += (GRID.H * 0.4 - en.y) * 0.01;
+    en.y = Math.max(1, Math.min(GRID.H - 1, en.y));
+
+    // Occasional torpedo fire at player when in range
+    if (dist < 25 && Date.now() > en.lastFired) {
+      en.lastFired = Date.now() + 7000 + Math.random() * 5000;
+      var th = Math.atan2(dx, dz);
+      state.torpedoes.push({
+        x: en.x, y: en.y, z: en.z,
+        vx: Math.sin(th) * 0.38, vy: 0, vz: Math.cos(th) * 0.38,
+        heading: th, tilt: 0, speed: 0.38, dist: 0,
+        isEnemy: true, isHoming: false, isAcoustic: false, age: 0,
+      });
+      addEvent('⚠ ' + en.name + ' FIRED TORPEDO', true);
+    }
+
+    // Bubble animation
+    if (en.bubbling) {
+      en.bubbleTimer++;
+      if (en.bubbleTimer > 60) { en.bubbling = false; en.bubbleTimer = 0; }
+    }
+  });
+}
 window.spawnExplosion = spawnExplosion;
 window.playExplosion = playExplosion;
 

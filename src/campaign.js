@@ -290,11 +290,12 @@ function launchMission(missionIndex, difficulty) {
   if (!bg) { console.error('[campaign] No battleground found:', mission.mapId); return; }
 
   _missionKillCount = 0;
+  var _killTarget = mission.enemyCount[difficulty] || 1;
   window._campaignLives = diff.lives;
 
   window._onEnemySubKill = function () {
     _missionKillCount++;
-    if (_missionKillCount >= mission.killTarget) {
+    if (_missionKillCount >= _killTarget) {
       window._onEnemySubKill = null;
       setTimeout(function () { completeMission(missionIndex, difficulty); }, 2000);
     }
@@ -309,16 +310,20 @@ function launchMission(missionIndex, difficulty) {
   hideAllCampaignScreens();
   document.getElementById('intro-screen').style.display = 'none';
 
+  var extraCount = (mission.enemyCount[difficulty] || 1) - 1;
+
   if (mission.isHeightfield) {
     window._isHeightfield = true;
     bg.loadAsync().then(function (mapGrid) {
       window._pendingGrid = mapGrid;
       window.launchGame(mapGrid);
+      if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
     });
   } else {
     window._isHeightfield = false;
     window._pendingGrid = null;
     window.launchGame(bg.makeGrid());
+    if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
   }
 }
 

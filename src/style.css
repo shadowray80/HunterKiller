@@ -2487,7 +2487,9 @@ pointer-events: none;
 /* ── MISSION BRIEFING OVERLAY (in-game, inside periscope-overlay) ── */
 #mission-briefing-overlay {
   position: absolute;
-  inset: 0;
+  top: calc(env(safe-area-inset-top) + 53px);
+  left: 0; right: 0;
+  bottom: 236px;
   z-index: 5;
   background: rgba(2,13,26,0.94);
   overflow-y: auto;

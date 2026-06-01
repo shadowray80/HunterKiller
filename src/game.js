@@ -3483,7 +3483,8 @@ function updateEnemyAI() {
   var dist2d = Math.sqrt((en.x-state.player.x)*(en.x-state.player.x) + (en.z-state.player.z)*(en.z-state.player.z));
   var los = hasLineOfSight(ex, ez, px, pz);
   var silentBlind = state.silentRunning && !state.enemyKnowsPlayer;
-  var canFire = state.battleStations && (Date.now() - state.enemyLastFired >= TORP_CD_MS) && !silentBlind;
+  var canFire = (state.battleStations || window._campaignMode) &&
+                (Date.now() - state.enemyLastFired >= TORP_CD_MS) && !silentBlind;
 
   // Update trail
   _enemyMoveTimer++;
@@ -6876,14 +6877,19 @@ function updateExtraEnemiesAI() {
     en.y = Math.max(1, Math.min(GRID.H - 1, en.y));
 
     // Occasional torpedo fire at player when in range
-    if (dist < 25 && Date.now() > en.lastFired) {
-      en.lastFired = Date.now() + 7000 + Math.random() * 5000;
-      var th = Math.atan2(dx, dz);
+    if (dist < 30 && Date.now() > en.lastFired) {
+      en.lastFired = Date.now() + 6000 + Math.random() * 5000;
+      var elen = dist || 1;
+      var off = 2.0;
+      var toxOx = en.x + (dx / elen) * off;
+      var toyOy = en.y;
+      var tozOz = en.z + (dz / elen) * off;
       state.torpedoes.push({
-        x: en.x, y: en.y, z: en.z,
-        vx: Math.sin(th) * 0.38, vy: 0, vz: Math.cos(th) * 0.38,
-        heading: th, tilt: 0, speed: 0.38, dist: 0,
-        isEnemy: true, isHoming: false, isAcoustic: false, age: 0,
+        ox: toxOx, oy: toyOy, oz: tozOz,
+        x: toxOx, y: toyOy, z: tozOz,
+        dx: dx / elen, dy: 0, dz: dz / elen,
+        speed: 0.15, progress: 0,
+        isEnemy: true, isHoming: false, isAcoustic: false,
       });
       addEvent('⚠ ' + en.name + ' FIRED TORPEDO', true);
     }

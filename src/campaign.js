@@ -292,6 +292,7 @@ function launchMission(missionIndex, difficulty) {
   _missionKillCount = 0;
   var _killTarget = mission.enemyCount[difficulty] || 1;
   window._campaignLives = diff.lives;
+  window._campaignMode = true;
 
   window._onEnemySubKill = function () {
     _missionKillCount++;
@@ -304,6 +305,7 @@ function launchMission(missionIndex, difficulty) {
   window._onCampaignGameOver = function () {
     window._onCampaignGameOver = null;
     window._onEnemySubKill = null;
+    window._campaignMode = false;
     setTimeout(function () { showMissionFailed(missionIndex, difficulty); }, 100);
   };
 
@@ -329,6 +331,7 @@ function launchMission(missionIndex, difficulty) {
 
 // ── MISSION COMPLETE ──
 function completeMission(missionIndex, difficulty) {
+  window._campaignMode = false;
   if (window._endMissionClean) window._endMissionClean();
 
   _save = loadSave();

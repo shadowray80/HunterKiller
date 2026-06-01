@@ -2494,6 +2494,8 @@ pointer-events: none;
   -webkit-overflow-scrolling: touch;
   pointer-events: all;
   display: none;
+  padding-top: calc(env(safe-area-inset-top) + 52px);
+  padding-bottom: 236px;
 }
 #mbo-img {
   width: 100%;

@@ -2500,5 +2500,5 @@ pointer-events: none;
   display: block;
 }
 /* Controls float above the briefing image */
-#peri-combat-btns { position: relative; z-index: 10; }
-#peri-actions     { position: relative; z-index: 10; }
+#peri-combat-btns { z-index: 10; }
+#peri-actions     { z-index: 10; }

@@ -13,7 +13,7 @@ const MISSIONS = [
     subtitle: 'Mission 1 — Stealth Transit',
     mapId: 'thegap',
     isHeightfield: true,
-    briefingImg: '/maps/TheGap_Waypoints.png',
+    briefingImg: '/Images/TheGap_MissionBriefing.png',
     briefing:
       'CLASSIFICATION: TOP SECRET\n' +
       'GIUK GAP — NORTH ATLANTIC OCEAN\n\n' +

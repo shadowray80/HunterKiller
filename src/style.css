@@ -2273,6 +2273,8 @@ pointer-events: none;
 .cpb-body {
   padding: 0;
   gap: 0;
+  overflow-y: auto;
+  flex: 1;
 }
 .cpb-img {
   width: 100%;
@@ -2284,9 +2286,8 @@ pointer-events: none;
   flex-shrink: 0;
 }
 .cpb-intel {
-  flex: 1;
   padding: 14px 16px;
-  overflow-y: auto;
+  flex-shrink: 0;
 }
 .cpb-codename {
   font-size: 12px;
@@ -2314,6 +2315,9 @@ pointer-events: none;
   flex-direction: column;
   gap: 10px;
   flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  background: var(--navy);
 }
 .cpb-badges {
   display: flex;

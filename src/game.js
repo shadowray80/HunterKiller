@@ -6895,7 +6895,17 @@ window._applyHullDamage = function(dmg, msg) { applyHullDamage(dmg, msg); };
 window._setPlayerSpawn = function(x, z) {
   state.player.x = x;
   state.player.z = z;
-  state.player.y = GRID.H * 0.45;
+  if (window._isHeightfield && window._canyonHeightGrid) {
+    var gz = Math.min(Math.floor(z), GRID.D - 1);
+    var gx = Math.min(Math.floor(x), GRID.W - 1);
+    var raw = (window._canyonHeightGrid[gz] && window._canyonHeightGrid[gz][gx] !== undefined)
+      ? window._canyonHeightGrid[gz][gx] : 0;
+    var _ts = window._hfTerrainScale || GRID.H;
+    var _floor = (raw / 255) * _ts;
+    state.player.y = Math.min(Math.max(_floor + 2.5, GRID.H * 0.35), GRID.H - 1);
+  } else {
+    state.player.y = 3;
+  }
   if (typeof centreOnPlayer === 'function') centreOnPlayer();
 };
 

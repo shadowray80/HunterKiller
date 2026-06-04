@@ -226,18 +226,37 @@ function findClearCell(preferX, preferZ) {
   return {x:2, z:2};
 }
 
+// Returns {x, z, y} for a position above terrain — spirals outward from (prefX, prefZ)
+function findSafeHfSpawn(prefX, prefZ) {
+  const _ts = window._hfTerrainScale || GRID.H;
+  const hg = window._canyonHeightGrid;
+  function floorAt(cx, cz) {
+    const raw = (hg[cz] && hg[cz][cx] !== undefined) ? hg[cz][cx] : 0;
+    return (raw / 255) * _ts;
+  }
+  let sx = Math.round(prefX), sz = Math.round(prefZ), found = false;
+  const maxR = Math.max(GRID.W, GRID.D);
+  for (let r = 0; r <= maxR && !found; r++) {
+    for (let dz = -r; dz <= r && !found; dz++) {
+      for (let dx = -r; dx <= r && !found; dx++) {
+        if (r > 0 && Math.abs(dx) !== r && Math.abs(dz) !== r) continue;
+        const cx = Math.round(prefX) + dx, cz = Math.round(prefZ) + dz;
+        if (cx < 1 || cx >= GRID.W - 1 || cz < 1 || cz >= GRID.D - 1) continue;
+        if (floorAt(cx, cz) < GRID.H - 2.5) { sx = cx; sz = cz; found = true; }
+      }
+    }
+  }
+  const fl = floorAt(sx, sz);
+  return { x: sx, z: sz, y: Math.min(fl + 2.5, GRID.H - 1) };
+}
+
 function spawnPlayer() {
-  const sp = findClearCell(Math.floor(GRID.W/2), Math.floor(GRID.D/2));
-  state.player.x = sp.x;
-  state.player.z = sp.z;
   if (window._isHeightfield && window._canyonHeightGrid) {
-    const gz = Math.min(Math.floor(sp.z), GRID.D-1), gx = Math.min(Math.floor(sp.x), GRID.W-1);
-    const raw = (window._canyonHeightGrid[gz] && window._canyonHeightGrid[gz][gx] !== undefined) ? window._canyonHeightGrid[gz][gx] : 0;
-    const _pts = window._hfTerrainScale || GRID.H;
-    const _pfloor = (raw/255)*_pts;
-    state.player.y = Math.min(Math.max(_pfloor + 2.5, GRID.H * 0.35), GRID.H - 1);
+    const sp = findSafeHfSpawn(Math.floor(GRID.W / 2), Math.floor(GRID.D / 2));
+    state.player.x = sp.x; state.player.z = sp.z; state.player.y = sp.y;
   } else {
-    state.player.y = 3;
+    const sp = findClearCell(Math.floor(GRID.W/2), Math.floor(GRID.D/2));
+    state.player.x = sp.x; state.player.z = sp.z; state.player.y = 3;
   }
 }
 
@@ -6893,18 +6912,11 @@ function launchGame(planGrid) {
 window.launchGame = launchGame; // expose for multiplayer
 window._applyHullDamage = function(dmg, msg) { applyHullDamage(dmg, msg); };
 window._setPlayerSpawn = function(x, z) {
-  state.player.x = x;
-  state.player.z = z;
   if (window._isHeightfield && window._canyonHeightGrid) {
-    var gz = Math.min(Math.floor(z), GRID.D - 1);
-    var gx = Math.min(Math.floor(x), GRID.W - 1);
-    var raw = (window._canyonHeightGrid[gz] && window._canyonHeightGrid[gz][gx] !== undefined)
-      ? window._canyonHeightGrid[gz][gx] : 0;
-    var _ts = window._hfTerrainScale || GRID.H;
-    var _floor = (raw / 255) * _ts;
-    state.player.y = Math.min(Math.max(_floor + 2.5, GRID.H * 0.35), GRID.H - 1);
+    var sp = findSafeHfSpawn(x, z);
+    state.player.x = sp.x; state.player.z = sp.z; state.player.y = sp.y;
   } else {
-    state.player.y = 3;
+    state.player.x = x; state.player.z = z; state.player.y = 3;
   }
   if (typeof centreOnPlayer === 'function') centreOnPlayer();
 };

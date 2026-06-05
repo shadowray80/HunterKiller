@@ -10039,14 +10039,31 @@ document.getElementById('upload-back-btn').addEventListener('click', function() 
 });
 
 var _guidesVisible = false;
+var _depthGuideTimer = null;
 document.getElementById('peri-btn-controls').addEventListener('click', function() {
   _guidesVisible = !_guidesVisible;
-  var op = _guidesVisible ? '1' : '0';
-  ['control-guide-img', 'peri-guide-img', 'depth-guide-img'].forEach(function(id) {
+  var btn = this;
+  function setGuideOpacity(id, op) {
     var el = document.getElementById(id);
     if (el) { el.style.transition = 'opacity 0.5s ease-in-out'; el.style.opacity = op; }
-  });
-  this.classList.toggle('active', _guidesVisible);
+  }
+  if (_guidesVisible) {
+    // Show movement + periscope guides immediately
+    setGuideOpacity('control-guide-img', '1');
+    setGuideOpacity('peri-guide-img', '1');
+    // Depth guide follows after 5 seconds, matching the auto-show sequence
+    if (_depthGuideTimer) clearTimeout(_depthGuideTimer);
+    _depthGuideTimer = setTimeout(function() {
+      if (_guidesVisible) setGuideOpacity('depth-guide-img', '1');
+    }, 5000);
+  } else {
+    // Hide all immediately
+    if (_depthGuideTimer) { clearTimeout(_depthGuideTimer); _depthGuideTimer = null; }
+    setGuideOpacity('control-guide-img', '0');
+    setGuideOpacity('peri-guide-img', '0');
+    setGuideOpacity('depth-guide-img', '0');
+  }
+  btn.classList.toggle('active', _guidesVisible);
 });
 
 document.getElementById('peri-btn-abort').addEventListener('click', function() {

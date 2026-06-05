@@ -39,15 +39,18 @@ const MISSIONS = [
     // Navigate: mission complete when reaching exit beacon, not by kill count
     killTarget: 0,
     enemyCount: { cadet: 1, captain: 1, commander: 2 },
-    // Waypoints shown on minimap (checkpoints only — spawn point A not shown)
+    // Waypoints shown on minimap (A = spawn marker, B/C/D = required checkpoints)
     waypoints: [
-      { id: 'C', x: 38, z: 52 },
-      { id: 'D', x: 82, z: 82 },
+      { id: 'A', x: 14, z: 16 },
+      { id: 'B', x: 35, z: 40 },
+      { id: 'C', x: 65, z: 68 },
+      { id: 'D', x: 95, z: 95 },
     ],
-    // Ordered checkpoints — must be cleared before exit beacon unlocks
+    // Ordered checkpoints B→C→D — must be cleared before exit beacon unlocks
     checkpoints: [
-      { id: 'C', x: 38, z: 52, radius: 8 },
-      { id: 'D', x: 82, z: 82, radius: 8 },
+      { id: 'B', x: 35, z: 40, radius: 8 },
+      { id: 'C', x: 65, z: 68, radius: 8 },
+      { id: 'D', x: 95, z: 95, radius: 8 },
     ],
     // Sonar buoys: _ox/_oz are home positions, x/z drift from them
     sonarBuoys: [
@@ -366,7 +369,7 @@ function launchMission(missionIndex, difficulty) {
   var objBar = document.getElementById('campaign-objective-bar');
   if (objBar) {
     objBar.textContent = isNavigate
-      ? '⊙ OBJECTIVE: NAVIGATE A → C → D → EXIT · CLEAR CHECKPOINTS IN ORDER · AVOID SONAR BUOYS'
+      ? '⊙ OBJECTIVE: NAVIGATE A → B → C → D → EXIT · CLEAR CHECKPOINTS IN ORDER · AVOID SONAR BUOYS'
       : '⊙ OBJECTIVE: DESTROY ALL ENEMY CONTACTS';
     objBar.style.display = '';
   }

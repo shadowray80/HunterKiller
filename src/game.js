@@ -6737,7 +6737,7 @@ var BATTLEGROUNDS = [
     desc: 'Continental shelf — open water, sonar buoy fields, shelf drop-off',
     tag: 'CAMPAIGN',
     isHeightfield: true,
-    gridW: 128, gridD: 128, gridH: 20, gridTerrainScale: 12,
+    gridW: 128, gridD: 128, gridH: 30, gridTerrainScale: 20,
     _hGrid: null,
     makeGrid: function() {
       var R=128,C=128,z,x; var g=[];

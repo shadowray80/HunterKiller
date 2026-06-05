@@ -39,15 +39,18 @@ const MISSIONS = [
     // Navigate: mission complete when reaching exit beacon, not by kill count
     killTarget: 0,
     enemyCount: { cadet: 1, captain: 1, commander: 2 },
-    // Waypoints shown on minimap (A = spawn marker, B/C/D = required checkpoints)
+    // Spawn position (separate from waypoints so A can be a real checkpoint)
+    spawnPoint: { x: 14, z: 16 },
+    // Waypoints shown on minimap — all four are required checkpoints
     waypoints: [
-      { id: 'A', x: 14, z: 16 },
+      { id: 'A', x: 42, z: 18 },
       { id: 'B', x: 85, z: 22 },
       { id: 'C', x: 25, z: 88 },
       { id: 'D', x: 75, z: 75 },
     ],
-    // Ordered checkpoints B→C→D — must be cleared before exit beacon unlocks
+    // Ordered checkpoints A→B→C→D — must be cleared before exit beacon unlocks
     checkpoints: [
+      { id: 'A', x: 42, z: 18, radius: 8 },
       { id: 'B', x: 85, z: 22, radius: 8 },
       { id: 'C', x: 25, z: 88, radius: 8 },
       { id: 'D', x: 75, z: 75, radius: 8 },
@@ -369,7 +372,7 @@ function launchMission(missionIndex, difficulty) {
   var objBar = document.getElementById('campaign-objective-bar');
   if (objBar) {
     objBar.textContent = isNavigate
-      ? '⊙ OBJECTIVE: NAVIGATE A → B → C → D → EXIT · CLEAR CHECKPOINTS IN ORDER · AVOID SONAR BUOYS'
+      ? '⊙ OBJECTIVE: CLEAR CHECKPOINTS A → B → C → D → EXIT IN ORDER · AVOID SONAR BUOYS'
       : '⊙ OBJECTIVE: DESTROY ALL ENEMY CONTACTS';
     objBar.style.display = '';
   }
@@ -385,16 +388,16 @@ function launchMission(missionIndex, difficulty) {
       window._pendingGrid = mapGrid;
       window.launchGame(mapGrid);
       if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
-      var spawnWP = mission.waypoints && mission.waypoints.find(function(w) { return w.id === 'A'; });
-      if (spawnWP && window._setPlayerSpawn) window._setPlayerSpawn(spawnWP.x, spawnWP.z);
+      var spawnRef = mission.spawnPoint || (mission.waypoints && mission.waypoints.find(function(w) { return w.id === 'A'; }));
+      if (spawnRef && window._setPlayerSpawn) window._setPlayerSpawn(spawnRef.x, spawnRef.z);
     });
   } else {
     window._isHeightfield = false;
     window._pendingGrid = null;
     window.launchGame(bg.makeGrid());
     if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
-    var spawnWP = mission.waypoints && mission.waypoints.find(function(w) { return w.id === 'A'; });
-    if (spawnWP && window._setPlayerSpawn) window._setPlayerSpawn(spawnWP.x, spawnWP.z);
+    var spawnRef = mission.spawnPoint || (mission.waypoints && mission.waypoints.find(function(w) { return w.id === 'A'; }));
+    if (spawnRef && window._setPlayerSpawn) window._setPlayerSpawn(spawnRef.x, spawnRef.z);
   }
 }
 

@@ -8423,7 +8423,47 @@ function initShips() {
 function drawDepthCharges() {
   if (!state.depthCharges || !state.depthCharges.length) return;
   state.depthCharges.forEach(function(dc) {
-    if (dc.exploded) return;
+
+    // ── SPHERICAL EXPLOSION RINGS ──
+    if (dc.exploding) {
+      var p = projectPeriscope(dc.x, dc.y, dc.z);
+      if (!p || p.depth > 100) return;
+      var t = dc.explAge / dc.explMaxAge;
+      var ss = Math.max(1, 28 / p.depth); // screen scale
+
+      // Three staggered shockwave rings
+      [
+        { delay: 0,    col: '255,220,80',  lw: 3.0 },
+        { delay: 0.14, col: '255,140,25',  lw: 2.2 },
+        { delay: 0.28, col: '200,70,10',   lw: 1.6 },
+      ].forEach(function(ring) {
+        var rt = Math.max(0, (t - ring.delay) / (1 - ring.delay));
+        if (rt <= 0 || rt >= 1) return;
+        var rEased = 1 - Math.pow(1 - rt, 2); // ease-out expansion
+        var screenR = rEased * dc.explMaxR * ss;
+        var alpha = (1 - rt) * 0.85;
+        ctx.save();
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, Math.max(1, screenR), 0, Math.PI*2);
+        ctx.strokeStyle = 'rgba('+ring.col+','+alpha+')';
+        ctx.lineWidth = ring.lw * (1 - rt*0.5) * Math.max(0.5, ss*0.35);
+        ctx.shadowBlur = 18*(1-rt); ctx.shadowColor='rgba(255,150,0,0.7)';
+        ctx.stroke(); ctx.shadowBlur=0; ctx.restore();
+      });
+
+      // Central white flash — first 25% of animation
+      if (t < 0.25) {
+        var ft = 1 - t/0.25;
+        var fr = 10 * ss * ft;
+        ctx.save();
+        var gr = ctx.createRadialGradient(p.sx,p.sy,0, p.sx,p.sy,fr);
+        gr.addColorStop(0,   'rgba(255,255,255,'+(ft*0.95)+')');
+        gr.addColorStop(0.4, 'rgba(255,220,100,'+(ft*0.7)+')');
+        gr.addColorStop(1,   'rgba(255,80,0,0)');
+        ctx.beginPath(); ctx.arc(p.sx,p.sy,fr,0,Math.PI*2);
+        ctx.fillStyle=gr; ctx.fill(); ctx.restore();
+      }
+      return;
+    }
 
     // ── TRAIL (dot trace as barrel descends) ──
     if (dc.trail) {
@@ -8432,10 +8472,8 @@ function drawDepthCharges() {
         if (!pp || pp.depth > 60) return;
         var a = (i / dc.trail.length) * 0.55;
         var r = Math.max(0.8, 2.5 - pp.depth * 0.04);
-        ctx.beginPath();
-        ctx.arc(pp.sx, pp.sy, r, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,160,40,' + a + ')';
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(pp.sx, pp.sy, r, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(255,160,40,' + a + ')'; ctx.fill();
       });
     }
 
@@ -8443,53 +8481,29 @@ function drawDepthCharges() {
     var p = projectPeriscope(dc.x, dc.y, dc.z);
     if (!p || p.depth > 60 || p.depth < 0.1) return;
 
-    var sc2 = Math.max(0.4, Math.min(2.5, 7 / p.depth));
-    var bw = 6 * sc2;   // barrel width
-    var bh = 9 * sc2;   // barrel height
-    var bx = p.sx, by = p.sy;
+    var sc2 = Math.max(0.4, Math.min(2.5, 7/p.depth));
+    var bw = 6*sc2, bh = 9*sc2;
 
-    ctx.save();
-    ctx.translate(bx, by);
+    ctx.save(); ctx.translate(p.sx, p.sy);
 
-    // Body — dark olive/brown
-    ctx.fillStyle = 'rgba(60,45,20,0.95)';
-    ctx.strokeStyle = '#cc8800';
-    ctx.lineWidth = 0.9;
-    ctx.beginPath();
-    ctx.roundRect(-bw * 0.5, -bh * 0.5, bw, bh, bw * 0.28);
-    ctx.fill();
-    ctx.stroke();
+    ctx.fillStyle = 'rgba(60,45,20,0.95)'; ctx.strokeStyle = '#cc8800'; ctx.lineWidth = 0.9;
+    ctx.beginPath(); ctx.roundRect(-bw*.5,-bh*.5,bw,bh,bw*.28); ctx.fill(); ctx.stroke();
 
-    // Metal bands (3 straps)
-    ctx.strokeStyle = 'rgba(220,150,30,0.85)';
-    ctx.lineWidth = Math.max(0.5, 0.9 * sc2);
-    [-bh * 0.3, 0, bh * 0.3].forEach(function(sy2) {
-      ctx.beginPath();
-      ctx.moveTo(-bw * 0.5, sy2);
-      ctx.lineTo( bw * 0.5, sy2);
-      ctx.stroke();
+    ctx.strokeStyle = 'rgba(220,150,30,0.85)'; ctx.lineWidth = Math.max(0.5,0.9*sc2);
+    [-bh*.3,0,bh*.3].forEach(function(sy2){
+      ctx.beginPath(); ctx.moveTo(-bw*.5,sy2); ctx.lineTo(bw*.5,sy2); ctx.stroke();
     });
 
-    // Detonator cap (top)
-    ctx.fillStyle = 'rgba(200,60,20,0.95)';
-    ctx.strokeStyle = '#ff4400';
-    ctx.lineWidth = 0.7;
-    ctx.beginPath();
-    ctx.ellipse(0, -bh * 0.5, bw * 0.3, bh * 0.12, 0, 0, Math.PI * 2);
-    ctx.fill(); ctx.stroke();
+    ctx.fillStyle='rgba(200,60,20,0.95)'; ctx.strokeStyle='#ff4400'; ctx.lineWidth=0.7;
+    ctx.beginPath(); ctx.ellipse(0,-bh*.5,bw*.3,bh*.12,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
 
-    // Glow when close to player depth
-    var depthDiff = Math.abs(dc.y - state.player.y);
-    if (depthDiff < 3) {
-      var g = 1 - depthDiff / 3;
-      ctx.shadowBlur = 12 * g;
-      ctx.shadowColor = '#ff4400';
-      ctx.strokeStyle = 'rgba(255,80,0,' + (g * 0.7) + ')';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.roundRect(-bw * 0.5, -bh * 0.5, bw, bh, bw * 0.28);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+    // Glow red as barrel approaches its set detonation depth
+    var setDiff = dc.y - (dc.detonateY || 0);
+    if (setDiff < 4 && setDiff >= 0) {
+      var g = 1 - setDiff/4;
+      ctx.shadowBlur = 15*g; ctx.shadowColor='#ff3300';
+      ctx.strokeStyle='rgba(255,60,0,'+(g*0.8)+')'; ctx.lineWidth=1.3;
+      ctx.beginPath(); ctx.roundRect(-bw*.5,-bh*.5,bw,bh,bw*.28); ctx.stroke(); ctx.shadowBlur=0;
     }
 
     ctx.restore();
@@ -8639,26 +8653,42 @@ function updateDepthCharges() {
       const dist2d = Math.sqrt(dx*dx + dz*dz);
       if (dist2d > 8 + det * 10) return; // low detection = must be almost on top
 
+      // Set detonation depth — accurate when locked on, random when searching
+      let detonateY, depthMsg;
+      if (det >= 0.75) {
+        detonateY = state.player.y + (Math.random()-0.5) * 2.0;
+        depthMsg = 'MATCHING YOUR DEPTH';
+      } else if (det >= 0.4) {
+        detonateY = state.player.y + (Math.random()-0.5) * GRID.H * 0.35 * (1-det);
+        depthMsg = 'ESTIMATING DEPTH';
+      } else {
+        detonateY = 1 + Math.random() * GRID.H * 0.65;
+        depthMsg = 'BLIND DROP';
+      }
+      detonateY = Math.max(0.5, Math.min(GRID.H * 0.9, detonateY));
+
       // Drop depth charge — falls from surface down
       state.depthCharges.push({
         x: aimX + (Math.random()-0.5) * dcScatter * 2,
         y: GRID.H,
         z: aimZ + (Math.random()-0.5) * dcScatter * 2,
-        vy: 0,
-        armed: false,
-        exploded: false,
-        label: ship.label,
-        trail: []
+        vy: 0, armed: false, exploding: false,
+        detonateY: detonateY,
+        label: ship.label, trail: []
       });
       const detWord = det > 0.75 ? 'LOCKED ON' : det > 0.4 ? 'TRACKING' : 'SEARCHING';
-      addEvent(`⚠ DEPTH CHARGES! — ${ship.label} (${detWord})`, true);
+      addEvent(`⚠ DEPTH CHARGES! — ${ship.label} (${detWord} — ${depthMsg})`, true);
       setTimeout(()=>addEvent('⚠ BRACE FOR IMPACT', true), 800);
     });
   }
 
   // Update depth charges
   state.depthCharges = state.depthCharges.filter(dc => {
-    if (dc.exploded) return false;
+    // Advance explosion animation — keep alive until done
+    if (dc.exploding) {
+      dc.explAge = (dc.explAge || 0) + 1;
+      return dc.explAge <= dc.explMaxAge;
+    }
 
     // Fall toward seabed (slow, weighted-barrel descent ~6-8 seconds)
     dc.vy = Math.min(0.035, dc.vy + 0.001);
@@ -8670,23 +8700,32 @@ function updateDepthCharges() {
     dc.trail.push({ x: dc.x, y: dc.y, z: dc.z });
     if (dc.trail.length > 50) dc.trail.shift();
 
-    // Explode at player depth or seabed
-    const dy = Math.abs(dc.y - state.player.y);
-    const dx = Math.abs(dc.x - state.player.x);
-    const dz = Math.abs(dc.z - state.player.z);
+    // Detonate at set depth (or seabed fallback)
+    if (dc.armed && (dc.y <= dc.detonateY || dc.y <= 0.5)) {
+      const dxe = dc.x - state.player.x;
+      const dye = dc.y - state.player.y;
+      const dze = dc.z - state.player.z;
+      const dist3 = Math.sqrt(dxe*dxe + dye*dye + dze*dze);
+      const KILL_R = 8;
 
-    if (dc.armed && (dc.y <= 0.5 || (dx < 3 && dy < 2 && dz < 3))) {
-      dc.exploded = true;
-      const dist3 = Math.sqrt(dx*dx+dy*dy+dz*dz);
+      dc.exploding = true;
+      dc.explAge = 0;
+      dc.explMaxAge = 85;
+      dc.explMaxR = KILL_R;
+
       playDepthCharge(dist3);
       spawnExplosion(dc.x, dc.y, dc.z, false);
-      if (dist3 < 4) {
-        const dmg = dist3 < 1 ? 20 : dist3 < 2 ? 10 : 5;
-        applyHullDamage(dmg, dmg >= 20 ? '⚠ DEPTH CHARGE — DIRECT' : dmg >= 10 ? '⚠ DEPTH CHARGE — CLOSE' : '▸ DEPTH CHARGE — NEAR MISS');
-      } else if (dist3 < 8) {
+
+      if (dist3 < KILL_R) {
+        const frac = 1 - dist3/KILL_R;
+        const dmg = Math.round(35 * frac * frac);
+        if (dmg >= 20) applyHullDamage(dmg, '⚠ DEPTH CHARGE — DIRECT HIT');
+        else if (dmg >= 8) applyHullDamage(dmg, '⚠ DEPTH CHARGE — CLOSE');
+        else if (dmg >= 1) applyHullDamage(dmg, '▸ DEPTH CHARGE — NEAR MISS');
+      } else if (dist3 < KILL_R * 1.8) {
         addEvent('▸ DEPTH CHARGE — CLOSE MISS', false);
       }
-      return false;
+      return true; // keep alive for animation
     }
     return dc.y > 0;
   });

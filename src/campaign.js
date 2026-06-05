@@ -42,15 +42,15 @@ const MISSIONS = [
     // Waypoints shown on minimap (A = spawn marker, B/C/D = required checkpoints)
     waypoints: [
       { id: 'A', x: 14, z: 16 },
-      { id: 'B', x: 35, z: 40 },
-      { id: 'C', x: 65, z: 68 },
-      { id: 'D', x: 95, z: 95 },
+      { id: 'B', x: 85, z: 22 },
+      { id: 'C', x: 25, z: 88 },
+      { id: 'D', x: 75, z: 75 },
     ],
     // Ordered checkpoints B→C→D — must be cleared before exit beacon unlocks
     checkpoints: [
-      { id: 'B', x: 35, z: 40, radius: 8 },
-      { id: 'C', x: 65, z: 68, radius: 8 },
-      { id: 'D', x: 95, z: 95, radius: 8 },
+      { id: 'B', x: 85, z: 22, radius: 8 },
+      { id: 'C', x: 25, z: 88, radius: 8 },
+      { id: 'D', x: 75, z: 75, radius: 8 },
     ],
     // Sonar buoys: _ox/_oz are home positions, x/z drift from them
     sonarBuoys: [

@@ -6737,7 +6737,7 @@ var BATTLEGROUNDS = [
     desc: 'Continental shelf — open water, sonar buoy fields, shelf drop-off',
     tag: 'CAMPAIGN',
     isHeightfield: true,
-    gridW: 128, gridD: 128, gridH: 20,
+    gridW: 128, gridD: 128, gridH: 20, gridTerrainScale: 12,
     _hGrid: null,
     makeGrid: function() {
       var R=128,C=128,z,x; var g=[];
@@ -6761,6 +6761,7 @@ var BATTLEGROUNDS = [
           hg = _smoothHg(hg, GW, GD, 1);
           self._hGrid=hg; window._canyonHeightGrid=hg;
           window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;
+          window._hfTerrainScale=self.gridTerrainScale;
           resolve(g);
         }
         var img = new Image();

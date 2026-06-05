@@ -39,9 +39,8 @@ const MISSIONS = [
     // Navigate: mission complete when reaching exit beacon, not by kill count
     killTarget: 0,
     enemyCount: { cadet: 1, captain: 1, commander: 2 },
-    // Waypoints shown on minimap (A = spawn)
+    // Waypoints shown on minimap (checkpoints only — spawn point A not shown)
     waypoints: [
-      { id: 'A', x: 14, z: 16 },
       { id: 'C', x: 38, z: 52 },
       { id: 'D', x: 82, z: 82 },
     ],

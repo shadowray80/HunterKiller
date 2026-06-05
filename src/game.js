@@ -6944,11 +6944,12 @@ function launchGame(planGrid) {
       setTimeout(() => { _cg.style.opacity = '0'; }, 4800);
     }, delayMs);
   }
-  // Sub control + periscope guide: fade in at 400ms
-  _showGuide('control-guide-img', 400);
-  _showGuide('peri-guide-img', 400);
-  // Depth guide: follows after sub control is gone (~400 + 4800 + 1000 fade = 6200ms)
-  _showGuide('depth-guide-img', 6400);
+  // Auto-show control guides in free play only — not in campaign or multiplayer
+  if (!window._campaignMode && !window._mpSendPos) {
+    _showGuide('control-guide-img', 400);
+    _showGuide('peri-guide-img', 400);
+    _showGuide('depth-guide-img', 6400);
+  }
 
   loop();
 }
@@ -10035,6 +10036,17 @@ document.getElementById('bg-back-btn').addEventListener('click', function() {
 document.getElementById('upload-back-btn').addEventListener('click', function() {
   document.getElementById('upload-screen').style.display = 'none';
   document.getElementById('intro-screen').style.display = 'flex';
+});
+
+var _guidesVisible = false;
+document.getElementById('peri-btn-controls').addEventListener('click', function() {
+  _guidesVisible = !_guidesVisible;
+  var op = _guidesVisible ? '1' : '0';
+  ['control-guide-img', 'peri-guide-img', 'depth-guide-img'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) { el.style.transition = 'opacity 0.5s ease-in-out'; el.style.opacity = op; }
+  });
+  this.classList.toggle('active', _guidesVisible);
 });
 
 document.getElementById('peri-btn-abort').addEventListener('click', function() {

@@ -1148,11 +1148,20 @@ function drawSonar() {
 
   // ── CAMPAIGN: WAYPOINTS A-D on minimap ──
   if (window._campaignWaypoints) {
+    var _cpMap = {};
+    if (window._campaignCheckpoints) {
+      window._campaignCheckpoints.forEach(function(cp) { _cpMap[cp.id] = cp; });
+    }
     window._campaignWaypoints.forEach(function(wp) {
+      var cp = _cpMap[wp.id];
+      var isCollected = cp && cp.collected;
+      var isNextCp = cp && !cp.collected && window._campaignCheckpoints &&
+        window._campaignCheckpoints.find(function(c) { return !c.collected; }) === cp;
+      var col = isCollected ? 'rgba(255,136,0,0.7)' : isNextCp ? 'rgba(0,255,150,0.85)' : 'rgba(0,200,255,0.55)';
       var wpp = mm(wp.x, wp.z);
       sc.beginPath(); sc.arc(wpp.x, wpp.y, 5, 0, Math.PI*2);
-      sc.strokeStyle = 'rgba(0,200,255,0.55)'; sc.lineWidth = 1; sc.stroke();
-      sc.font = '7px Share Tech Mono'; sc.fillStyle = '#00e5ff';
+      sc.strokeStyle = col; sc.lineWidth = 1; sc.stroke();
+      sc.font = '7px Share Tech Mono'; sc.fillStyle = col;
       sc.textAlign = 'center'; sc.fillText(wp.id, wpp.x, wpp.y + 2.5);
     });
   }
@@ -2003,6 +2012,7 @@ function update() {
   if (state.enemy.alive) updateEnemyAI();
   if (state.extraEnemies.length) updateExtraEnemiesAI();
   if (window._campaignSonarBuoys) updateCampaignBuoys();
+  if (window._campaignCheckpoints) checkCampaignCheckpoints();
   if (window._campaignExitBeacon) checkExitBeacon();
 
   // Update cooldowns
@@ -5914,25 +5924,52 @@ function drawWpMarker(c, sx, sy, num, color, rotAngle, scale) {
 
 function drawWaypoints() {
   const m = state.wpMission;
-  if (!m.active && m.result === null) return;
-  m.waypoints.forEach(wp => {
-    wp.rotAngle = (wp.rotAngle||0) + (wp.collected ? 0.01 : 0.03);
-    const color = wp.collected ? '#ff8800' : '#00ff66';
-    const isNext = !wp.collected && wp.num === m.nextRequired;
-    const pulse = isNext ? (0.6 + 0.4*Math.sin(state.animFrame*0.12)) : 1;
-    ctx.globalAlpha = 0.9 * pulse;
-    if (state.viewMode === 'command' || state.viewMode === 'surfaced') {
-      const sp = project(wp.x, wp.y, wp.z);
-      drawWpMarker(ctx, sp.sx, sp.sy, wp.num, color, wp.rotAngle, 1);
-    } else if (state.viewMode === 'periscope' || state.viewMode === 'surface') {
-      const sp = projectPeriscope(wp.x, wp.y, wp.z);
-      if (sp && sp.depth > 0.5 && sp.depth < 25) {
-        const scale = Math.max(0.4, Math.min(2, 7/sp.depth));
-        drawWpMarker(ctx, sp.sx, sp.sy, wp.num, color, wp.rotAngle, scale);
+  if (m.active || m.result !== null) {
+    m.waypoints.forEach(wp => {
+      wp.rotAngle = (wp.rotAngle||0) + (wp.collected ? 0.01 : 0.03);
+      const color = wp.collected ? '#ff8800' : '#00ff66';
+      const isNext = !wp.collected && wp.num === m.nextRequired;
+      const pulse = isNext ? (0.6 + 0.4*Math.sin(state.animFrame*0.12)) : 1;
+      ctx.globalAlpha = 0.9 * pulse;
+      if (state.viewMode === 'command' || state.viewMode === 'surfaced') {
+        const sp = project(wp.x, wp.y, wp.z);
+        drawWpMarker(ctx, sp.sx, sp.sy, wp.num, color, wp.rotAngle, 1);
+      } else if (state.viewMode === 'periscope' || state.viewMode === 'surface') {
+        const sp = projectPeriscope(wp.x, wp.y, wp.z);
+        if (sp && sp.depth > 0.5 && sp.depth < 25) {
+          const scale = Math.max(0.4, Math.min(2, 7/sp.depth));
+          drawWpMarker(ctx, sp.sx, sp.sy, wp.num, color, wp.rotAngle, scale);
+        }
       }
-    }
-    ctx.globalAlpha = 1;
-  });
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  // Campaign ordered checkpoints (C, D etc.)
+  var cps = window._campaignCheckpoints;
+  if (cps) {
+    var nextCp = null;
+    for (var _ci = 0; _ci < cps.length; _ci++) { if (!cps[_ci].collected) { nextCp = cps[_ci]; break; } }
+    var cpY = GRID.H * 0.4;
+    cps.forEach(function(cp) {
+      cp._rot = (cp._rot || 0) + (cp.collected ? 0.01 : 0.03);
+      var color = cp.collected ? '#ff8800' : '#00ccff';
+      var isNext = cp === nextCp;
+      var pulse = isNext ? (0.6 + 0.4*Math.sin(state.animFrame*0.12)) : (cp.collected ? 0.5 : 0.9);
+      ctx.globalAlpha = pulse;
+      if (state.viewMode === 'command' || state.viewMode === 'surfaced') {
+        var sp = project(cp.x, cpY, cp.z);
+        drawWpMarker(ctx, sp.sx, sp.sy, cp.id, color, cp._rot, 1);
+      } else if (state.viewMode === 'periscope' || state.viewMode === 'surface') {
+        var sp2 = projectPeriscope(cp.x, cpY, cp.z);
+        if (sp2 && sp2.depth > 0.5 && sp2.depth < 30) {
+          var scale = Math.max(0.4, Math.min(2, 7/sp2.depth));
+          drawWpMarker(ctx, sp2.sx, sp2.sy, cp.id, color, cp._rot, scale);
+        }
+      }
+      ctx.globalAlpha = 1;
+    });
+  }
 }
 
 let _lastFrameTime = 0;
@@ -7036,9 +7073,39 @@ function updateCampaignBuoys() {
   });
 }
 
+function checkCampaignCheckpoints() {
+  var cps = window._campaignCheckpoints;
+  if (!cps) return;
+  var next = null;
+  for (var i = 0; i < cps.length; i++) { if (!cps[i].collected) { next = cps[i]; break; } }
+  if (!next) return;
+  var dx = state.player.x - next.x, dz = state.player.z - next.z;
+  if (Math.sqrt(dx*dx + dz*dz) < (next.radius || 8)) {
+    next.collected = true;
+    addScore(50);
+    var remaining = cps.filter(function(c) { return !c.collected; });
+    var nextLabel = remaining.length > 0 ? remaining[0].id : 'EXIT';
+    addEvent('⊙ CHECKPOINT ' + next.id + ' CLEARED — PROCEED TO ' + nextLabel, false);
+    playWpCollect();
+  }
+}
+
 function checkExitBeacon() {
   var eb = window._campaignExitBeacon;
   if (!eb || eb._reached || _gameOver) return;
+  var cps = window._campaignCheckpoints;
+  if (cps) {
+    var next = null;
+    for (var i = 0; i < cps.length; i++) { if (!cps[i].collected) { next = cps[i]; break; } }
+    if (next) {
+      var dx2 = state.player.x - eb.x, dz2 = state.player.z - eb.z;
+      if (Math.sqrt(dx2*dx2+dz2*dz2) < (eb.radius||6)*2 && !eb._cpWarned) {
+        eb._cpWarned = true;
+        addEvent('⚠ CHECKPOINT ' + next.id + ' NOT CLEARED — CANNOT EXIT', true);
+      }
+      return;
+    }
+  }
   var dx = state.player.x - eb.x;
   var dz = state.player.z - eb.z;
   if (Math.sqrt(dx*dx + dz*dz) < (eb.radius || 6)) {

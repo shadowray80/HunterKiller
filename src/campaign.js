@@ -39,11 +39,16 @@ const MISSIONS = [
     // Navigate: mission complete when reaching exit beacon, not by kill count
     killTarget: 0,
     enemyCount: { cadet: 1, captain: 1, commander: 2 },
-    // Waypoints shown on minimap
+    // Waypoints shown on minimap (A = spawn)
     waypoints: [
       { id: 'A', x: 14, z: 16 },
       { id: 'C', x: 38, z: 52 },
       { id: 'D', x: 82, z: 82 },
+    ],
+    // Ordered checkpoints — must be cleared before exit beacon unlocks
+    checkpoints: [
+      { id: 'C', x: 38, z: 52, radius: 8 },
+      { id: 'D', x: 82, z: 82, radius: 8 },
     ],
     // Sonar buoys: _ox/_oz are home positions, x/z drift from them
     sonarBuoys: [
@@ -320,6 +325,9 @@ function launchMission(missionIndex, difficulty) {
   window._campaignExitBeacon = mission.exitBeacon
     ? Object.assign({}, mission.exitBeacon, { _reached: false })
     : null;
+  window._campaignCheckpoints = mission.checkpoints
+    ? mission.checkpoints.map(function(cp) { return Object.assign({}, cp, { collected: false }); })
+    : null;
 
   var isNavigate = mission.objectiveType === 'navigate';
 
@@ -351,6 +359,7 @@ function launchMission(missionIndex, difficulty) {
     window._campaignWaypoints = null;
     window._campaignSonarBuoys = null;
     window._campaignExitBeacon = null;
+    window._campaignCheckpoints = null;
     setTimeout(function () { showMissionFailed(missionIndex, difficulty); }, 100);
   };
 
@@ -358,7 +367,7 @@ function launchMission(missionIndex, difficulty) {
   var objBar = document.getElementById('campaign-objective-bar');
   if (objBar) {
     objBar.textContent = isNavigate
-      ? '⊙ OBJECTIVE: NAVIGATE A → E · AVOID SONAR BUOYS · REACH EXIT ZONE'
+      ? '⊙ OBJECTIVE: NAVIGATE A → C → D → EXIT · CLEAR CHECKPOINTS IN ORDER · AVOID SONAR BUOYS'
       : '⊙ OBJECTIVE: DESTROY ALL ENEMY CONTACTS';
     objBar.style.display = '';
   }
@@ -394,6 +403,7 @@ function completeMission(missionIndex, difficulty) {
   window._campaignWaypoints = null;
   window._campaignSonarBuoys = null;
   window._campaignExitBeacon = null;
+  window._campaignCheckpoints = null;
   window._onCampaignMissionComplete = null;
   var ob = document.getElementById('campaign-objective-bar');
   if (ob) ob.style.display = 'none';

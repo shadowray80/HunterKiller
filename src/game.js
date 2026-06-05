@@ -6832,6 +6832,16 @@ function launchGame(planGrid) {
   stopIntroMusic();
   _sonarTerrainCache = null;
 
+  // Reset controls guide button state
+  _guidesVisible = false;
+  if (_depthGuideTimer) { clearTimeout(_depthGuideTimer); _depthGuideTimer = null; }
+  var _ctrlBtn = document.getElementById('peri-btn-controls');
+  if (_ctrlBtn) _ctrlBtn.classList.remove('active');
+  ['control-guide-img','peri-guide-img','depth-guide-img'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) { el.style.transition = 'none'; el.style.opacity = '0'; }
+  });
+
   // Set grid dimensions — heightfield maps can override W/D/H via window._hfGrid*
   if (window._isHeightfield) {
     GRID.W = window._hfGridW || 64;
@@ -6887,6 +6897,42 @@ function launchGame(planGrid) {
 
   // Reset extra enemies
   state.extraEnemies = [];
+
+  // Reset all combat/projectile state
+  state.torpedoes = [];
+  state.depthCharges = [];
+  state.shells = [];
+  state.noisemakers = [];
+  state.deployedMines = [];
+  state.explosions = [];
+  state.sonarPings = [];
+  state.silentPings = [];
+  state.particles = [];
+  state.aimCursor = null;
+  state.firingSolution = null;
+  state.muzzleFlash = 0;
+
+  // Reset stats
+  state.score = 0;
+  state.kills = 0;
+  state.torpsFired = 0;
+  state.torpsHit = 0;
+  state.timesDetected = 0;
+  state.maxDepth = 0;
+  state.countermeasures = 3;
+
+  // Reset combat mode flags
+  if (state.battleStations) {
+    state.battleStations = false;
+    const bsBtn = document.getElementById('btn-battlestations');
+    if (bsBtn) bsBtn.classList.remove('active');
+    document.getElementById('hud').classList.remove('battle-stations');
+  }
+  if (state.silentRunning) {
+    state.silentRunning = false;
+    const srBtn = document.getElementById('btn-silent');
+    if (srBtn) srBtn.classList.remove('active');
+  }
 
   // Reset lives and game-over flag
   _gameOver = false;

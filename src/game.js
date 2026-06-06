@@ -2373,6 +2373,20 @@ function update() {
       return false;
     }
 
+    // Hit deployed mines — any player torpedo detonates mines; chain reactions cascade outward
+    if (travelDist > 2.0 && !t.isEnemy && !t.isMine && state.deployedMines) {
+      for (var _dmi = 0; _dmi < state.deployedMines.length; _dmi++) {
+        var _dm = state.deployedMines[_dmi];
+        if (!_dm.alive) continue;
+        var _dmY = _dm.type === 'anchor' ? (_dm.currentY || _dm.floatY) : _dm.y;
+        if (Math.abs(t.x-_dm.x) < 1.8 && Math.abs(t.y-_dmY) < 1.8 && Math.abs(t.z-_dm.z) < 1.8) {
+          addEvent('⊛ TORPEDO — MINE DETONATED', false);
+          _detonateMine(_dm, 0);
+          return false;
+        }
+      }
+    }
+
     // Out of bounds or hit furniture — grace period of 4 units so torpedo clears the firer
     const atSurfaceLevel = t.y >= GRID.H - 1;
     const hitFurniture = !atSurfaceLevel && travelDist > 4.0 && inFurniture(t.x, t.y, t.z);
@@ -8562,6 +8576,46 @@ function playDepthCharge(dist) {
   var a = new Audio('/Sounds/Depth_Charge_Distant.mp3');
   a.volume = vol;
   a.play().catch(function(){});
+}
+
+function _detonateMine(mine, chainDepth) {
+  if (!mine.alive) return;
+  mine.alive = false;
+  var mY = mine.type === 'anchor' ? (mine.currentY || mine.floatY) : mine.y;
+  var BLAST_R = 6;
+
+  // Three overlapping blasts for epic effect
+  spawnExplosion(mine.x, mY, mine.z, false);
+  setTimeout(function() {
+    if (!_gameOver) spawnExplosion(mine.x+(Math.random()-.5)*2.5, mY+(Math.random()-.5)*1.5, mine.z+(Math.random()-.5)*2.5, false);
+  }, 80);
+  setTimeout(function() {
+    if (!_gameOver) spawnExplosion(mine.x+(Math.random()-.5)*3.5, mY+(Math.random()-.5)*2, mine.z+(Math.random()-.5)*3.5, false);
+  }, 190);
+  playExplosion(chainDepth === 0);
+
+  // Damage player based on proximity
+  var pdx = state.player.x - mine.x, pdy = state.player.y - mY, pdz = state.player.z - mine.z;
+  var pdist = Math.sqrt(pdx*pdx + pdy*pdy + pdz*pdz);
+  if (pdist < BLAST_R) {
+    var frac = 1 - pdist/BLAST_R;
+    var dmg = Math.round(25 * frac * frac);
+    if (dmg >= 15) applyHullDamage(dmg, '⚠ MINE BLAST — DIRECT HIT');
+    else if (dmg >= 5) applyHullDamage(dmg, '⚠ MINE BLAST — SHOCKWAVE');
+    else if (dmg >= 1) applyHullDamage(dmg, '▸ MINE BLAST — PRESSURE WAVE');
+  }
+
+  // Chain reaction — nearby mines detonate with distance-based delay
+  if (chainDepth < 8 && state.deployedMines) {
+    state.deployedMines.forEach(function(m2) {
+      if (!m2.alive) return;
+      var m2Y = m2.type === 'anchor' ? (m2.currentY || m2.floatY) : m2.y;
+      var cd = Math.sqrt((m2.x-mine.x)*(m2.x-mine.x)+(m2Y-mY)*(m2Y-mY)+(m2.z-mine.z)*(m2.z-mine.z));
+      if (cd < BLAST_R) {
+        setTimeout(function() { _detonateMine(m2, chainDepth+1); }, Math.round(cd * 55));
+      }
+    });
+  }
 }
 
 // ── DEPLOYED MINE UPDATE ──

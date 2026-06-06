@@ -14,7 +14,7 @@ const _MUS = (() => {
 
   // Notes (Hz)
   const A2=110, C3=130.8, D3=146.8, E3=164.8, F3=174.6, G3=196,
-        A3=220, C4=261.6, D4=293.7,  E4=329.6, G4=392,   A4=440;
+        A3=220, B3=246.9, C4=261.6, D4=293.7,  E4=329.6, G4=392, A4=440;
 
   let ctx = null, master = null, rev = null;
   let gDrum, gArp, gBass, gLead, gPad;

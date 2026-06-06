@@ -322,15 +322,26 @@ function _ping(vol = 0.7) {
 }
 
 // ── VOICE CHAT (WebRTC P2P, PTT) ──
-const _vc = { stream: null, peers: {} };
+const _vc = { stream: null, peers: {}, pendingOffers: new Set() };
+
+const _iceServers = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
 
 async function _vcInit() {
   if (!navigator.mediaDevices?.getUserMedia) return;
   try {
     _vc.stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    _vc.stream.getAudioTracks().forEach(t => t.enabled = false); // muted until PTT
+    _vc.stream.getAudioTracks().forEach(t => t.enabled = false); // PTT — off until held
     const el = document.getElementById('peri-ptt-btns');
     if (el) el.style.display = 'flex';
+    // FIX: offer any players seen while getUserMedia was prompting
+    _vc.pendingOffers.forEach(id => _vcOffer(id));
+    _vc.pendingOffers.clear();
+    Object.keys(window._mpRemotePlayers || {}).forEach(id => {
+      if (!_vc.peers[id] && _user && _user.id < id) _vcOffer(id);
+    });
   } catch(e) { console.warn('[VC] mic unavailable:', e.message); }
 }
 
@@ -340,6 +351,7 @@ function _vcCleanup() {
     if (p.audio) { p.audio.pause(); p.audio.remove(); }
   });
   _vc.peers = {};
+  _vc.pendingOffers.clear();
   if (_vc.stream) { _vc.stream.getTracks().forEach(t => t.stop()); _vc.stream = null; }
   const el = document.getElementById('peri-ptt-btns');
   if (el) el.style.display = 'none';
@@ -347,18 +359,23 @@ function _vcCleanup() {
 
 function _vcPeer(peerId) {
   if (_vc.peers[peerId]) return _vc.peers[peerId];
-  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-  const entry = { pc, audio: null };
+  const pc = new RTCPeerConnection({ iceServers: _iceServers });
+  // entry.pttActive tracks the remote player's current PTT state
+  // so we can apply it correctly when ontrack fires after rtc-ptt arrives
+  const entry = { pc, audio: null, pttActive: false };
   _vc.peers[peerId] = entry;
   if (_vc.stream) _vc.stream.getTracks().forEach(t => pc.addTrack(t, _vc.stream));
   pc.ontrack = e => {
     if (!entry.audio) {
       entry.audio = document.createElement('audio');
       entry.audio.autoplay = true;
-      entry.audio.muted = true; // unmuted only when remote PTT active
       document.body.appendChild(entry.audio);
     }
     entry.audio.srcObject = e.streams[0];
+    // Apply stored PTT state — might have arrived before track
+    entry.audio.muted = !entry.pttActive;
+    // Resume in case autoplay was blocked
+    entry.audio.play().catch(() => {});
   };
   pc.onicecandidate = e => {
     if (e.candidate && _gameChannel)
@@ -391,6 +408,8 @@ async function _vcAnswer(from, sdp) {
 export function vcPttStart(teamOnly) {
   if (!_vc.stream) return;
   _vc.stream.getAudioTracks().forEach(t => t.enabled = true);
+  // Resume any autoplay-blocked remote audio during this user gesture
+  Object.values(_vc.peers).forEach(p => { if (p.audio?.paused) p.audio.play().catch(()=>{}); });
   if (_gameChannel) _gameChannel.send({ type: 'broadcast', event: 'rtc-ptt',
     payload: { from: _user?.id, active: true, teamOnly, team: _myTeam } });
 }
@@ -414,8 +433,11 @@ function _startGameSync(code) {
       if (payload.id !== _user?.id) {
         const isNew = !window._mpRemotePlayers[payload.id];
         window._mpRemotePlayers[payload.id] = payload;
-        // Offer voice connection to new player — lower userId initiates
-        if (isNew && _vc.stream && _user.id < payload.id) _vcOffer(payload.id);
+        if (isNew && _user && _user.id < payload.id) {
+          // Offer now if mic is ready; otherwise queue — _vcInit will drain it
+          if (_vc.stream) _vcOffer(payload.id);
+          else _vc.pendingOffers.add(payload.id);
+        }
       }
     })
     .on('broadcast', { event: 'torp' }, ({ payload }) => {
@@ -446,10 +468,13 @@ function _startGameSync(code) {
     })
     .on('broadcast', { event: 'rtc-ptt' }, ({ payload }) => {
       const entry = _vc.peers[payload.from];
-      if (!entry?.audio) return;
-      if (!payload.active) { entry.audio.muted = true; return; }
-      // Team-only: mute if sender is on a different team
-      entry.audio.muted = payload.teamOnly && payload.team !== _myTeam;
+      if (!entry) return;
+      const shouldHear = payload.active && (!payload.teamOnly || payload.team === _myTeam);
+      entry.pttActive = shouldHear; // store so ontrack can apply it later
+      if (entry.audio) {
+        entry.audio.muted = !shouldHear;
+        if (shouldHear) entry.audio.play().catch(() => {});
+      }
     })
     .subscribe();
 

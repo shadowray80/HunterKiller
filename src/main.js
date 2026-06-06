@@ -189,10 +189,14 @@ document.getElementById('invite-gen-share').addEventListener('click', () => {
     document.getElementById('multiplayer-screen').style.display = '';
     await initMultiplayer();
     renderLeaderboard('mp-leaderboard');
-    // Pre-fill the join-by-code input so it's obvious what to enter
+    // Pre-fill the join code
     const codeInput = document.getElementById('mp-join-code-input');
     if (codeInput) codeInput.value = code;
-    // Try to auto-join — if session doesn't exist yet the error shows next to the input
-    await joinByCode(code);
+    // Pause at lobby so player can confirm/set their call sign, then tap JOIN →
+    const notice = document.getElementById('mp-join-code-error');
+    if (notice) {
+      notice.style.cssText = 'display:;color:#00e5ff;font-size:10px;letter-spacing:0.1em;margin-top:5px;';
+      notice.textContent = `◉ INVITED TO ${code} — CONFIRM YOUR CALL SIGN ABOVE THEN TAP JOIN →`;
+    }
   });
 })();

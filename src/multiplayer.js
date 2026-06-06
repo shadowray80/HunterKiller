@@ -228,12 +228,14 @@ async function _enterWaitingRoom(code, asHost) {
   showView('waiting');
   _updatePresenceStatus('waiting');
 
-  // Insert player record
+  // Insert or update player record — always write latest username so stale rows get refreshed
   const { data: existing } = await supabase.from('session_players').select('id').eq('session_id', code).eq('player_id', _user.id).maybeSingle();
   if (!existing) {
     await supabase.from('session_players').insert({
       session_id: code, player_id: _user.id, username: _username || 'UNKNOWN', ready: false
     });
+  } else if (_username) {
+    await supabase.from('session_players').update({ username: _username }).eq('session_id', code).eq('player_id', _user.id);
   }
 
   // Auto-assign teams after insert
@@ -309,8 +311,11 @@ async function _renderWaitingRoom() {
     readyBtn.classList.toggle('is-ready', _isReady);
   }
 
-  // Launch button — enabled when all players ready (at least 1)
-  const allReady = players.length >= 1 && players.every(p => p.ready);
+  // Launch button — host just needs all OTHER players to be ready (host is ready by being host)
+  const others = players.filter(p => p.player_id !== _user?.id);
+  const allReady = _isHost
+    ? (others.length >= 1 && others.every(p => p.ready))
+    : (players.length >= 1 && players.every(p => p.ready));
   const launchBtn = document.getElementById('mp-launch-btn');
   if (launchBtn) launchBtn.disabled = !allReady;
 }

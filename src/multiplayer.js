@@ -206,8 +206,21 @@ function _setCreateStatus(msg) {
 
 // ── JOIN GAME ──
 window._mpJoin = async function(code) {
-  await _enterWaitingRoom(code, false);
+  return await _enterWaitingRoom(code, false);
 };
+
+export async function joinByCode(rawCode) {
+  const code = (rawCode || '').toUpperCase().trim();
+  const errEl = document.getElementById('mp-join-code-error');
+  if (errEl) errEl.style.display = 'none';
+  if (!code) return;
+  const { data: sess } = await supabase.from('sessions').select('id').eq('id', code).maybeSingle();
+  if (!sess) {
+    if (errEl) { errEl.textContent = `⚠ SESSION ${code} NOT FOUND — HOST MAY NOT HAVE STARTED IT YET`; errEl.style.display = ''; }
+    return;
+  }
+  await _enterWaitingRoom(code, false);
+}
 
 // ── WAITING ROOM ──
 async function _enterWaitingRoom(code, asHost) {

@@ -1,6 +1,6 @@
 import './game.js';
 import './campaign.js';
-import { initMultiplayer, setUsername, showCreateGame, createGame, toggleReady, launchSession, leaveSession, renderLeaderboard } from './multiplayer.js';
+import { initMultiplayer, setUsername, showCreateGame, createGame, toggleReady, launchSession, leaveSession, renderLeaderboard, joinByCode } from './multiplayer.js';
 
 // ── MULTIPLAYER ──
 document.getElementById('intro-multi-btn').addEventListener('click', async () => {
@@ -43,6 +43,14 @@ document.getElementById('mp-create-cancel').addEventListener('click', () => {
   document.getElementById('mp-lobby-view').style.display = '';
 });
 document.getElementById('mp-create-confirm').addEventListener('click', createGame);
+
+// Join by code
+document.getElementById('mp-join-code-btn').addEventListener('click', () => {
+  joinByCode(document.getElementById('mp-join-code-input').value);
+});
+document.getElementById('mp-join-code-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') joinByCode(e.target.value);
+});
 
 // Waiting room
 document.getElementById('mp-ready-btn').addEventListener('click', toggleReady);
@@ -181,9 +189,10 @@ document.getElementById('invite-gen-share').addEventListener('click', () => {
     document.getElementById('multiplayer-screen').style.display = '';
     await initMultiplayer();
     renderLeaderboard('mp-leaderboard');
-    // Auto-join the session if it exists
-    if (window._mpJoin) {
-      try { await window._mpJoin(code); } catch (e) { /* session might not exist yet */ }
-    }
+    // Pre-fill the join-by-code input so it's obvious what to enter
+    const codeInput = document.getElementById('mp-join-code-input');
+    if (codeInput) codeInput.value = code;
+    // Try to auto-join — if session doesn't exist yet the error shows next to the input
+    await joinByCode(code);
   });
 })();

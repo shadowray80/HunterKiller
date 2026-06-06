@@ -94,6 +94,18 @@
 .mp-session-code { font-size: 13px; letter-spacing: 0.1em; color: #ffcc00; }
 .mp-session-map  { font-size: 10px; color: #00e5ff; }
 .mp-session-mode { font-size: 9px; color: #0097a7; letter-spacing: 0.1em; }
+.mp-join-code-row { display:flex; gap:6px; margin-top:6px; }
+#mp-join-code-input {
+  flex:1; background:rgba(0,10,25,0.9); border:1px solid rgba(0,150,200,0.4);
+  color:#00e5ff; font-family:var(--mono); font-size:12px; padding:7px 10px;
+  letter-spacing:0.15em; outline:none; text-transform:uppercase;
+}
+#mp-join-code-btn {
+  background:rgba(0,229,255,0.1); border:1px solid rgba(0,229,255,0.5);
+  color:#00e5ff; font-family:var(--mono); font-size:10px; letter-spacing:0.12em;
+  padding:7px 14px; cursor:pointer;
+}
+#mp-join-code-error { font-size:10px; color:#ff6644; letter-spacing:0.1em; margin-top:5px; }
 .mp-join-btn {
   background: rgba(0,229,255,0.1); border: 1px solid rgba(0,229,255,0.4);
   color: #00e5ff; font-family: inherit; font-size: 10px;

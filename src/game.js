@@ -5738,10 +5738,9 @@ document.getElementById('peri-btn-signal').addEventListener('click', () => {
 
 // ── ACOUSTICS PANEL ──
 (function(){
-  const panel = document.getElementById('acoustics-panel');
+  const panel  = document.getElementById('acoustics-panel');
   const openBtn = document.getElementById('peri-btn-acoustics');
   let _vol = 1.0;
-  let _activeTrack = 0;
 
   openBtn.addEventListener('click', () => {
     const open = panel.style.display === 'none' || panel.style.display === '';
@@ -5749,26 +5748,15 @@ document.getElementById('peri-btn-signal').addEventListener('click', () => {
     openBtn.classList.toggle('open', open);
   });
 
-  function selectTrack(n) {
-    _activeTrack = n;
-    [0,1,2,3].forEach(i => {
-      document.getElementById('aco-t'+i).classList.toggle('on', i===n);
-    });
-    if (window._musicTrack) window._musicTrack(n);
-  }
-  [0,1,2,3].forEach(i => {
-    document.getElementById('aco-t'+i).addEventListener('click', () => selectTrack(i));
-  });
-
   function updateVol() {
-    document.getElementById('aco-vol-val').textContent = Math.round(_vol*100)+'%';
+    document.getElementById('aco-vol-val').textContent = Math.round(_vol * 100) + '%';
     if (window._musicVolume) window._musicVolume(_vol);
   }
   document.getElementById('aco-vol-up').addEventListener('click', () => {
-    _vol = Math.min(1.0, Math.round((_vol+0.1)*10)/10); updateVol();
+    _vol = Math.min(1.0, Math.round((_vol + 0.1) * 10) / 10); updateVol();
   });
   document.getElementById('aco-vol-dn').addEventListener('click', () => {
-    _vol = Math.max(0.0, Math.round((_vol-0.1)*10)/10); updateVol();
+    _vol = Math.max(0.0, Math.round((_vol - 0.1) * 10) / 10); updateVol();
   });
 })();
 
@@ -10102,7 +10090,7 @@ if (false) (function() {
 })();
 
 // ── INTRO MUSIC ──
-var _introMusic = new Audio('/Sounds/intro_theme.mp3');
+var _introMusic = new Audio('/Sounds/OST/ost_hymn.mp3');
 _introMusic.loop = true;
 _introMusic.volume = 0.75;
 var _introAudioUnlocked = false;

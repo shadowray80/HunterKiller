@@ -3643,27 +3643,27 @@ function updateEnemyAI() {
   // ── CONTINUOUS MOVEMENT — BRAVO travels every frame along its current heading ──
   // State machine only updates heading/target; this block does the actual moving.
   if (en.aiState !== 'evade') {
-    var _bSpd = en.aiState === 'cover' ? 0.30 : en.aiState === 'flank' ? 0.27 : 0.22;
+    var _bSpd = en.aiState === 'cover' ? 0.20 : en.aiState === 'flank' ? 0.18 : 0.15;
     var _bnx = en.x + Math.sin(en.heading) * _bSpd;
     var _bnz = en.z + Math.cos(en.heading) * _bSpd;
     if (!isOccupied(_bnx, en.y, _bnz) && _bnx > 0.5 && _bnx < GRID.W-0.5 && _bnz > 0.5 && _bnz < GRID.D-0.5) {
       en.x = _bnx; en.z = _bnz;
     } else {
-      // Steer around walls — try a 45° offset, then give up and randomise heading
       var _bh2 = en.heading + Math.PI * 0.4 * (Math.random() < 0.5 ? 1 : -1);
       var _bnx2 = en.x + Math.sin(_bh2) * _bSpd;
       var _bnz2 = en.z + Math.cos(_bh2) * _bSpd;
       if (!isOccupied(_bnx2, en.y, _bnz2) && _bnx2 > 0.5 && _bnx2 < GRID.W-0.5 && _bnz2 > 0.5 && _bnz2 < GRID.D-0.5) {
         en.x = _bnx2; en.z = _bnz2; en.heading = _bh2;
       } else {
-        en.heading += (Math.random() - 0.5) * Math.PI; // unstick — full random turn
+        en.heading += (Math.random() - 0.5) * Math.PI;
       }
     }
-    // Slow depth drift every 18 frames
-    if (_enemyMoveTimer % 18 === 0) {
-      var _bdy = Math.max(0.5, Math.min(GRID.H - 0.5, en.y + (Math.random() - 0.5) * 1.5));
-      if (!isOccupied(en.x, _bdy, en.z)) en.y = _bdy;
+    // Smooth depth: pick a new target every 8-14 seconds, glide toward it
+    if (!en.depthTarget) en.depthTarget = en.y;
+    if (_enemyMoveTimer % 480 === 0 || Math.abs(en.y - en.depthTarget) < 0.3) {
+      en.depthTarget = Math.max(1, Math.min(GRID.H - 1, GRID.H * (0.15 + Math.random() * 0.65)));
     }
+    en.y += (en.depthTarget - en.y) * 0.003;
   }
 
   // ── STATE: HUNT ──
@@ -4291,6 +4291,14 @@ function renderPeriscope() {
       const ep = projectPeriscope(state.enemy.x, state.enemy.y, state.enemy.z);
       if (ep && ep.depth > 0.2) drawQueue.push({ depth: ep.depth, kind: 'enemy', ep });
     }
+    // Extra AI enemy subs — same sonar visibility rule as BRAVO
+    if (showEnemyP) {
+      state.extraEnemies.forEach(function(xe) {
+        if (!xe.alive) return;
+        const xep = projectPeriscope(xe.x, xe.y, xe.z);
+        if (xep && xep.depth > 0.2) drawQueue.push({ depth: xep.depth, kind: 'extraEnemy', xe });
+      });
+    }
 
     // Remote player subs (multiplayer) — hidden in silent running beyond close visual range
     if (window._mpRemotePlayers) {
@@ -4375,6 +4383,9 @@ function renderPeriscope() {
           ctx.globalAlpha = 1;
           ctx.restore();
         }
+      } else if (item.kind === 'extraEnemy') {
+        const xeAlpha = state.silentRunning ? state.enemySilentAlpha : (state.forceReveal ? 1 : state.revealAlpha);
+        if (xeAlpha > 0.02) drawPlayerSubPeri(item.xe, '255,100,40', xeAlpha);
       } else if (item.kind === 'remote') {
         drawPlayerSubPeri(item.rp, item.rgb, 1.0);
       } else if (item.kind === 'whale') {
@@ -7116,55 +7127,94 @@ window._spawnExtraEnemies = function(n) {
   }
 };
 
-// Simplified AI for extra campaign enemies
+// AI for extra enemies — patrol/hunt with realistic turn radius and depth changes
 function updateExtraEnemiesAI() {
   state.extraEnemies.forEach(function(en) {
     if (!en.alive) return;
-    var dx = state.player.x - en.x, dz = state.player.z - en.z;
-    var dist = Math.sqrt(dx*dx + dz*dz);
 
-    // Steer toward player
-    var tgt = Math.atan2(dx, dz);
-    var hd = tgt - en.heading;
-    while (hd > Math.PI) hd -= Math.PI * 2;
-    while (hd < -Math.PI) hd += Math.PI * 2;
-    en.heading += hd * 0.025;
-
-    // Move
-    var spd = 0.19;
-    var nx = en.x + Math.sin(en.heading) * spd;
-    var nz = en.z + Math.cos(en.heading) * spd;
-    var gnx = Math.round(nx), gnz = Math.round(nz);
-    if (gnx >= 1 && gnx < GRID.W-1 && gnz >= 1 && gnz < GRID.D-1 &&
-        !(FLOOR_PLAN[gnz] && FLOOR_PLAN[gnz][gnx])) {
-      en.x = nx; en.z = nz;
-    } else {
-      en.heading += Math.PI * 0.45 + Math.random() * 0.3;
+    // Initialise persistent state on first tick
+    if (!en.aiState) {
+      en.aiState = 'patrol';
+      en.patrolTarget = null;
+      en.stateTimer = ~~(Math.random() * 200);
+      en.depthTarget = GRID.H * (0.25 + Math.random() * 0.5);
+      en.depthTimer = ~~(Math.random() * 400);
     }
 
-    // Keep in mid-depth
-    en.y += (GRID.H * 0.4 - en.y) * 0.01;
-    en.y = Math.max(1, Math.min(GRID.H - 1, en.y));
+    var dx = state.player.x - en.x, dz = state.player.z - en.z;
+    var dist = Math.sqrt(dx * dx + dz * dz);
+    en.stateTimer++;
+    en.depthTimer++;
 
-    // Occasional torpedo fire at player when in range
+    // ── DEPTH — smooth, slow, changes every 8–15 seconds ──
+    if (en.depthTimer > 480 + ~~(Math.random() * 420)) {
+      en.depthTimer = 0;
+      en.depthTarget = Math.max(1, Math.min(GRID.H - 1, GRID.H * (0.12 + Math.random() * 0.72)));
+    }
+    en.y += (en.depthTarget - en.y) * 0.004;
+
+    // ── STATE TRANSITIONS ──
+    if (en.aiState === 'patrol' && dist < 38 && en.stateTimer > 120) {
+      en.aiState = 'hunt'; en.stateTimer = 0;
+    }
+    if (en.aiState === 'hunt' && dist > 55) {
+      en.aiState = 'patrol'; en.stateTimer = 0; en.patrolTarget = null;
+    }
+
+    // ── STEERING — limited turn rate (submarine wide turning circle) ──
+    var MAX_TURN = 0.014; // ~0.8° per frame — feels deliberate
+    var targetAngle;
+
+    if (en.aiState === 'hunt') {
+      // Steer toward player
+      targetAngle = Math.atan2(dx, dz);
+    } else {
+      // Pick / maintain a patrol waypoint
+      if (!en.patrolTarget ||
+          (Math.abs(en.x - en.patrolTarget.x) < 5 && Math.abs(en.z - en.patrolTarget.z) < 5)) {
+        en.patrolTarget = {
+          x: 4 + ~~(Math.random() * (GRID.W - 8)),
+          z: 4 + ~~(Math.random() * (GRID.D - 8))
+        };
+      }
+      var pdx = en.patrolTarget.x - en.x, pdz = en.patrolTarget.z - en.z;
+      targetAngle = Math.atan2(pdx, pdz);
+    }
+
+    var hdDiff = targetAngle - en.heading;
+    while (hdDiff >  Math.PI) hdDiff -= Math.PI * 2;
+    while (hdDiff < -Math.PI) hdDiff += Math.PI * 2;
+    en.heading += Math.sign(hdDiff) * Math.min(Math.abs(hdDiff), MAX_TURN);
+
+    // ── MOVEMENT — slower, heavier ──
+    var spd = en.aiState === 'hunt' ? 0.13 : 0.09;
+    var nx = en.x + Math.sin(en.heading) * spd;
+    var nz = en.z + Math.cos(en.heading) * spd;
+    if (nx > 1 && nx < GRID.W - 1 && nz > 1 && nz < GRID.D - 1 &&
+        !(FLOOR_PLAN[~~nz] && FLOOR_PLAN[~~nz][~~nx])) {
+      en.x = nx; en.z = nz;
+    } else {
+      // Nudge heading away from wall, wide arc
+      en.heading += (Math.random() < 0.5 ? 1 : -1) * (Math.PI * 0.25 + Math.random() * 0.4);
+      en.patrolTarget = null; // pick a new waypoint
+    }
+
+    // ── FIRE ──
     if (dist < 30 && Date.now() > en.lastFired) {
-      en.lastFired = Date.now() + 6000 + Math.random() * 5000;
+      en.lastFired = Date.now() + 7000 + Math.random() * 6000;
       var elen = dist || 1;
       var off = 2.0;
-      var toxOx = en.x + (dx / elen) * off;
-      var toyOy = en.y;
-      var tozOz = en.z + (dz / elen) * off;
       state.torpedoes.push({
-        ox: toxOx, oy: toyOy, oz: tozOz,
-        x: toxOx, y: toyOy, z: tozOz,
-        dx: dx / elen, dy: 0, dz: dz / elen,
-        speed: 0.15, progress: 0,
+        ox: en.x + (dx/elen)*off, oy: en.y, oz: en.z + (dz/elen)*off,
+        x:  en.x + (dx/elen)*off, y:  en.y, z:  en.z + (dz/elen)*off,
+        dx: dx/elen, dy: 0, dz: dz/elen,
+        speed: 0.13, progress: 0,
         isEnemy: true, isHoming: false, isAcoustic: false,
       });
       addEvent('⚠ ' + en.name + ' FIRED TORPEDO', true);
     }
 
-    // Bubble animation
+    // ── BUBBLE ANIMATION ──
     if (en.bubbling) {
       en.bubbleTimer++;
       if (en.bubbleTimer > 60) { en.bubbling = false; en.bubbleTimer = 0; }

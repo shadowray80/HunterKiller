@@ -1508,7 +1508,7 @@ function render() {
   if (window._mpRemotePlayers) {
     const _teamColors = { alpha: '#22ee88', bravo: '#ff8833' };
     Object.values(window._mpRemotePlayers).forEach(function(rp) {
-      if (!rp || rp.x === undefined) return;
+      if (!rp || rp.x === undefined || rp.sr) return; // hidden in silent running
       const rpColor = _teamColors[rp.team] || '#22ee88';
       drawSub({ x: rp.x, y: rp.y, z: rp.z, heading: rp.heading || 0 }, rpColor, rp.username || '?', false, 1.0);
     });
@@ -2053,7 +2053,7 @@ function update() {
 
   // ── MULTIPLAYER POSITION BROADCAST ──
   if (window._mpSendPos && state.time % 3 === 0) {
-    window._mpSendPos(state.player.x, state.player.y, state.player.z, state.periAngleH);
+    window._mpSendPos(state.player.x, state.player.y, state.player.z, state.periAngleH, state.silentRunning);
   }
 
   // ── MULTIPLAYER REMOTE TORPEDOES — update positions + hit detection ──
@@ -2119,7 +2119,7 @@ function update() {
     if (state.squids)     state.squids.forEach(s   => { if (s.alive)  _checkGuidedLock(s,  'SQUID', s.x, s.y, s.z); });
     if (state.ships)      state.ships.forEach(sh   => { if (sh.alive && !sh.sinking) _checkGuidedLock(sh, 'SHIP', sh.x, GRID.H, sh.z); });
     if (window._mpRemotePlayers) Object.values(window._mpRemotePlayers).forEach(function(rp) {
-      if (rp && rp.x !== undefined) _checkGuidedLock(rp, 'PLAYER', rp.x, rp.y !== undefined ? rp.y : GRID.H*0.5, rp.z);
+      if (rp && rp.x !== undefined && !rp.sr) _checkGuidedLock(rp, 'PLAYER', rp.x, rp.y !== undefined ? rp.y : GRID.H*0.5, rp.z);
     });
     state.acousticLock = _bestLock;
     state.guidedLockTarget = _bestTarget;
@@ -4289,11 +4289,16 @@ function renderPeriscope() {
       if (ep && ep.depth > 0.2) drawQueue.push({ depth: ep.depth, kind: 'enemy', ep });
     }
 
-    // Remote player subs (multiplayer)
+    // Remote player subs (multiplayer) — hidden in silent running beyond close visual range
     if (window._mpRemotePlayers) {
       const _rpRgb = { alpha: '34,238,136', bravo: '255,136,51' };
       Object.values(window._mpRemotePlayers).forEach(function(rp) {
         if (!rp || rp.x === undefined) return;
+        // Silent running: only visible within 15 world units (close visual contact)
+        if (rp.sr) {
+          var _srdx = rp.x - state.player.x, _srdy = (rp.y||0) - state.player.y, _srdz = rp.z - state.player.z;
+          if (Math.sqrt(_srdx*_srdx + _srdy*_srdy + _srdz*_srdz) > 15) return;
+        }
         const rpe = projectPeriscope(rp.x, rp.y, rp.z);
         if (rpe && rpe.depth > 0.2) {
           drawQueue.push({ depth: rpe.depth, kind: 'remote', rp, rgb: _rpRgb[rp.team] || '34,238,136' });
@@ -5437,11 +5442,11 @@ function drawPeriFwdSlider() {
   c.beginPath(); c.arc(ppx.x, ppx.y, 3.5, 0, Math.PI*2);
   c.fillStyle='#00e5ff'; c.shadowBlur=8; c.shadowColor='#00e5ff'; c.fill(); c.shadowBlur=0;
 
-  // ── REMOTE PLAYERS on minimap ──
+  // ── REMOTE PLAYERS on minimap (hidden when in silent running) ──
   if (window._mpRemotePlayers) {
     const _mmTeamColors = { alpha: '#22ee88', bravo: '#ff8833' };
     Object.values(window._mpRemotePlayers).forEach(function(rp) {
-      if (!rp || rp.x === undefined) return;
+      if (!rp || rp.x === undefined || rp.sr) return;
       var rpp = mm(rp.x, rp.z);
       var rpCol = _mmTeamColors[rp.team] || '#00ff66';
       var rdx = Math.sin(rp.heading || 0) * 10, rdy = -Math.cos(rp.heading || 0) * 10;

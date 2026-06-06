@@ -539,11 +539,11 @@ function _startGameSync(code) {
   };
 
   // Called by game.js every 3 frames
-  window._mpSendPos = function(x, y, z, heading) {
+  window._mpSendPos = function(x, y, z, heading, silentRunning) {
     if (!_gameChannel) return;
     _gameChannel.send({
       type: 'broadcast', event: 'pos',
-      payload: { id: _user.id, username: _username || '?', x, y, z, heading, team: _myTeam }
+      payload: { id: _user.id, username: _username || '?', x, y, z, heading, team: _myTeam, sr: !!silentRunning }
     });
   };
 

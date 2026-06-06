@@ -432,9 +432,10 @@ function _startGameSync(code) {
     .on('broadcast', { event: 'pos' }, ({ payload }) => {
       if (payload.id !== _user?.id) {
         const isNew = !window._mpRemotePlayers[payload.id];
-        window._mpRemotePlayers[payload.id] = payload;
+        // Update in-place so torpedo lockedTargetRef stays live
+        if (isNew) window._mpRemotePlayers[payload.id] = payload;
+        else Object.assign(window._mpRemotePlayers[payload.id], payload);
         if (isNew && _user && _user.id < payload.id) {
-          // Offer now if mic is ready; otherwise queue — _vcInit will drain it
           if (_vc.stream) _vcOffer(payload.id);
           else _vc.pendingOffers.add(payload.id);
         }
@@ -447,10 +448,18 @@ function _startGameSync(code) {
     })
     .on('broadcast', { event: 'hit' }, ({ payload }) => {
       if (payload.target === _user?.id && window._applyHullDamage) {
+        _lastAttacker = payload.from; // track who's hitting us for death broadcast
         window._applyHullDamage(payload.damage, '⚠ DIRECT HIT — HULL BREACH');
         if (payload.hx !== undefined && window.spawnExplosion)
           window.spawnExplosion(payload.hx, payload.hy, payload.hz, false);
         if (window.playExplosion) window.playExplosion(false);
+      }
+    })
+    .on('broadcast', { event: 'died' }, ({ payload }) => {
+      if (payload.id !== _user?.id) {
+        // Remove from remote players so their ghost disappears
+        delete window._mpRemotePlayers[payload.id];
+        if (window._mpOnPlayerDied) window._mpOnPlayerDied(payload.id, payload.killedBy, payload.username);
       }
     })
     .on('broadcast', { event: 'rtc-offer' }, ({ payload }) => {
@@ -479,6 +488,18 @@ function _startGameSync(code) {
     .subscribe();
 
   _vcInit();
+
+  let _lastAttacker = null;
+  window._mpMyUserId = _user?.id;
+
+  // Called by game.js when local player dies — broadcasts kill credit to attacker
+  window._mpBroadcastDeath = function() {
+    if (!_gameChannel) return;
+    _gameChannel.send({ type: 'broadcast', event: 'died',
+      payload: { id: _user.id, username: _username || '?', killedBy: _lastAttacker, team: _myTeam }
+    });
+    _lastAttacker = null;
+  };
 
   // Called by game.js every 3 frames
   window._mpSendPos = function(x, y, z, heading) {

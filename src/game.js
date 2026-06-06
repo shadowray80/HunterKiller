@@ -1990,6 +1990,7 @@ function triggerImplosion() {
     spawnExplosion(state.player.x, state.player.y, state.player.z, false);
     state.lives = Math.max(0, state.lives - 1);
     updateLivesDisplay();
+    if (window._mpSendPos && window._mpBroadcastDeath) window._mpBroadcastDeath();
     if (state.lives <= 0) {
       gameOver();
       return;
@@ -2117,6 +2118,9 @@ function update() {
     if (state.megalodons) state.megalodons.forEach(m => { if (m.alive) _checkGuidedLock(m,  'MEGA',  m.x, m.y, m.z); });
     if (state.squids)     state.squids.forEach(s   => { if (s.alive)  _checkGuidedLock(s,  'SQUID', s.x, s.y, s.z); });
     if (state.ships)      state.ships.forEach(sh   => { if (sh.alive && !sh.sinking) _checkGuidedLock(sh, 'SHIP', sh.x, GRID.H, sh.z); });
+    if (window._mpRemotePlayers) Object.values(window._mpRemotePlayers).forEach(function(rp) {
+      if (rp && rp.x !== undefined) _checkGuidedLock(rp, 'PLAYER', rp.x, rp.y !== undefined ? rp.y : GRID.H*0.5, rp.z);
+    });
     state.acousticLock = _bestLock;
     state.guidedLockTarget = _bestTarget;
   }
@@ -7015,6 +7019,18 @@ function launchGame(planGrid) {
 }
 window.launchGame = launchGame; // expose for multiplayer
 window._applyHullDamage = function(dmg, msg) { applyHullDamage(dmg, msg); };
+window._mpOnPlayerDied = function(playerId, killedBy, username) {
+  var name = username || (window._mpRemotePlayers && window._mpRemotePlayers[playerId] && window._mpRemotePlayers[playerId].username) || 'ENEMY';
+  if (killedBy && killedBy === window._mpMyUserId) {
+    state.kills++;
+    addScore(50);
+    addEvent('⊛ ' + name + ' DESTROYED — +50 PTS', false);
+    document.getElementById('kill-count').textContent = state.kills;
+    if (window._onEnemySubKill) window._onEnemySubKill();
+  } else {
+    addEvent('▸ ' + name + ' — SUBMARINE LOST', false);
+  }
+};
 window._setPlayerSpawn = function(x, z) {
   if (window._isHeightfield && window._canyonHeightGrid) {
     var sp = findSafeHfSpawn(x, z);

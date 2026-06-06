@@ -9786,6 +9786,7 @@ function renderSurfacedView() {
 // Upload screen — dive in with uploaded plan
 document.getElementById('launch-btn').addEventListener('click', function() {
   launchGame(window._pendingGrid || FLOOR_PLAN);
+  _spawnSoloExtras();
 });
 
 // ── INTRO CANVAS ANIMATION — removed ──
@@ -10080,10 +10081,32 @@ function restartIntroMusic() {
 }
 
 // ── INTRO SCREEN NAVIGATION ──
+// ── ENEMY COUNT (solo) ───────────────────────────────────────────────────────
+window._soloEnemyCount = 1;
+(function() {
+  var val = document.getElementById('intro-enemy-val');
+  function update(n) {
+    window._soloEnemyCount = n;
+    val.textContent = n;
+  }
+  document.getElementById('intro-enemy-dn').addEventListener('click', function() {
+    if (window._soloEnemyCount > 1) update(window._soloEnemyCount - 1);
+  });
+  document.getElementById('intro-enemy-up').addEventListener('click', function() {
+    if (window._soloEnemyCount < 6) update(window._soloEnemyCount + 1);
+  });
+})();
+
+function _spawnSoloExtras() {
+  var n = (window._soloEnemyCount || 1) - 1;
+  if (n > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(n);
+}
+
 document.getElementById('intro-btn-floorplan').addEventListener('click', function() {
   window._pendingGrid = null;
   window._isHeightfield = false;
   launchGame(FLOOR_PLAN);
+  _spawnSoloExtras();
 });
 
 document.getElementById('intro-btn-ocean').addEventListener('click', function() {
@@ -10096,6 +10119,7 @@ document.getElementById('intro-btn-ocean').addEventListener('click', function() 
   canyonBg.loadAsync().then(function(mapGrid) {
     window._pendingGrid = mapGrid;
     launchGame(mapGrid);
+    _spawnSoloExtras();
   });
 });
 
@@ -10312,6 +10336,7 @@ document.getElementById('peri-btn-abort').addEventListener('click', function() {
       window._hfTerrainScale = bg.gridTerrainScale || undefined;
       if (bg._hGrid) window._canyonHeightGrid = bg._hGrid;
       launchGame(mapGrid);
+      _spawnSoloExtras();
     });
     return card;
   }

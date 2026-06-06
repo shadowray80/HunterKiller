@@ -1683,6 +1683,35 @@ color: var(--teal);
 text-shadow: 0 0 12px var(--teal);
 text-align: center;
 }
+.intro-enemy-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.intro-enemy-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: rgba(0,229,255,0.7);
+  min-width: 110px;
+  text-align: center;
+}
+.intro-enemy-btn {
+  font-family: var(--mono);
+  font-size: 14px;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid rgba(0,229,255,0.5);
+  color: var(--teal);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.intro-enemy-btn:active { background: rgba(0,229,255,0.2); }
 .intro-dive-split {
 display: flex;
 gap: 10px;

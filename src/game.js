@@ -5725,6 +5725,42 @@ document.getElementById('peri-btn-signal').addEventListener('click', () => {
   btn.classList.toggle('open', open);
 });
 
+// ── ACOUSTICS PANEL ──
+(function(){
+  const panel = document.getElementById('acoustics-panel');
+  const openBtn = document.getElementById('peri-btn-acoustics');
+  let _vol = 1.0;
+  let _activeTrack = 0;
+
+  openBtn.addEventListener('click', () => {
+    const open = panel.style.display === 'none' || panel.style.display === '';
+    panel.style.display = open ? 'flex' : 'none';
+    openBtn.classList.toggle('open', open);
+  });
+
+  function selectTrack(n) {
+    _activeTrack = n;
+    [0,1,2,3].forEach(i => {
+      document.getElementById('aco-t'+i).classList.toggle('on', i===n);
+    });
+    if (window._musicTrack) window._musicTrack(n);
+  }
+  [0,1,2,3].forEach(i => {
+    document.getElementById('aco-t'+i).addEventListener('click', () => selectTrack(i));
+  });
+
+  function updateVol() {
+    document.getElementById('aco-vol-val').textContent = Math.round(_vol*100)+'%';
+    if (window._musicVolume) window._musicVolume(_vol);
+  }
+  document.getElementById('aco-vol-up').addEventListener('click', () => {
+    _vol = Math.min(1.0, Math.round((_vol+0.1)*10)/10); updateVol();
+  });
+  document.getElementById('aco-vol-dn').addEventListener('click', () => {
+    _vol = Math.max(0.0, Math.round((_vol-0.1)*10)/10); updateVol();
+  });
+})();
+
 document.getElementById('peri-wireframe-btn').addEventListener('click', () => {
   state.showWireframe = !state.showWireframe;
   const btn = document.getElementById('peri-wireframe-btn');
@@ -10231,23 +10267,6 @@ document.getElementById('peri-btn-abort').addEventListener('click', function() {
   restartIntroMusic();
 });
 
-// ── MUSIC VOLUME CONTROL ──
-(function() {
-  const LEVELS = [
-    { label: '♪ ON',  vol: 1.0 },
-    { label: '♪ LOW', vol: 0.3 },
-    { label: '♪ OFF', vol: 0.0 },
-  ];
-  let idx = 0;
-  const btn = document.getElementById('btn-music-vol');
-  if (btn) {
-    btn.addEventListener('click', function() {
-      idx = (idx + 1) % LEVELS.length;
-      btn.textContent = LEVELS[idx].label;
-      if (window._musicVolume) window._musicVolume(LEVELS[idx].vol);
-    });
-  }
-})();
 
 // ── BATTLEGROUND CARDS ──
 (function() {

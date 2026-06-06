@@ -706,6 +706,24 @@
     <div id="wp-result-text"></div>
   </div>
 
+  <div id="acoustics-panel" style="display:none">
+    <div class="rp-label">TRACK</div>
+    <div class="rp-row">
+      <button class="rp-btn rp-toggle on" id="aco-t0" style="min-width:38px">GRID</button>
+      <button class="rp-btn rp-toggle"    id="aco-t1" style="min-width:38px">PULSE</button>
+    </div>
+    <div class="rp-row">
+      <button class="rp-btn rp-toggle"    id="aco-t2" style="min-width:38px">VOID</button>
+      <button class="rp-btn rp-toggle"    id="aco-t3" style="min-width:38px">DEPTH</button>
+    </div>
+    <div class="rp-label" style="margin-top:4px">VOLUME</div>
+    <div class="rp-row">
+      <button class="rp-btn" id="aco-vol-dn">−</button>
+      <button class="rp-btn" id="aco-vol-val" style="min-width:34px;font-size:8px;pointer-events:none">100%</button>
+      <button class="rp-btn" id="aco-vol-up">+</button>
+    </div>
+  </div>
+
   <div id="render-panel" style="display:none">
     <div class="rp-label">POINTS</div>
     <div class="rp-row">
@@ -808,6 +826,7 @@
       <button class="peri-top-btn" id="peri-btn-tactical">◉ STATUS</button>
       <button class="peri-top-btn" id="peri-btn-ping-peri">◎ PING</button>
       <button class="peri-top-btn" id="peri-btn-cm">◈ CM 3</button>
+      <button class="peri-top-btn" id="peri-btn-acoustics">ACOUSTICS</button>
       <button class="peri-top-btn" id="peri-btn-weapon">━━▶<br><span class="peri-weapon-label">TORP</span></button>
     </div>
 
@@ -893,8 +912,6 @@
     </div>
   </div>
 </div>
-
-<button id="btn-music-vol" style="position:fixed;bottom:10px;right:10px;z-index:9999;background:rgba(0,10,20,0.75);border:1px solid #00e5ff55;color:#00e5ff;font-family:'Courier New',monospace;font-size:10px;letter-spacing:0.15em;cursor:pointer;padding:4px 8px;opacity:0.7;">♪ ON</button>
 
 <script type="module" src="/src/main.js"></script>
 </body>

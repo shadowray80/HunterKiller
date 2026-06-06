@@ -1345,6 +1345,21 @@ background: rgba(0,20,40,0.95);
 #peri-btn-signal:active { background: rgba(0,229,255,0.12); }
 
 /* Render controls panel */
+#acoustics-panel {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 96px);
+  right: 0;
+  pointer-events: all;
+  z-index: 10;
+  background: rgba(0,8,20,0.92);
+  border: 1px solid rgba(0,160,200,0.35);
+  border-top: none;
+  padding: 6px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 84px;
+}
 #render-panel {
   position: absolute;
   top: calc(env(safe-area-inset-top) + 96px);

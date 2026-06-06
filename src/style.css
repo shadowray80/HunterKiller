@@ -906,6 +906,53 @@ border-right-color: rgba(0,229,255,0.7);
 border-bottom-color: rgba(0,229,255,0.7);
 }
 
+/* Voice PTT buttons — multiplayer only, above combat row */
+#peri-ptt-btns {
+position: absolute;
+bottom: 244px;
+left: 0; right: 0;
+display: flex;
+justify-content: space-between;
+align-items: center;
+padding: 0 6px;
+pointer-events: none;
+z-index: 13;
+}
+.peri-ptt-btn {
+width: 52px; height: 52px;
+border-radius: 50%;
+background: rgba(0,4,12,0.88);
+border: 2px solid rgba(0,200,255,0.45);
+color: rgba(0,200,255,0.7);
+font-family: var(--mono);
+display: flex; flex-direction: column;
+align-items: center; justify-content: center;
+gap: 1px;
+cursor: pointer;
+pointer-events: all;
+touch-action: none;
+-webkit-tap-highlight-color: transparent;
+user-select: none;
+transition: box-shadow 0.1s, border-color 0.1s;
+}
+.ptt-icon { font-size: 16px; line-height: 1; }
+.ptt-label { font-size: 7px; letter-spacing: 0.12em; }
+.peri-ptt-btn.active {
+background: rgba(0,35,70,0.95);
+border-color: #00e5ff;
+color: #00e5ff;
+box-shadow: 0 0 14px rgba(0,229,255,0.55), inset 0 0 8px rgba(0,229,255,0.15);
+}
+.peri-ptt-team {
+border-color: rgba(34,238,136,0.45);
+color: rgba(34,238,136,0.7);
+}
+.peri-ptt-team.active {
+border-color: #22ee88;
+color: #22ee88;
+box-shadow: 0 0 14px rgba(34,238,136,0.55), inset 0 0 8px rgba(34,238,136,0.15);
+}
+
 /* Combat buttons row above the control panel */
 #peri-combat-btns {
 position: absolute;

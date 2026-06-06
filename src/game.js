@@ -10166,6 +10166,24 @@ document.getElementById('peri-btn-controls').addEventListener('click', function(
   btn.classList.toggle('active', _guidesVisible);
 });
 
+// ── PTT VOICE CHAT BUTTONS ──
+(function() {
+  function bindPtt(id, teamOnly) {
+    var btn = document.getElementById(id);
+    if (!btn) return;
+    function start(e) { e.preventDefault(); if (window._vcPttStart) window._vcPttStart(teamOnly); btn.classList.add('active'); }
+    function stop()  { if (window._vcPttStop)  window._vcPttStop();              btn.classList.remove('active'); }
+    btn.addEventListener('mousedown',   start);
+    btn.addEventListener('touchstart',  start, { passive: false });
+    btn.addEventListener('mouseup',     stop);
+    btn.addEventListener('mouseleave',  stop);
+    btn.addEventListener('touchend',    stop);
+    btn.addEventListener('touchcancel', stop);
+  }
+  bindPtt('peri-btn-ptt-all',  false);
+  bindPtt('peri-btn-ptt-team', true);
+})();
+
 document.getElementById('peri-btn-abort').addEventListener('click', function() {
   _gameOver = true;
   _imploding = false;

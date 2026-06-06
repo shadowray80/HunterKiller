@@ -321,6 +321,88 @@ function _ping(vol = 0.7) {
   a.play().catch(() => {});
 }
 
+// ── VOICE CHAT (WebRTC P2P, PTT) ──
+const _vc = { stream: null, peers: {} };
+
+async function _vcInit() {
+  if (!navigator.mediaDevices?.getUserMedia) return;
+  try {
+    _vc.stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    _vc.stream.getAudioTracks().forEach(t => t.enabled = false); // muted until PTT
+    const el = document.getElementById('peri-ptt-btns');
+    if (el) el.style.display = 'flex';
+  } catch(e) { console.warn('[VC] mic unavailable:', e.message); }
+}
+
+function _vcCleanup() {
+  Object.values(_vc.peers).forEach(p => {
+    try { p.pc.close(); } catch(e) {}
+    if (p.audio) { p.audio.pause(); p.audio.remove(); }
+  });
+  _vc.peers = {};
+  if (_vc.stream) { _vc.stream.getTracks().forEach(t => t.stop()); _vc.stream = null; }
+  const el = document.getElementById('peri-ptt-btns');
+  if (el) el.style.display = 'none';
+}
+
+function _vcPeer(peerId) {
+  if (_vc.peers[peerId]) return _vc.peers[peerId];
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  const entry = { pc, audio: null };
+  _vc.peers[peerId] = entry;
+  if (_vc.stream) _vc.stream.getTracks().forEach(t => pc.addTrack(t, _vc.stream));
+  pc.ontrack = e => {
+    if (!entry.audio) {
+      entry.audio = document.createElement('audio');
+      entry.audio.autoplay = true;
+      entry.audio.muted = true; // unmuted only when remote PTT active
+      document.body.appendChild(entry.audio);
+    }
+    entry.audio.srcObject = e.streams[0];
+  };
+  pc.onicecandidate = e => {
+    if (e.candidate && _gameChannel)
+      _gameChannel.send({ type: 'broadcast', event: 'rtc-ice',
+        payload: { from: _user.id, to: peerId, c: e.candidate.toJSON() } });
+  };
+  return entry;
+}
+
+async function _vcOffer(peerId) {
+  const { pc } = _vcPeer(peerId);
+  if (pc.signalingState !== 'stable') return;
+  try {
+    await pc.setLocalDescription(await pc.createOffer());
+    _gameChannel.send({ type: 'broadcast', event: 'rtc-offer',
+      payload: { from: _user.id, to: peerId, sdp: pc.localDescription } });
+  } catch(e) { console.warn('[VC] offer err', e); }
+}
+
+async function _vcAnswer(from, sdp) {
+  const { pc } = _vcPeer(from);
+  try {
+    await pc.setRemoteDescription(sdp);
+    await pc.setLocalDescription(await pc.createAnswer());
+    _gameChannel.send({ type: 'broadcast', event: 'rtc-answer',
+      payload: { from: _user.id, to: from, sdp: pc.localDescription } });
+  } catch(e) { console.warn('[VC] answer err', e); }
+}
+
+export function vcPttStart(teamOnly) {
+  if (!_vc.stream) return;
+  _vc.stream.getAudioTracks().forEach(t => t.enabled = true);
+  if (_gameChannel) _gameChannel.send({ type: 'broadcast', event: 'rtc-ptt',
+    payload: { from: _user?.id, active: true, teamOnly, team: _myTeam } });
+}
+export function vcPttStop() {
+  if (!_vc.stream) return;
+  _vc.stream.getAudioTracks().forEach(t => t.enabled = false);
+  if (_gameChannel) _gameChannel.send({ type: 'broadcast', event: 'rtc-ptt',
+    payload: { from: _user?.id, active: false } });
+}
+window._vcPttStart = vcPttStart;
+window._vcPttStop  = vcPttStop;
+
 function _startGameSync(code) {
   window._mpRemotePlayers = {};
   if (_gameChannel) supabase.removeChannel(_gameChannel);
@@ -330,7 +412,10 @@ function _startGameSync(code) {
   _gameChannel
     .on('broadcast', { event: 'pos' }, ({ payload }) => {
       if (payload.id !== _user?.id) {
+        const isNew = !window._mpRemotePlayers[payload.id];
         window._mpRemotePlayers[payload.id] = payload;
+        // Offer voice connection to new player — lower userId initiates
+        if (isNew && _vc.stream && _user.id < payload.id) _vcOffer(payload.id);
       }
     })
     .on('broadcast', { event: 'torp' }, ({ payload }) => {
@@ -341,14 +426,34 @@ function _startGameSync(code) {
     .on('broadcast', { event: 'hit' }, ({ payload }) => {
       if (payload.target === _user?.id && window._applyHullDamage) {
         window._applyHullDamage(payload.damage, '⚠ DIRECT HIT — HULL BREACH');
-        // Spawn visual explosion at hit location if position provided
-        if (payload.hx !== undefined && window.spawnExplosion) {
+        if (payload.hx !== undefined && window.spawnExplosion)
           window.spawnExplosion(payload.hx, payload.hy, payload.hz, false);
-        }
         if (window.playExplosion) window.playExplosion(false);
       }
     })
+    .on('broadcast', { event: 'rtc-offer' }, ({ payload }) => {
+      if (payload.to === _user?.id) _vcAnswer(payload.from, payload.sdp);
+    })
+    .on('broadcast', { event: 'rtc-answer' }, async ({ payload }) => {
+      if (payload.to !== _user?.id) return;
+      const entry = _vc.peers[payload.from];
+      if (entry) try { await entry.pc.setRemoteDescription(payload.sdp); } catch(e) {}
+    })
+    .on('broadcast', { event: 'rtc-ice' }, async ({ payload }) => {
+      if (payload.to !== _user?.id) return;
+      const entry = _vc.peers[payload.from];
+      if (entry) try { await entry.pc.addIceCandidate(payload.c); } catch(e) {}
+    })
+    .on('broadcast', { event: 'rtc-ptt' }, ({ payload }) => {
+      const entry = _vc.peers[payload.from];
+      if (!entry?.audio) return;
+      if (!payload.active) { entry.audio.muted = true; return; }
+      // Team-only: mute if sender is on a different team
+      entry.audio.muted = payload.teamOnly && payload.team !== _myTeam;
+    })
     .subscribe();
+
+  _vcInit();
 
   // Called by game.js every 3 frames
   window._mpSendPos = function(x, y, z, heading) {
@@ -505,6 +610,7 @@ function _listenForPings() {
 
 // ── END GAME — save kills/deaths to Supabase ──
 export async function mpEndGame(kills, deaths) {
+  _vcCleanup();
   if (!_currentCode || !_user) return;
   await supabase.from('session_players')
     .update({ kills, deaths })

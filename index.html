@@ -218,6 +218,25 @@
   </div>
 </div>
 
+<!-- ── INVITE LANDING SCREEN ─────────────────────────────── -->
+<div id="invite-screen" style="display:none">
+  <div class="invite-header">
+    <div class="invite-title">HUNTER KILLER</div>
+    <div class="invite-badge">CLASSIFIED — MISSION BRIEF</div>
+  </div>
+  <div class="invite-body">
+    <div id="invite-msg-text" class="invite-msg" style="display:none"></div>
+    <div class="invite-field-label">DEPLOY TIME</div>
+    <div id="invite-local-time" class="invite-time-val"></div>
+    <div id="invite-countdown" class="invite-countdown">--:--:--</div>
+    <div id="invite-status-text" class="invite-status">STAND BY</div>
+    <div class="invite-field-label" style="margin-top:20px">SESSION CODE</div>
+    <div id="invite-code-display" class="invite-code"></div>
+    <button id="invite-join-btn" class="invite-join-btn" disabled>⊙ ENTER THE BREACH</button>
+    <div class="invite-hint">Opens the multiplayer lobby — join the session when the host deploys.</div>
+  </div>
+</div>
+
 <!-- Multiplayer Screen -->
 <div id="multiplayer-screen" style="display:none;">
   <div id="mp-launch-overlay" style="display:none;"></div>
@@ -303,7 +322,30 @@
     <div id="mp-waiting-actions">
       <button id="mp-leave-btn">LEAVE</button>
       <button id="mp-ready-btn">READY UP</button>
+      <button id="mp-invite-btn">⊙ INVITE</button>
       <button id="mp-launch-btn" style="display:none;" disabled>LAUNCH →</button>
+    </div>
+
+    <!-- Invite generator panel -->
+    <div id="invite-gen-modal" style="display:none">
+      <div class="invite-gen-title">⊙ GENERATE MISSION INVITE</div>
+      <div class="invite-gen-code-row">SESSION CODE: <span id="invite-gen-code"></span></div>
+      <div class="invite-gen-label">DEPLOY TIME (YOUR LOCAL TIME)</div>
+      <input type="datetime-local" id="invite-gen-time">
+      <div class="invite-gen-label">MISSION MESSAGE (OPTIONAL)</div>
+      <input type="text" id="invite-gen-msg" maxlength="60" placeholder="e.g. GIUK Gap run — bring backup">
+      <div class="invite-gen-actions">
+        <button id="invite-gen-cancel">CANCEL</button>
+        <button id="invite-gen-create">GENERATE LINK →</button>
+      </div>
+      <div id="invite-gen-result" style="display:none">
+        <textarea id="invite-gen-url" readonly rows="3"></textarea>
+        <div class="invite-gen-share-row">
+          <button id="invite-gen-copy">COPY</button>
+          <button id="invite-gen-share">SHARE</button>
+          <span id="invite-gen-confirm" style="display:none">✓ COPIED</span>
+        </div>
+      </div>
     </div>
   </div>
 

@@ -687,6 +687,19 @@ export async function mpEndGame(kills, deaths) {
 // Hook called from game.js via window._mpEndGame
 window._mpEndGame = mpEndGame;
 
+// ── INVITE LINK GENERATION ──
+window._mpGetSessionCode = function() { return _currentCode; };
+window._mpGenerateInvite = function(atMs, msg) {
+  var code = _currentCode;
+  if (!code) return null;
+  var url = new URL(location.href);
+  url.search = '';
+  url.searchParams.set('invite', code);
+  url.searchParams.set('at', Math.floor(atMs / 1000));
+  if (msg) url.searchParams.set('msg', msg);
+  return url.toString();
+};
+
 // ── LEADERBOARD ──
 export async function fetchLeaderboard() {
   const { data, error } = await supabase

@@ -982,6 +982,70 @@ border-right: 1px solid rgba(0,180,220,0.2);
 #peri-btn-weapon.amine-mode   { color: #3366cc; text-shadow: 0 0 6px #1a3a80; border-color: rgba(30,70,160,0.6); }
 #peri-btn-cm { color: var(--teal-dim); }
 
+/* ── INVITE LANDING SCREEN ───────────────────────────────── */
+#invite-screen {
+position:fixed; inset:0; z-index:9000;
+background: radial-gradient(ellipse at 30% 40%, rgba(0,20,40,0.95) 0%, rgba(0,4,12,0.99) 70%);
+display:flex; flex-direction:column; align-items:center; justify-content:center;
+font-family:var(--mono); color:#00e5ff; overflow:hidden;
+}
+#invite-screen::before {
+content:''; position:absolute; inset:0;
+background: repeating-linear-gradient(0deg, transparent, transparent 48px, rgba(0,200,255,0.03) 49px);
+pointer-events:none;
+}
+.invite-header { text-align:center; margin-bottom:28px; }
+.invite-title { font-size:clamp(28px,7vw,52px); letter-spacing:0.25em; color:#00e5ff; text-shadow:0 0 30px rgba(0,229,255,0.6); }
+.invite-badge { font-size:11px; letter-spacing:0.35em; color:rgba(255,80,80,0.9); margin-top:6px; text-shadow:0 0 10px rgba(255,80,80,0.5); }
+.invite-body { display:flex; flex-direction:column; align-items:center; gap:8px; width:min(380px,92vw); }
+.invite-msg { font-size:13px; letter-spacing:0.1em; color:#a0d8ef; text-align:center; padding:10px 16px; border:1px solid rgba(0,180,220,0.3); background:rgba(0,20,40,0.5); border-radius:4px; width:100%; box-sizing:border-box; }
+.invite-field-label { font-size:8px; letter-spacing:0.3em; color:rgba(0,180,220,0.5); align-self:flex-start; margin-top:8px; }
+.invite-time-val { font-size:13px; letter-spacing:0.1em; color:#80c8e0; align-self:flex-start; }
+.invite-countdown { font-size:clamp(36px,10vw,64px); letter-spacing:0.15em; color:#00e5ff; text-shadow:0 0 20px rgba(0,229,255,0.5); font-variant-numeric:tabular-nums; margin:4px 0; }
+.invite-status { font-size:10px; letter-spacing:0.25em; color:rgba(0,180,220,0.6); }
+.invite-code { font-size:clamp(22px,6vw,36px); letter-spacing:0.3em; color:#00ff9d; text-shadow:0 0 15px rgba(0,255,157,0.5); border:1px solid rgba(0,255,157,0.3); padding:8px 20px; background:rgba(0,20,10,0.5); }
+.invite-join-btn {
+margin-top:18px; padding:14px 32px;
+font-family:var(--mono); font-size:13px; letter-spacing:0.2em;
+background:rgba(0,4,12,0.9); color:rgba(0,180,220,0.4);
+border:2px solid rgba(0,180,220,0.2); cursor:not-allowed;
+transition:all 0.3s;
+}
+.invite-join-btn:not([disabled]) {
+color:#00e5ff; border-color:#00e5ff; cursor:pointer;
+box-shadow:0 0 20px rgba(0,229,255,0.35), inset 0 0 12px rgba(0,229,255,0.08);
+animation: invite-pulse 2s ease-in-out infinite;
+}
+@keyframes invite-pulse {
+0%,100% { box-shadow:0 0 20px rgba(0,229,255,0.35); }
+50%      { box-shadow:0 0 35px rgba(0,229,255,0.65); }
+}
+.invite-hint { font-size:9px; letter-spacing:0.1em; color:rgba(0,120,160,0.6); text-align:center; margin-top:8px; line-height:1.6; }
+
+/* Invite generator modal */
+#invite-gen-modal {
+margin-top:12px; padding:14px 16px; background:rgba(0,8,20,0.95);
+border:1px solid rgba(0,180,220,0.3); display:flex; flex-direction:column; gap:8px;
+font-family:var(--mono); font-size:11px; letter-spacing:0.1em; color:#00e5ff;
+}
+.invite-gen-title { font-size:10px; letter-spacing:0.25em; color:rgba(0,200,255,0.7); }
+.invite-gen-code-row { font-size:11px; color:rgba(0,180,220,0.6); }
+.invite-gen-code-row span { color:#00ff9d; letter-spacing:0.2em; }
+.invite-gen-label { font-size:8px; letter-spacing:0.2em; color:rgba(0,150,180,0.6); margin-top:4px; }
+#invite-gen-time, #invite-gen-msg {
+background:rgba(0,10,25,0.9); border:1px solid rgba(0,150,200,0.3);
+color:#00e5ff; font-family:var(--mono); font-size:11px; padding:6px 8px;
+letter-spacing:0.08em; width:100%; box-sizing:border-box; outline:none;
+}
+.invite-gen-actions { display:flex; gap:8px; margin-top:4px; }
+.invite-gen-actions button { flex:1; padding:7px; font-family:var(--mono); font-size:9px; letter-spacing:0.15em; cursor:pointer; background:rgba(0,4,12,0.9); border:1px solid rgba(0,150,200,0.35); color:rgba(0,200,255,0.7); }
+.invite-gen-actions button:last-child { border-color:rgba(0,229,255,0.5); color:#00e5ff; }
+#invite-gen-url { width:100%; background:rgba(0,4,12,0.8); border:1px solid rgba(0,150,200,0.25); color:rgba(0,200,255,0.75); font-family:var(--mono); font-size:10px; padding:7px; box-sizing:border-box; resize:none; }
+.invite-gen-share-row { display:flex; gap:8px; align-items:center; }
+.invite-gen-share-row button { padding:6px 12px; font-family:var(--mono); font-size:9px; letter-spacing:0.15em; background:rgba(0,4,12,0.9); border:1px solid rgba(0,180,220,0.4); color:#00e5ff; cursor:pointer; }
+#invite-gen-confirm { font-size:10px; color:#00ff9d; letter-spacing:0.1em; }
+#mp-invite-btn { background:rgba(0,4,12,0.9); border:1px solid rgba(0,180,220,0.35); color:rgba(0,200,255,0.7); font-family:var(--mono); font-size:9px; letter-spacing:0.15em; padding:7px 12px; cursor:pointer; }
+
 /* Bearing compass strip + hull bar */
 #peri-compass {
 flex: 1;

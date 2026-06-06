@@ -48,3 +48,132 @@ document.getElementById('mp-create-confirm').addEventListener('click', createGam
 document.getElementById('mp-ready-btn').addEventListener('click', toggleReady);
 document.getElementById('mp-launch-btn').addEventListener('click', launchSession);
 document.getElementById('mp-leave-btn').addEventListener('click', leaveSession);
+
+// ── INVITE GENERATOR ──
+document.getElementById('mp-invite-btn').addEventListener('click', () => {
+  const modal = document.getElementById('invite-gen-modal');
+  const code = window._mpGetSessionCode ? window._mpGetSessionCode() : '???';
+  document.getElementById('invite-gen-code').textContent = code;
+  // Default time: now + 30 minutes
+  const def = new Date(Date.now() + 30 * 60 * 1000);
+  def.setSeconds(0, 0);
+  document.getElementById('invite-gen-time').value = def.toISOString().slice(0, 16);
+  document.getElementById('invite-gen-result').style.display = 'none';
+  modal.style.display = modal.style.display === 'none' ? '' : 'none';
+});
+document.getElementById('invite-gen-cancel').addEventListener('click', () => {
+  document.getElementById('invite-gen-modal').style.display = 'none';
+});
+document.getElementById('invite-gen-create').addEventListener('click', () => {
+  const t = document.getElementById('invite-gen-time').value;
+  const msg = document.getElementById('invite-gen-msg').value.trim();
+  if (!t) return;
+  const url = window._mpGenerateInvite ? window._mpGenerateInvite(new Date(t).getTime(), msg) : null;
+  if (!url) return;
+  document.getElementById('invite-gen-url').value = url;
+  document.getElementById('invite-gen-result').style.display = '';
+  document.getElementById('invite-gen-confirm').style.display = 'none';
+});
+document.getElementById('invite-gen-copy').addEventListener('click', () => {
+  const url = document.getElementById('invite-gen-url').value;
+  navigator.clipboard.writeText(url).then(() => {
+    const c = document.getElementById('invite-gen-confirm');
+    c.style.display = '';
+    setTimeout(() => { c.style.display = 'none'; }, 2500);
+  });
+});
+document.getElementById('invite-gen-share').addEventListener('click', () => {
+  const url = document.getElementById('invite-gen-url').value;
+  if (navigator.share) {
+    navigator.share({ title: 'Hunter Killer — Mission Invite', url });
+  } else {
+    navigator.clipboard.writeText(url);
+  }
+});
+
+// ── INVITE LANDING PAGE ──
+(function () {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('invite');
+  const at = parseInt(params.get('at'), 10);
+  const msg = params.get('msg');
+  if (!code || !at || isNaN(at)) return;
+
+  // Show invite screen, hide intro
+  document.getElementById('intro-screen').style.display = 'none';
+  document.getElementById('invite-screen').style.display = '';
+  document.getElementById('invite-code-display').textContent = code;
+
+  if (msg) {
+    const el = document.getElementById('invite-msg-text');
+    el.textContent = msg;
+    el.style.display = '';
+  }
+
+  const deployTime = new Date(at * 1000);
+  document.getElementById('invite-local-time').textContent =
+    deployTime.toLocaleString([], { weekday:'short', month:'short', day:'numeric',
+      hour:'2-digit', minute:'2-digit', timeZoneName:'short' });
+
+  function _sonarPing() {
+    const a = new Audio('/Sounds/sonar_ping_single.mp3');
+    a.volume = 0.7;
+    a.play().catch(() => {});
+  }
+
+  let _pinging = false, _pingTimer = null;
+  function startMissionHot() {
+    if (_pinging) return;
+    _pinging = true;
+    const btn = document.getElementById('invite-join-btn');
+    const status = document.getElementById('invite-status-text');
+    btn.disabled = false;
+    status.textContent = 'MISSION IS HOT — DEPLOY NOW';
+    status.style.color = '#00ff9d';
+    _sonarPing();
+    setTimeout(_sonarPing, 600);
+    setTimeout(_sonarPing, 1200);
+    _pingTimer = setInterval(_sonarPing, 30000);
+  }
+
+  function tick() {
+    const diff = at * 1000 - Date.now();
+    const countEl = document.getElementById('invite-countdown');
+    const statusEl = document.getElementById('invite-status-text');
+    const btn = document.getElementById('invite-join-btn');
+
+    if (diff <= 0) {
+      countEl.textContent = '00:00:00';
+      startMissionHot();
+      return;
+    }
+    // Enable button 2 minutes early
+    if (diff < 120000) btn.disabled = false;
+
+    const s = Math.floor(diff / 1000);
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const pad = n => String(n).padStart(2, '0');
+
+    countEl.textContent = d > 0
+      ? `${d}d ${pad(h)}h ${pad(m)}m`
+      : `${pad(h)}:${pad(m)}:${pad(sec)}`;
+    if (!_pinging) statusEl.textContent = diff < 3600000
+      ? `T-MINUS ${pad(m)}:${pad(sec)}`
+      : 'STAND BY';
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  document.getElementById('invite-join-btn').addEventListener('click', async () => {
+    if (_pingTimer) clearInterval(_pingTimer);
+    document.getElementById('invite-screen').style.display = 'none';
+    document.getElementById('multiplayer-screen').style.display = '';
+    await initMultiplayer();
+    renderLeaderboard('mp-leaderboard');
+    // Auto-join the session if it exists
+    if (window._mpJoin) {
+      try { await window._mpJoin(code); } catch (e) { /* session might not exist yet */ }
+    }
+  });
+})();

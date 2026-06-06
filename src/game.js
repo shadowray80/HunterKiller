@@ -3005,6 +3005,7 @@ function doFire() {
   state.torpLastFired = Date.now();
   // Auto red alert on first torpedo
   if (!state.battleStations) document.getElementById('btn-battlestations').click();
+  if (window._musicCombat) window._musicCombat(true);
   state.firingSolution = null;
   state.mode = 'navigate';
   state.aimCursor = null;
@@ -3286,7 +3287,8 @@ document.getElementById('btn-battlestations').addEventListener('click', () => {
     btn.style.boxShadow = '0 0 15px rgba(255,0,0,0.5)';
     if (periBtn) { periBtn.style.color='#ff4444'; periBtn.style.borderColor='#ff4444'; }
     addEvent('🚨 RED ALERT — ALL HANDS TO BATTLE STATIONS', true);
-    playSiren(); // plays once only
+    playSiren();
+    if (window._musicCombat) window._musicCombat(true);
   } else {
     btn.classList.remove('active');
     btn.style.color = '';
@@ -3294,6 +3296,7 @@ document.getElementById('btn-battlestations').addEventListener('click', () => {
     btn.style.boxShadow = '';
     if (periBtn) { periBtn.style.color=''; periBtn.style.borderColor=''; }
     addEvent('▸ STAND DOWN — RED ALERT CANCELLED', false);
+    if (window._musicCombat) window._musicCombat(false);
   }
   _updateAlertImage();
 });
@@ -5666,6 +5669,7 @@ document.getElementById('peri-btn-reveal-peri').addEventListener('click', () => 
     btn.textContent = '◎ SILENT';
     btn.classList.add('silent-active');
     addEvent('◎ SILENT RUNNING — ENGAGED', false);
+    if (window._musicStealth) window._musicStealth(true);
   } else {
     // Disengage silent running — back to standard steaming
     state.silentRunning = false;
@@ -5686,6 +5690,7 @@ document.getElementById('peri-btn-reveal-peri').addEventListener('click', () => 
     btn.innerHTML = 'STANDARD<br>STEAMING';
     btn.classList.remove('silent-active');
     addEvent('◎ SILENT RUNNING — DISENGAGED', false);
+    if (window._musicStealth) window._musicStealth(false);
   }
 });
 
@@ -6853,6 +6858,8 @@ window.BATTLEGROUNDS = BATTLEGROUNDS;
 // Launch with current grid — exposed to window for multiplayer
 function launchGame(planGrid) {
   stopIntroMusic();
+  if (window._musicStop) window._musicStop();
+  if (window._musicStart) window._musicStart();
   _sonarTerrainCache = null;
 
   // Reset controls guide button state
@@ -10208,6 +10215,7 @@ document.getElementById('peri-btn-controls').addEventListener('click', function(
 document.getElementById('peri-btn-abort').addEventListener('click', function() {
   _gameOver = true;
   _imploding = false;
+  if (window._musicStop) window._musicStop();
   // Save kills/deaths to Supabase if this was a multiplayer session
   if (window._mpEndGame) window._mpEndGame(state.kills, 3 - state.lives);
   window._mpSendPos = null;

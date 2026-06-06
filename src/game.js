@@ -10231,6 +10231,24 @@ document.getElementById('peri-btn-abort').addEventListener('click', function() {
   restartIntroMusic();
 });
 
+// ── MUSIC VOLUME CONTROL ──
+(function() {
+  const LEVELS = [
+    { label: '♪ ON',  vol: 1.0 },
+    { label: '♪ LOW', vol: 0.3 },
+    { label: '♪ OFF', vol: 0.0 },
+  ];
+  let idx = 0;
+  const btn = document.getElementById('btn-music-vol');
+  if (btn) {
+    btn.addEventListener('click', function() {
+      idx = (idx + 1) % LEVELS.length;
+      btn.textContent = LEVELS[idx].label;
+      if (window._musicVolume) window._musicVolume(LEVELS[idx].vol);
+    });
+  }
+})();
+
 // ── BATTLEGROUND CARDS ──
 (function() {
   var bgGrid = document.getElementById('bg-grid');

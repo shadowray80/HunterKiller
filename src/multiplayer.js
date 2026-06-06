@@ -322,7 +322,13 @@ function _ping(vol = 0.7) {
 }
 
 // ── VOICE CHAT (WebRTC P2P, PTT) ──
-const _vc = { stream: null, peers: {}, pendingOffers: new Set() };
+const _vc = {
+  stream: null,
+  peers: {},
+  pendingOffers: new Set(),  // outbound offers waiting for our stream
+  queuedOffers: new Map(),   // inbound offers waiting for our stream (from -> sdp)
+  iceQueue: new Map(),       // ICE candidates queued before peer exists (from -> [])
+};
 
 const _iceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -333,12 +339,16 @@ async function _vcInit() {
   if (!navigator.mediaDevices?.getUserMedia) return;
   try {
     _vc.stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    _vc.stream.getAudioTracks().forEach(t => t.enabled = false); // PTT — off until held
+    _vc.stream.getAudioTracks().forEach(t => t.enabled = false);
     const el = document.getElementById('peri-ptt-btns');
     if (el) el.style.display = 'flex';
-    // FIX: offer any players seen while getUserMedia was prompting
+    // Process queued inbound offers — stream is now ready so we can add our track
+    for (const [from, sdp] of _vc.queuedOffers) await _vcAnswer(from, sdp);
+    _vc.queuedOffers.clear();
+    // Offer any outbound peers we queued while waiting for stream
     _vc.pendingOffers.forEach(id => _vcOffer(id));
     _vc.pendingOffers.clear();
+    // Offer any already-known players we haven't connected to yet
     Object.keys(window._mpRemotePlayers || {}).forEach(id => {
       if (!_vc.peers[id] && _user && _user.id < id) _vcOffer(id);
     });
@@ -352,6 +362,8 @@ function _vcCleanup() {
   });
   _vc.peers = {};
   _vc.pendingOffers.clear();
+  _vc.queuedOffers.clear();
+  _vc.iceQueue.clear();
   if (_vc.stream) { _vc.stream.getTracks().forEach(t => t.stop()); _vc.stream = null; }
   const el = document.getElementById('peri-ptt-btns');
   if (el) el.style.display = 'none';
@@ -360,8 +372,6 @@ function _vcCleanup() {
 function _vcPeer(peerId) {
   if (_vc.peers[peerId]) return _vc.peers[peerId];
   const pc = new RTCPeerConnection({ iceServers: _iceServers });
-  // entry.pttActive tracks the remote player's current PTT state
-  // so we can apply it correctly when ontrack fires after rtc-ptt arrives
   const entry = { pc, audio: null, pttActive: false };
   _vc.peers[peerId] = entry;
   if (_vc.stream) _vc.stream.getTracks().forEach(t => pc.addTrack(t, _vc.stream));
@@ -372,9 +382,7 @@ function _vcPeer(peerId) {
       document.body.appendChild(entry.audio);
     }
     entry.audio.srcObject = e.streams[0];
-    // Apply stored PTT state — might have arrived before track
     entry.audio.muted = !entry.pttActive;
-    // Resume in case autoplay was blocked
     entry.audio.play().catch(() => {});
   };
   pc.onicecandidate = e => {
@@ -396,9 +404,14 @@ async function _vcOffer(peerId) {
 }
 
 async function _vcAnswer(from, sdp) {
+  // If our mic isn't ready yet, queue — _vcInit will call us again once stream is ready
+  if (!_vc.stream) { _vc.queuedOffers.set(from, sdp); return; }
   const { pc } = _vcPeer(from);
   try {
     await pc.setRemoteDescription(sdp);
+    // Drain any ICE candidates that arrived before we had a remote description
+    const queued = _vc.iceQueue.get(from);
+    if (queued) { for (const c of queued) try { await pc.addIceCandidate(c); } catch(e) {} _vc.iceQueue.delete(from); }
     await pc.setLocalDescription(await pc.createAnswer());
     _gameChannel.send({ type: 'broadcast', event: 'rtc-answer',
       payload: { from: _user.id, to: from, sdp: pc.localDescription } });
@@ -473,7 +486,13 @@ function _startGameSync(code) {
     .on('broadcast', { event: 'rtc-ice' }, async ({ payload }) => {
       if (payload.to !== _user?.id) return;
       const entry = _vc.peers[payload.from];
-      if (entry) try { await entry.pc.addIceCandidate(payload.c); } catch(e) {}
+      if (entry && entry.pc.remoteDescription) {
+        try { await entry.pc.addIceCandidate(payload.c); } catch(e) {}
+      } else {
+        // Queue — peer doesn't exist yet or remote description not set
+        if (!_vc.iceQueue.has(payload.from)) _vc.iceQueue.set(payload.from, []);
+        _vc.iceQueue.get(payload.from).push(payload.c);
+      }
     })
     .on('broadcast', { event: 'rtc-ptt' }, ({ payload }) => {
       const entry = _vc.peers[payload.from];

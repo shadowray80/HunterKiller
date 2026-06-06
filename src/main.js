@@ -64,30 +64,40 @@ document.getElementById('mp-invite-btn').addEventListener('click', () => {
 document.getElementById('invite-gen-cancel').addEventListener('click', () => {
   document.getElementById('invite-gen-modal').style.display = 'none';
 });
+let _inviteShareText = '';
 document.getElementById('invite-gen-create').addEventListener('click', () => {
   const t = document.getElementById('invite-gen-time').value;
   const msg = document.getElementById('invite-gen-msg').value.trim();
   if (!t) return;
-  const url = window._mpGenerateInvite ? window._mpGenerateInvite(new Date(t).getTime(), msg) : null;
+  const atMs = new Date(t).getTime();
+  const url = window._mpGenerateInvite ? window._mpGenerateInvite(atMs, msg) : null;
   if (!url) return;
-  document.getElementById('invite-gen-url').value = url;
+  const code = window._mpGetSessionCode ? window._mpGetSessionCode() : '???';
+  const timeStr = new Date(atMs).toLocaleString([], {
+    weekday:'short', month:'short', day:'numeric',
+    hour:'2-digit', minute:'2-digit', timeZoneName:'short'
+  });
+  _inviteShareText = `Hunter Killer multiplayer game invite\n`
+    + `⏱ ${timeStr}\n`
+    + (msg ? `${msg}\n` : '')
+    + `Join here: ${url}`;
+  document.getElementById('invite-gen-url').value = _inviteShareText;
   document.getElementById('invite-gen-result').style.display = '';
   document.getElementById('invite-gen-confirm').style.display = 'none';
 });
 document.getElementById('invite-gen-copy').addEventListener('click', () => {
-  const url = document.getElementById('invite-gen-url').value;
-  navigator.clipboard.writeText(url).then(() => {
+  navigator.clipboard.writeText(_inviteShareText).then(() => {
     const c = document.getElementById('invite-gen-confirm');
     c.style.display = '';
     setTimeout(() => { c.style.display = 'none'; }, 2500);
   });
 });
 document.getElementById('invite-gen-share').addEventListener('click', () => {
-  const url = document.getElementById('invite-gen-url').value;
   if (navigator.share) {
-    navigator.share({ title: 'Hunter Killer — Mission Invite', url });
+    const url = window._mpGenerateInvite ? document.getElementById('invite-gen-url').value.split('\n').pop() : '';
+    navigator.share({ title: 'Hunter Killer — Multiplayer Invite', text: _inviteShareText });
   } else {
-    navigator.clipboard.writeText(url);
+    navigator.clipboard.writeText(_inviteShareText);
   }
 });
 

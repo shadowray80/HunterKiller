@@ -738,25 +738,21 @@ function _tickAI() {
   const allEntities = Object.values(rp); // includes humans + AI
 
   allAI.forEach(ai => {
-    const isAlpha = ai.team === 'alpha';
-
-    // Find nearest enemy entity
+    // Find nearest enemy — store x, y, z for torpedo aiming
     let nearestDist = Infinity, nearestPos = null;
 
-    // Check human player position (cached each frame by _mpSendPos)
     if (window._mpLocalPos && window._mpLocalPos.team !== ai.team) {
       const p = window._mpLocalPos;
       const dx = p.x - ai.x, dz = p.z - ai.z;
       const d = Math.sqrt(dx * dx + dz * dz);
-      if (d < nearestDist) { nearestDist = d; nearestPos = { x: p.x, z: p.z }; }
+      if (d < nearestDist) { nearestDist = d; nearestPos = { x: p.x, y: p.y || ai.y, z: p.z }; }
     }
 
-    // Check other remote players/AI on opposite team
     allEntities.forEach(other => {
       if (!other || other.id === ai.id || other.team === ai.team) return;
       const dx = other.x - ai.x, dz = other.z - ai.z;
       const d = Math.sqrt(dx * dx + dz * dz);
-      if (d < nearestDist) { nearestDist = d; nearestPos = { x: other.x, z: other.z }; }
+      if (d < nearestDist) { nearestDist = d; nearestPos = { x: other.x, y: other.y || ai.y, z: other.z }; }
     });
 
     const SPEED = 0.18;
@@ -769,6 +765,29 @@ function _tickAI() {
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       ai.heading += Math.sign(diff) * Math.min(Math.abs(diff), MAX_TURN);
+
+      // Fire torpedo — enemy within range, roughly ahead, cooldown elapsed
+      if (nearestDist < 24 && now > (ai._nextFire || 0)) {
+        let aDiff = Math.atan2(nearestPos.x - ai.x, nearestPos.z - ai.z) - ai.heading;
+        while (aDiff > Math.PI) aDiff -= Math.PI * 2;
+        while (aDiff < -Math.PI) aDiff += Math.PI * 2;
+        if (Math.abs(aDiff) < Math.PI / 2.5) { // within ~72° forward arc
+          const tdx = nearestPos.x - ai.x;
+          const tdy = nearestPos.y - ai.y;
+          const tdz = nearestPos.z - ai.z;
+          const tlen = Math.sqrt(tdx * tdx + tdy * tdy + tdz * tdz) || 1;
+          const torpId = `aitorp_${ai.id}_${now}`;
+          if (!window._mpRemoteTorps) window._mpRemoteTorps = {};
+          window._mpRemoteTorps[torpId] = {
+            x: ai.x, y: ai.y, z: ai.z,
+            dx: tdx / tlen, dy: tdy / tlen, dz: tdz / tlen,
+            speed: 0.3, progress: 0, age: 0,
+            owner: ai.id, team: ai.team,
+          };
+          // Cooldown: 18–36 seconds
+          ai._nextFire = now + 18000 + Math.random() * 18000;
+        }
+      }
     } else {
       // Patrol — gradual random turns
       if (now > (ai._nextTurn || 0)) {
@@ -784,8 +803,8 @@ function _tickAI() {
     // Bounce off bounds
     if (ai.x < 3)    { ai.heading = Math.PI - ai.heading; ai.x = 3; }
     if (ai.x > _AI_GRID) { ai.heading = Math.PI - ai.heading; ai.x = _AI_GRID; }
-    if (ai.z < 3)    { ai.heading = -ai.heading;           ai.z = 3; }
-    if (ai.z > _AI_GRID) { ai.heading = -ai.heading;           ai.z = _AI_GRID; }
+    if (ai.z < 3)    { ai.heading = -ai.heading; ai.z = 3; }
+    if (ai.z > _AI_GRID) { ai.heading = -ai.heading; ai.z = _AI_GRID; }
 
     // Smooth depth wander
     if (now > (ai._nextDepth || 0)) {
@@ -794,7 +813,7 @@ function _tickAI() {
     }
     if (ai._depthTarget !== undefined) ai.y += (ai._depthTarget - ai.y) * 0.02;
 
-    // Host broadcasts AI positions so human guests also see them
+    // Broadcast AI position so human guests also see them
     if (_gameChannel) {
       _gameChannel.send({
         type: 'broadcast', event: 'pos',

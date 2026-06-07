@@ -4357,6 +4357,7 @@ function renderPeriscope() {
 
     // ── WATER SURFACE GRID + 3D WIREFRAME SHIPS ──
     var depthVis = Math.max(0, (surfaceFrac - 0.70) / 0.30);
+    drawWavePointCloud(surfaceFrac);
     drawWaterGrid(surfaceFrac);
     if (depthVis > 0.02 && state.ships) state.ships.forEach(function(ship) {
       if (!ship.alive && !ship.sinking) return;
@@ -8099,6 +8100,72 @@ function drawSquidPeri(sq) {
 }
 
 // ── WATER SURFACE GRID (Battlezone/Tron style) ──
+function drawWavePointCloud(surfaceFrac) {
+  const t = state.animFrame * 0.011;
+  const px = state.player.x, py = state.player.y, pz = state.player.z;
+  const spacing = 1.5, range = 33;
+  const sf = surfaceFrac !== undefined ? surfaceFrac : (py / GRID.H);
+  // Visible even at periscope depth; peaks near surface
+  const baseAlpha = Math.min(0.92, Math.max(0.18, sf * 1.05));
+  if (baseAlpha < 0.04) return;
+
+  // Cache trig + FOV for this frame — avoids recomputing per-point
+  const cosH = Math.cos(state.periAngleH);
+  const sinH = Math.sin(state.periAngleH);
+  const cosV = Math.cos(state.periAngleV);
+  const sinV = Math.sin(state.periAngleV);
+  const FOV_SCALE = (W * 0.5) / Math.tan(0.7) * (state.periZoom || 1);
+  const CX = W * 0.5, CY = H * 0.44;
+
+  // 8-step depth palette: deep navy trough → bright cyan peak
+  const PAL = [
+    [0, 18, 88], [0, 48, 128], [0, 88, 168], [0, 128, 198],
+    [10, 168, 224], [48, 204, 240], [100, 228, 255], [178, 244, 255]
+  ];
+
+  ctx.save();
+  const xMin = Math.floor((px - range) / spacing) * spacing;
+  const xMax = Math.ceil((px + range) / spacing) * spacing;
+  const zMin = Math.floor((pz - range) / spacing) * spacing;
+  const zMax = Math.ceil((pz + range) / spacing) * spacing;
+
+  for (let wx = xMin; wx <= xMax; wx += spacing) {
+    const rxBase = wx - px;
+    for (let wz = zMin; wz <= zMax; wz += spacing) {
+      // Three-frequency animated wave surface
+      const wh = 0.55 * Math.sin(wx * 0.22 + t * 1.4 + wz * 0.11)
+               + 0.28 * Math.sin(wx * 0.44 - t * 0.9 + wz * 0.37 + 1.3)
+               + 0.12 * Math.sin(wx * 0.78 + t * 2.0 - wz * 0.58);
+
+      const ry = (GRID.H + wh) - py;
+      const rz = wz - pz;
+
+      // Inline perspective projection (avoids per-call trig lookup)
+      const fx  =  rxBase * cosH + rz * sinH;
+      const fz  = -rxBase * sinH + rz * cosH;
+      const ffz =  fz * cosV - ry * sinV;
+      if (ffz < 0.5 || ffz > 45) continue;
+      const ffy =  fz * sinV + ry * cosV;
+
+      const distFade = 1 - ffz / 43;
+      const a = baseAlpha * distFade;
+      if (a < 0.022) continue;
+
+      const sx = CX - (fx / ffz) * FOV_SCALE;
+      const sy = CY - (ffy / ffz) * FOV_SCALE;
+      if (sx < -8 || sx > W + 8 || sy < -8 || sy > H + 8) continue;
+
+      const hf = Math.max(0, Math.min(1, (wh + 0.95) / 1.9));
+      const [cr, cg, cb] = PAL[Math.min(7, hf * 8 | 0)];
+      const dotSz = Math.max(0.7, 2.4 * distFade * (0.65 + hf * 0.55));
+
+      ctx.fillStyle = `rgba(${cr},${cg},${cb},${a.toFixed(2)})`;
+      ctx.fillRect(sx - dotSz, sy - dotSz, dotSz * 2, dotSz * 2);
+    }
+  }
+  ctx.restore();
+}
+
 function drawWaterGrid(surfaceFrac) {
   const sf = surfaceFrac !== undefined ? surfaceFrac : (state.player.y / GRID.H);
   const baseA = Math.max(0, (sf - 0.55) / 0.45) * 0.55;

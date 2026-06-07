@@ -9647,11 +9647,12 @@ function drawSurfaceWavePoints(pcx, horizonY, bearing) {
     const t       = ri / Math.max(1, nRows);
     const sy_base = horizonY + ri * rowStep;
 
-    const worldDist = Math.max(0.4, 68 * Math.pow(1 - t, 1.70));
-    const colStep   = Math.max(3, 22 * (1 - t) + 3);   // tight near horizon
+    const worldDist = Math.max(0.5, 70 * Math.pow(1 - t, 1.55));
+    // Perspective-correct: horizon = dense tiny dots, near = sparse large dots
+    const colStep   = Math.max(2, t * 20 + 2);
     const rowOff    = (ri % 2) * colStep * 0.5;
-    const halfW     = W * (0.05 + t * 0.62);
-    // Horizon rows get a real base alpha so they're always visible
+    // Wider at horizon so the waterline feels full edge-to-edge
+    const halfW     = W * (0.30 + t * 0.32);
     const rowAlpha  = Math.min(0.95, 0.30 + t * 0.65);
 
     for (let sx = pcx - halfW + rowOff; sx <= pcx + halfW; sx += colStep) {

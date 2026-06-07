@@ -696,10 +696,11 @@ async function _launchGame(mapId, mode) {
 
 // ── AI PLAYERS ──────────────────────────────────────────────────────────────
 
+const _AI__AI_GRID = 78; // approximate playfield size
+
 function _startAIPlayers() {
   if (_aiInterval) { clearInterval(_aiInterval); _aiInterval = null; }
 
-  const GRID = 78; // approximate grid size
   const aiNames = { alpha: 'WOLFPACK', bravo: 'KRAKEN' };
 
   function spawnAI(team, idx) {
@@ -709,9 +710,9 @@ function _startAIPlayers() {
     window._mpRemotePlayers[id] = {
       id,
       username: `${aiNames[team]}-${idx + 1}`,
-      x: GRID * (side + Math.random() * 0.35),
+      x: _AI_GRID * (side + Math.random() * 0.35),
       y: 3 + Math.random() * 6,
-      z: GRID * (side + Math.random() * 0.35),
+      z: _AI_GRID * (side + Math.random() * 0.35),
       heading: Math.random() * Math.PI * 2,
       team,
       sr: false,
@@ -782,9 +783,9 @@ function _tickAI() {
 
     // Bounce off bounds
     if (ai.x < 3)    { ai.heading = Math.PI - ai.heading; ai.x = 3; }
-    if (ai.x > GRID) { ai.heading = Math.PI - ai.heading; ai.x = GRID; }
+    if (ai.x > _AI_GRID) { ai.heading = Math.PI - ai.heading; ai.x = _AI_GRID; }
     if (ai.z < 3)    { ai.heading = -ai.heading;           ai.z = 3; }
-    if (ai.z > GRID) { ai.heading = -ai.heading;           ai.z = GRID; }
+    if (ai.z > _AI_GRID) { ai.heading = -ai.heading;           ai.z = _AI_GRID; }
 
     // Smooth depth wander
     if (now > (ai._nextDepth || 0)) {

@@ -9612,8 +9612,8 @@ function drawShipPoints(ctx2d, ship, yLevel, projectFn) {
 // wide-spaced; far waves are tiny and dense — same colour palette as the
 // submerged drawWavePointCloud so both views feel consistent.
 function drawSurfaceWavePoints(pcx, horizonY, bearing) {
-  const ta  = state.animFrame * 0.011;
-  const px  = state.player.x, pz = state.player.z;
+  const ta   = state.animFrame * 0.011;
+  const px   = state.player.x, pz = state.player.z;
   const cosB = Math.cos(bearing), sinB = Math.sin(bearing);
   const oceanH = H - horizonY;
 
@@ -9624,40 +9624,54 @@ function drawSurfaceWavePoints(pcx, horizonY, bearing) {
 
   ctx.save();
 
-  const rowStep = 4;
+  // Wider row spacing = less grid-like, more breathing room between rows
+  const rowStep = 6;
   const nRows   = Math.floor(oceanH / rowStep);
 
   for (let ri = 1; ri <= nRows; ri++) {
-    const t       = ri / nRows;                          // 0=horizon, 1=bottom
+    const t       = ri / nRows;          // 0=horizon, 1=bottom of screen
     const sy_base = horizonY + ri * rowStep;
 
-    // Perspective: near rows (t→1) are large, widely spaced; horizon rows tiny, dense
-    const worldDist = Math.max(0.5, 50 * Math.pow(1 - t, 2.3));
-    const colStep   = Math.max(3, 26 * (1 - t) + 3);
-    const halfW     = W * (0.10 + t * 0.54);
-    const rowAlpha  = Math.min(0.90, t * 1.05 + 0.08);
+    // Lower exponent → points extend much further toward horizon
+    const worldDist = Math.max(0.4, 62 * Math.pow(1 - t, 1.85));
+    // More column spacing = less grid feeling; stagger alternate rows by half-step
+    const colStep   = Math.max(6, 34 * (1 - t) + 6);
+    const rowOff    = (ri % 2) * colStep * 0.5;   // hex-brick offset breaks grid
+    const halfW     = W * (0.08 + t * 0.58);
+    const rowAlpha  = Math.min(0.88, t * 1.0 + 0.06);
 
-    for (let sx = pcx - halfW; sx <= pcx + halfW; sx += colStep) {
-      // Approximate world X/Z from screen column + bearing
-      const offX = (sx - pcx) / (W * 0.45);
-      const wx = px + cosB * worldDist - sinB * offX * worldDist * 1.3;
-      const wz = pz + sinB * worldDist + cosB * offX * worldDist * 1.3;
+    for (let sx = pcx - halfW + rowOff; sx <= pcx + halfW; sx += colStep) {
+      // Map screen column to approximate world offset
+      const offX = (sx - pcx) / (W * 0.42);
+      const wx = px + cosB * worldDist - sinB * offX * worldDist * 1.35;
+      const wz = pz + sinB * worldDist + cosB * offX * worldDist * 1.35;
 
-      // Three-frequency animated wave (same formula as submerged view)
-      const wh = 0.55 * Math.sin(wx * 0.22 + ta * 1.4 + wz * 0.11)
-               + 0.28 * Math.sin(wx * 0.44 - ta * 0.9 + wz * 0.37 + 1.3)
-               + 0.12 * Math.sin(wx * 0.78 + ta * 2.0 - wz * 0.58);
+      // Bigger amplitude waves — more dramatic undulation
+      const wh = 0.80 * Math.sin(wx * 0.22 + ta * 1.4 + wz * 0.11)
+               + 0.42 * Math.sin(wx * 0.44 - ta * 0.9 + wz * 0.37 + 1.3)
+               + 0.20 * Math.sin(wx * 0.78 + ta * 2.0 - wz * 0.58)
+               + 0.10 * Math.sin(wx * 1.3  + ta * 3.1 - wz * 1.1  + 2.4);
 
-      // Wave height nudges the dot up/down (near waves ripple more)
-      const sy = sy_base + wh * t * 6.0;
+      // Stable structural jitter (position-based — no frame flicker)
+      const seed = Math.floor(sx * 0.1) * 137 + ri * 29;
+      const jx   = Math.sin(seed * 127.3) * colStep * 0.38;
+      const jy   = Math.sin(seed *  93.7) * rowStep * 0.38;
+      // Slow time-drift gives organic life to the points
+      const driftX = Math.sin(ta * 1.1 + wx * 0.6 + wz * 0.4) * 2.2;
+      const driftY = Math.cos(ta * 0.9 + wz * 0.5 + wx * 0.3) * 1.8;
 
-      const hf    = Math.max(0, Math.min(1, (wh + 0.95) / 1.9));
+      // Near waves ripple much more in screen Y
+      const sy  = sy_base + wh * t * 11.0 + jy + driftY;
+      const sxf = sx      + jx + driftX;
+
+      const maxWh = 1.52; // 0.80+0.42+0.20+0.10
+      const hf    = Math.max(0, Math.min(1, (wh + maxWh) / (maxWh * 2)));
       const [cr, cg, cb] = PAL[Math.min(7, hf * 8 | 0)];
-      const a     = rowAlpha * (0.32 + hf * 0.68);
-      const dotSz = Math.max(0.7, t * 4.0 * (0.40 + hf * 0.60));
+      const a     = rowAlpha * (0.28 + hf * 0.72);
+      const dotSz = Math.max(0.7, t * 4.8 * (0.38 + hf * 0.62));
 
       ctx.fillStyle = `rgba(${cr},${cg},${cb},${a.toFixed(2)})`;
-      ctx.fillRect(sx - dotSz, sy - dotSz, dotSz * 2, dotSz * 2);
+      ctx.fillRect(sxf - dotSz, sy - dotSz, dotSz * 2, dotSz * 2);
     }
   }
 

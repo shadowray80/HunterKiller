@@ -139,21 +139,46 @@ async function _subscribeToSessions() {
 async function _renderSessions() {
   const list = document.getElementById('mp-sessions-list');
   if (!list) return;
-  const { data } = await supabase.from('sessions').select('*').eq('status', 'waiting').order('created_at', { ascending: false }).limit(10);
-  if (!data || data.length === 0) {
-    list.innerHTML = '<div class="mp-empty">No open games — create one!</div>'; return;
+
+  // Fetch open (waiting) sessions
+  const { data: waiting } = await supabase.from('sessions').select('*').eq('status', 'waiting').order('created_at', { ascending: false }).limit(10);
+
+  // Fetch ingame sessions this player has a record in (for rejoin)
+  let rejoinRows = [];
+  if (_user) {
+    const { data: mySlots } = await supabase.from('session_players').select('session_id').eq('player_id', _user.id);
+    if (mySlots && mySlots.length) {
+      const ids = mySlots.map(r => r.session_id);
+      const { data: ingame } = await supabase.from('sessions').select('*').in('id', ids).eq('status', 'ingame');
+      rejoinRows = ingame || [];
+    }
   }
-  list.innerHTML = data.map(s => {
+
+  const rows = [];
+  rejoinRows.forEach(s => {
     const map = MP_MAPS.find(m => m.id === s.map_id) || { name: s.map_id };
-    return `<div class="mp-session-row">
+    rows.push(`<div class="mp-session-row mp-session-rejoin">
+      <div class="mp-session-info">
+        <span class="mp-session-code">${s.id}</span>
+        <span class="mp-session-map">${map.name}</span>
+        <span class="mp-session-mode" style="color:#ff8833">⚔ IN PROGRESS</span>
+      </div>
+      <button class="mp-join-btn mp-rejoin-btn" onclick="window._mpRejoin('${s.id}')">REJOIN</button>
+    </div>`);
+  });
+  (waiting || []).forEach(s => {
+    const map = MP_MAPS.find(m => m.id === s.map_id) || { name: s.map_id };
+    rows.push(`<div class="mp-session-row">
       <div class="mp-session-info">
         <span class="mp-session-code">${s.id}</span>
         <span class="mp-session-map">${map.name}</span>
         <span class="mp-session-mode">${s.mode.toUpperCase()}</span>
       </div>
       <button class="mp-join-btn" onclick="window._mpJoin('${s.id}')">JOIN</button>
-    </div>`;
-  }).join('');
+    </div>`);
+  });
+
+  list.innerHTML = rows.length ? rows.join('') : '<div class="mp-empty">No open games — create one!</div>';
 }
 
 // ── ONLINE PLAYERS ──
@@ -651,6 +676,30 @@ async function _launchGame(mapId, mode) {
   _startGameSync(_currentCode);
   window._mpMyTeam = _myTeam;
 
+  // Show session code + LOBBY button in HUD
+  const codeHud = document.getElementById('mp-session-code-hud');
+  if (codeHud) { codeHud.textContent = _currentCode; codeHud.style.display = ''; }
+  const lobbyBtn = document.getElementById('peri-btn-lobby');
+  if (lobbyBtn) {
+    lobbyBtn.style.display = '';
+    lobbyBtn.onclick = () => {
+      document.getElementById('hud').style.display = 'none';
+      document.getElementById('multiplayer-screen').style.display = '';
+      const banner = document.getElementById('mp-resume-banner');
+      const codeEl = document.getElementById('mp-resume-code');
+      if (codeEl) codeEl.textContent = `SESSION: ${_currentCode}`;
+      if (banner) banner.style.display = '';
+    };
+  }
+  const resumeBtn = document.getElementById('mp-resume-btn');
+  if (resumeBtn) {
+    resumeBtn.onclick = () => {
+      document.getElementById('mp-resume-banner').style.display = 'none';
+      document.getElementById('multiplayer-screen').style.display = 'none';
+      document.getElementById('hud').style.display = '';
+    };
+  }
+
   // Show team badge in HUD
   const teamInfo = TEAMS[_myTeam] || TEAMS.alpha;
   setTimeout(() => {
@@ -831,9 +880,45 @@ export async function leaveSession() {
   }
   _currentCode = null; _isHost = false;
   _updatePresenceStatus('lobby');
+  _hideInGameExtras();
   await _renderSessions();
   showView('lobby');
 }
+
+function _hideInGameExtras() {
+  const lobbyBtn = document.getElementById('peri-btn-lobby');
+  if (lobbyBtn) lobbyBtn.style.display = 'none';
+  const codeHud = document.getElementById('mp-session-code-hud');
+  if (codeHud) { codeHud.style.display = 'none'; codeHud.textContent = ''; }
+  const banner = document.getElementById('mp-resume-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+// Rejoin an in-progress session — reconnect game channel, show HUD
+window._mpRejoin = async function(code) {
+  const { data: sess } = await supabase.from('sessions').select('*').eq('id', code).single();
+  if (!sess) return;
+  const { data: myRow } = await supabase.from('session_players').select('team').eq('session_id', code).eq('player_id', _user.id).maybeSingle();
+  _currentCode = code;
+  _myTeam = myRow?.team || 'alpha';
+  window._mpMyTeam = _myTeam;
+
+  // Reconnect game channel
+  _startGameSync(code);
+
+  // Update HUD session code
+  const codeHud = document.getElementById('mp-session-code-hud');
+  if (codeHud) { codeHud.textContent = code; codeHud.style.display = ''; }
+  const lobbyBtn = document.getElementById('peri-btn-lobby');
+  if (lobbyBtn) lobbyBtn.style.display = '';
+
+  // Hide lobby, show game
+  const banner = document.getElementById('mp-resume-banner');
+  if (banner) banner.style.display = 'none';
+  document.getElementById('multiplayer-screen').style.display = 'none';
+  document.getElementById('hud').style.display = '';
+  _updatePresenceStatus('ingame');
+};
 
 // ── USERNAME ──
 export async function setUsername(name) {

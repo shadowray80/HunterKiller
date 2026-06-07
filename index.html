@@ -242,6 +242,12 @@
 <div id="multiplayer-screen" style="display:none;">
   <div id="mp-launch-overlay" style="display:none;"></div>
 
+  <!-- Resume banner — shown when player is mid-game and returns to lobby -->
+  <div id="mp-resume-banner" style="display:none;">
+    <span id="mp-resume-code"></span>
+    <button id="mp-resume-btn">▶ BACK TO GAME</button>
+  </div>
+
   <div id="mp-auth-error" style="color:#ff6644;font-size:11px;padding:12px 16px;letter-spacing:0.08em;"></div>
 
   <!-- Shared header -->
@@ -781,6 +787,7 @@
     <button id="peri-btn-abort">ABORT</button>
     <button id="peri-btn-controls">PLAYER<br>CONTROLS</button>
     <button id="peri-btn-acoustics">ACOUSTICS</button>
+    <button id="peri-btn-lobby" style="display:none">⊙ LOBBY</button>
 
     <span id="peri-density-val" style="display:none;">POINTS</span>
 
@@ -788,6 +795,7 @@
       <div><span style="color:var(--teal-dim)">DEPTH </span><span id="peri-depth">-0m</span></div>
       <div><span style="color:var(--teal-dim)">BEAR  </span><span id="peri-bearing">000°</span></div>
       <div id="mp-team-badge" style="display:none;font-size:9px;letter-spacing:0.18em;margin-top:3px;"></div>
+      <div id="mp-session-code-hud" style="display:none;font-size:8px;letter-spacing:0.14em;margin-top:3px;color:rgba(0,180,220,0.5);"></div>
     </div>
     <div id="peri-info-mid">
       <div><span id="peri-contact">NO CONTACT</span></div>

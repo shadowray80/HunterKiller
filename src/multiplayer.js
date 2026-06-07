@@ -586,6 +586,7 @@ function _startGameSync(code) {
 
   // Called by game.js every 3 frames
   window._mpSendPos = function(x, y, z, heading, silentRunning) {
+    window._mpLocalPos = { x, y, z, team: _myTeam }; // cache for AI proximity checks
     if (!_gameChannel) return;
     _gameChannel.send({
       type: 'broadcast', event: 'pos',
@@ -696,7 +697,7 @@ async function _launchGame(mapId, mode) {
 
 // ── AI PLAYERS ──────────────────────────────────────────────────────────────
 
-const _AI__AI_GRID = 78; // approximate playfield size
+const _AI_GRID = 78; // approximate playfield size
 
 function _startAIPlayers() {
   if (_aiInterval) { clearInterval(_aiInterval); _aiInterval = null; }
@@ -742,10 +743,9 @@ function _tickAI() {
     // Find nearest enemy entity
     let nearestDist = Infinity, nearestPos = null;
 
-    // Check human player
-    const playerTeam = window._mpMyTeam || 'alpha';
-    if (playerTeam !== ai.team && window.state?.player) {
-      const p = window.state.player;
+    // Check human player position (cached each frame by _mpSendPos)
+    if (window._mpLocalPos && window._mpLocalPos.team !== ai.team) {
+      const p = window._mpLocalPos;
       const dx = p.x - ai.x, dz = p.z - ai.z;
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d < nearestDist) { nearestDist = d; nearestPos = { x: p.x, z: p.z }; }

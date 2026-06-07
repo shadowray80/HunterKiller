@@ -1754,27 +1754,22 @@ text-align: center;
   -webkit-tap-highlight-color: transparent;
 }
 .intro-enemy-btn:active { background: rgba(0,229,255,0.2); }
-.intro-dive-split {
-display: flex;
-gap: 10px;
-}
-.intro-dive-split button {
+#intro-choose-btn {
 font-family: var(--mono);
 font-size: 10px;
 letter-spacing: 0.18em;
-padding: 12px 8px;
+padding: 13px 8px;
 background: transparent;
 border: 1px solid var(--teal);
 color: var(--teal);
 cursor: pointer;
-flex: 1;
 text-align: center;
 -webkit-tap-highlight-color: transparent;
 }
-.intro-dive-split button:active {
+#intro-choose-btn:active {
 background: rgba(0,229,255,0.2);
 }
-#intro-choose-btn, #intro-upload-btn {
+#intro-upload-btn {
 font-family: var(--mono);
 font-size: 9px;
 letter-spacing: 0.18em;
@@ -1786,7 +1781,7 @@ cursor: pointer;
 text-align: center;
 -webkit-tap-highlight-color: transparent;
 }
-#intro-choose-btn:active, #intro-upload-btn:active {
+#intro-upload-btn:active {
 border-color: var(--teal);
 color: var(--teal);
 background: rgba(0,229,255,0.08);

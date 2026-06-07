@@ -10140,27 +10140,6 @@ function _spawnSoloExtras() {
   if (n > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(n);
 }
 
-document.getElementById('intro-btn-floorplan').addEventListener('click', function() {
-  window._pendingGrid = null;
-  window._isHeightfield = false;
-  launchGame(FLOOR_PLAN);
-  _spawnSoloExtras();
-});
-
-document.getElementById('intro-btn-ocean').addEventListener('click', function() {
-  var canyonBg = BATTLEGROUNDS.find(function(b) { return b.id === 'canyon'; });
-  if (!canyonBg) return;
-  window._isHeightfield = true;
-  window._hfGridW = undefined; window._hfGridD = undefined; window._hfGridH = undefined;
-  window._hfTerrainScale = undefined;
-  document.getElementById('intro-screen').style.display = 'none';
-  canyonBg.loadAsync().then(function(mapGrid) {
-    window._pendingGrid = mapGrid;
-    launchGame(mapGrid);
-    _spawnSoloExtras();
-  });
-});
-
 document.getElementById('intro-choose-btn').addEventListener('click', function() {
   document.getElementById('intro-screen').style.display = 'none';
   document.getElementById('battleground-screen').style.display = 'flex';

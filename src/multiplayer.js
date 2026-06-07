@@ -593,6 +593,10 @@ function _startGameSync(code) {
         if (shouldHear) entry.audio.play().catch(() => {});
       }
     })
+    .on('broadcast', { event: 'pickup' }, ({ payload }) => {
+      // Another player collected a torpedo pickup — remove it from our local list
+      if (window._mpCollectPickup) window._mpCollectPickup(payload.id);
+    })
     .subscribe();
 
   _vcInit();
@@ -643,6 +647,12 @@ function _startGameSync(code) {
       type: 'broadcast', event: 'hit',
       payload: { target: targetId, damage, hx, hy, hz, from: _user?.id }
     });
+  };
+
+  // Broadcast that this player collected a torpedo pickup
+  window._mpBroadcastPickup = function(pickupId) {
+    if (!_gameChannel) return;
+    _gameChannel.send({ type: 'broadcast', event: 'pickup', payload: { id: pickupId } });
   };
 
 }
@@ -722,6 +732,13 @@ async function _launchGame(mapId, mode) {
     window._hfGridD = undefined;
     window._hfGridH = undefined;
   }
+
+  // Seed torpedo pickups deterministically from session code so all clients spawn identical positions
+  let _pickupSeed = 0;
+  for (let i = 0; i < _currentCode.length; i++)
+    _pickupSeed = (Math.imul(31, _pickupSeed) + _currentCode.charCodeAt(i)) | 0;
+  window._mpPickupSeed = Math.abs(_pickupSeed) || 99991;
+  window._mpLimitedTorps = true; // tells launchGame to cap torpedoes at 20
 
   if (bg.loadAsync) {
     const grid = await bg.loadAsync();

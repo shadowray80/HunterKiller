@@ -151,6 +151,25 @@ const MISSIONS = [
     killTarget: 1,
     enemyCount: { cadet: 1, captain: 1, commander: 3 },
   },
+  {
+    index: 6,
+    name: 'THROUGH THE ANGELS',
+    codename: 'RED ROUTE',
+    subtitle: 'Mission 7 — Canyon Run',
+    objectiveType: 'angels',
+    briefingImg: '/Images/Rules/dropoff.png',
+    briefing:
+      'CLASSIFICATION: DEEP BLACK\n\n' +
+      'The Angels — a chain of volcanic pinnacles in the Norwegian Deep. No chart covers them. No one who has run them has reported back.\n\n' +
+      'A Soviet torpedo is in the water behind you. Proximity-fuzed. No countermeasures remaining.\n\n' +
+      'There is one way through. We call it the Red Route. A 4-unit gap between two pinnacles at the far end of the passage — too narrow for a Type 53 to navigate at speed.\n\n' +
+      'Thread it. The torpedo will not.\n\n' +
+      'Use the Engine Order Telegraph to set speed. Tap the heading compass to steer.\n' +
+      'The Arch requires depth below 16. The Needle requires precise heading at ½ speed or less.\n\n' +
+      'THREATS: Canyon walls · The Arch · Pursuing torpedo · The Angels themselves',
+    killTarget: 0,
+    enemyCount: { cadet: 0, captain: 0, commander: 0 },
+  },
 ];
 
 // ── DIFFICULTY CONFIG ──
@@ -313,6 +332,33 @@ function showMissionBriefing(missionIndex, difficulty) {
 function launchMission(missionIndex, difficulty) {
   const mission = MISSIONS[missionIndex];
   const diff = DIFFICULTY_CONFIG[difficulty];
+
+  // ── ANGELS mission: self-contained canyon run (no battleground needed) ──
+  if (mission.objectiveType === 'angels') {
+    _missionKillCount = 0;
+    window._campaignMode = true;
+
+    window._onCampaignMissionComplete = function () {
+      window._onCampaignMissionComplete = null;
+      completeMission(missionIndex, difficulty);
+    };
+    window._onCampaignGameOver = function () {
+      window._onCampaignGameOver = null;
+      window._campaignMode = false;
+      setTimeout(function () { showMissionFailed(missionIndex, difficulty); }, 100);
+    };
+
+    hideAllCampaignScreens();
+    document.getElementById('intro-screen').style.display = 'none';
+
+    if (window.launchAngels) {
+      window.launchAngels(difficulty);
+    } else {
+      console.error('[campaign] launchAngels not available — angels.js not loaded');
+    }
+    return;
+  }
+
   const bg = window.BATTLEGROUNDS && window.BATTLEGROUNDS.find(b => b.id === mission.mapId);
   if (!bg) { console.error('[campaign] No battleground found:', mission.mapId); return; }
 

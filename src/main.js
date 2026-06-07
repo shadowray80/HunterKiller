@@ -1,6 +1,7 @@
 import './game.js';
 import './campaign.js';
 import './music.js';
+import './missions/angels.js';
 import { initMultiplayer, setUsername, showCreateGame, createGame, toggleReady, launchSession, leaveSession, renderLeaderboard, joinByCode } from './multiplayer.js';
 
 // ── MULTIPLAYER ──

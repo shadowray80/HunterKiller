@@ -84,6 +84,11 @@
         <div class="cp-tile-name">LAUNCH AUTHORITY</div>
         <div class="cp-tile-code">ARMAGEDDON</div>
       </div>
+      <div class="cp-mission-tile" id="cp-tile-6">
+        <div class="cp-tile-num">07</div>
+        <div class="cp-tile-name">THROUGH THE ANGELS</div>
+        <div class="cp-tile-code">RED ROUTE</div>
+      </div>
     </div>
 
     <div class="cp-actions">
@@ -106,6 +111,7 @@
         <button class="cp-test-btn" data-mission="3">M4</button>
         <button class="cp-test-btn" data-mission="4">M5</button>
         <button class="cp-test-btn" data-mission="5">M6</button>
+        <button class="cp-test-btn" data-mission="6">M7</button>
       </div>
     </div>
   </div>
@@ -732,7 +738,7 @@
     <div class="rp-label" style="margin-top:4px">VOLUME</div>
     <div class="rp-row">
       <button class="rp-btn" id="aco-vol-dn">−</button>
-      <button class="rp-btn" id="aco-vol-val" style="min-width:34px;font-size:8px;pointer-events:none">100%</button>
+      <button class="rp-btn" id="aco-vol-val" style="min-width:34px;font-size:8px;pointer-events:none">20%</button>
       <button class="rp-btn" id="aco-vol-up">+</button>
     </div>
   </div>
@@ -835,6 +841,14 @@
       </button>
     </div>
 
+    <!-- Angels Mission throttle bar — hidden unless Mission: Through The Angels is active -->
+    <div id="ang-throttle">
+      <div class="ang-throt-zone" data-throt="0">STOP</div>
+      <div class="ang-throt-zone" data-throt="1">1/3</div>
+      <div class="ang-throt-zone" data-throt="2">2/3</div>
+      <div class="ang-throt-zone" data-throt="3">FULL</div>
+    </div>
+
     <!-- Combat buttons above the control panel -->
     <div id="peri-combat-btns">
       <button class="peri-top-btn" id="peri-btn-reveal-peri">STANDARD<br>STEAMING</button>
@@ -927,6 +941,10 @@
     </div>
   </div>
 </div>
+
+<!-- Angels overlay stub (unused — mission now uses existing periscope UI) -->
+<div id="angels-overlay" style="display:none;"></div>
+
 
 <script type="module" src="/src/main.js"></script>
 </body>

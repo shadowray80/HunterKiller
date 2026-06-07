@@ -329,7 +329,71 @@ const state = {
   moveTimer: 0,
   enemyMoveTimer: 0,
   extraEnemies: [],
+  torpPickups: [],
 };
+
+// ── TORPEDO PICKUPS ──
+function spawnTorpPickups(seed) {
+  state.torpPickups = [];
+  // deterministic LCG seeded from session hash so all MP clients place pickups identically
+  let s = seed | 0;
+  function rnd() { s = (Math.imul(1664525, s) + 1013904223) & 0x7fffffff; return s / 0x7fffffff; }
+  const count = 5;
+  let attempts = 0;
+  while (state.torpPickups.length < count && attempts < 300) {
+    attempts++;
+    const gx = 2 + Math.floor(rnd() * (GRID.W - 4));
+    const gz = 2 + Math.floor(rnd() * (GRID.D - 4));
+    if (FLOOR_PLAN[gz] && FLOOR_PLAN[gz][gx] === 0) {
+      const id = `pu_${gx}_${gz}`;
+      if (!state.torpPickups.find(p => p.id === id)) {
+        state.torpPickups.push({ id, x: gx + 0.5, y: GRID.H * 0.5, z: gz + 0.5, collected: false });
+      }
+    }
+  }
+}
+
+function drawTorpPickupPeri(p) {
+  const pp = projectPeriscope(p.x, p.y, p.z);
+  if (!pp || pp.depth < 0.3 || pp.depth > 80) return;
+  const pulse = 0.5 + Math.sin(state.animFrame * 0.1) * 0.5;
+  const spin  = state.animFrame * 0.07;
+  const sz    = Math.max(6, Math.min(30, 70 / pp.depth));
+
+  ctx.save();
+  ctx.translate(pp.sx, pp.sy);
+
+  // Outer spinning ring
+  for (let r = 0; r < 2; r++) {
+    ctx.beginPath();
+    ctx.arc(0, 0, sz * 2.2, spin + r * Math.PI, spin + r * Math.PI + Math.PI * 1.3);
+    ctx.strokeStyle = `rgba(255,200,0,${(0.4 + pulse * 0.5).toFixed(2)})`;
+    ctx.lineWidth = 1.5;
+    ctx.shadowBlur = 14 * pulse;
+    ctx.shadowColor = '#ffcc00';
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+
+  // Mini torpedo body
+  ctx.save();
+  ctx.rotate(-0.5);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, sz * 0.6, sz * 0.18, 0, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(255,220,80,${(0.7 + pulse * 0.25).toFixed(2)})`;
+  ctx.shadowBlur = 10 * pulse; ctx.shadowColor = '#ffcc00';
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  // Label
+  ctx.font = `${Math.round(sz * 0.55)}px Share Tech Mono`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = `rgba(255,230,80,${(0.6 + pulse * 0.35).toFixed(2)})`;
+  ctx.fillText('+10', 0, -sz * 2.6);
+
+  ctx.restore();
+}
 
 // ── WAYPOINT MISSION ──
 const WP_DEFS = [
@@ -894,6 +958,7 @@ const sonarPings = [];
 let _sonarTerrainCache = null; // pre-rendered heightmap image, rebuilt on map load
 
 function drawSonar() {
+  if (window._angelsDrawSonar) { window._angelsDrawSonar(); return; }
   const sc = sonarCtx;
   const sw = 200, sh = 200;
   const scx = sw/2, scy = sh/2;
@@ -1245,6 +1310,19 @@ function drawSonar() {
     sc.font = '6px Share Tech Mono'; sc.textAlign = 'center'; sc.textBaseline = 'alphabetic';
     sc.fillStyle = 'rgba(100,140,180,0.75)';
     sc.fillText('MEG', mp.x, mp.y - 6);
+  });
+
+  // ── TORPEDO PICKUP BLIPS ──
+  if (state.torpPickups) state.torpPickups.forEach(function(p) {
+    if (p.collected) return;
+    var tp2 = mm(p.x, p.z);
+    var tpulse = 0.5 + 0.5 * Math.sin(state.animFrame * 0.12);
+    sc.beginPath(); sc.arc(tp2.x, tp2.y, 3 + tpulse, 0, Math.PI*2);
+    sc.strokeStyle = `rgba(255,200,0,${0.5 + tpulse*0.4})`; sc.lineWidth = 1; sc.stroke();
+    sc.beginPath(); sc.arc(tp2.x, tp2.y, 2.5, 0, Math.PI*2);
+    sc.fillStyle = '#ffcc00'; sc.shadowBlur = 8; sc.shadowColor = '#ffdd00'; sc.fill(); sc.shadowBlur = 0;
+    sc.font = '5px Share Tech Mono'; sc.textAlign = 'center'; sc.textBaseline = 'alphabetic';
+    sc.fillStyle = 'rgba(255,230,80,0.85)'; sc.fillText('+T', tp2.x, tp2.y - 5);
   });
 
   // ── DEPLOYED MINE BLIPS ──
@@ -2020,6 +2098,7 @@ function update() {
   if (window._campaignSonarBuoys) updateCampaignBuoys();
   if (window._campaignCheckpoints) checkCampaignCheckpoints();
   if (window._campaignExitBeacon) checkExitBeacon();
+  if (window._angelsUpdate) window._angelsUpdate();
 
   // Update cooldowns
   // Update fire button every frame using real time
@@ -2135,6 +2214,22 @@ function update() {
   updateMegalodons();
   updateSquids();
 
+  // ── TORPEDO PICKUP COLLECTION ──
+  if (state.torpPickups && state.torpCount !== Infinity) {
+    state.torpPickups.forEach(function(p) {
+      if (p.collected) return;
+      var dx = state.player.x - p.x, dy = state.player.y - p.y, dz = state.player.z - p.z;
+      if (dx*dx + dy*dy + dz*dz < 6.25) { // 2.5 unit radius
+        p.collected = true;
+        state.torpCount += 10;
+        document.getElementById('torp-count').textContent = state.torpCount;
+        document.getElementById('peri-torps').textContent = state.torpCount;
+        addEvent('⊛ TORPEDO CACHE — +10 TUBES LOADED', false);
+        if (window._mpBroadcastPickup) window._mpBroadcastPickup(p.id);
+      }
+    });
+  }
+
   // Update torpedoes
   state.torpedoes = state.torpedoes.filter(t => {
     t.progress += t.speed;
@@ -2154,8 +2249,11 @@ function update() {
       t.z += t.dz * t.speed;
       // ── TERRAIN COLLISION — the Red October moment ──
       const _thx = Math.round(t.x), _thz = Math.round(t.z);
+      var _thHfWall = window._isHeightfield && window._canyonHeightGrid
+        ? (window._canyonHeightGrid[Math.max(0,Math.min(127,_thz))][Math.max(0,Math.min(127,_thx))]/255)*(window._hfTerrainScale||16) > t.y
+        : false;
       if (t.x < 1 || t.x >= GRID.W-1 || t.z < 1 || t.z >= GRID.D-1 ||
-          (FLOOR_PLAN[_thz] && FLOOR_PLAN[_thz][_thx]) || (_expired && t.y <= 0.5)) {
+          (FLOOR_PLAN[_thz] && FLOOR_PLAN[_thz][_thx]) || (_expired && t.y <= 0.5) || _thHfWall) {
         spawnExplosion(t.x, Math.max(0.5, t.y), t.z, false);
         playExplosion(false);
         addEvent(_expired ? '▸ GUIDED — TIME EXPIRED — SEABED DETONATION' : '▸ GUIDED — TERRAIN DETONATION', false);
@@ -2175,8 +2273,11 @@ function update() {
       t.y += (t.dy||0) * t.speed;
       t.z += t.dz * t.speed;
       const _atx = Math.round(t.x), _atz = Math.round(t.z);
+      var _atHfWall = window._isHeightfield && window._canyonHeightGrid
+        ? (window._canyonHeightGrid[Math.max(0,Math.min(127,_atz))][Math.max(0,Math.min(127,_atx))]/255)*(window._hfTerrainScale||16) > t.y
+        : false;
       if (t.x < 1 || t.x >= GRID.W-1 || t.z < 1 || t.z >= GRID.D-1 ||
-          (FLOOR_PLAN[_atz] && FLOOR_PLAN[_atz][_atx]) || (_aExp && t.y <= 0.5)) {
+          (FLOOR_PLAN[_atz] && FLOOR_PLAN[_atz][_atx]) || (_aExp && t.y <= 0.5) || _atHfWall) {
         spawnExplosion(t.x, Math.max(0.5, t.y), t.z, false);
         playExplosion(false);
         addEvent(_aExp ? '▸ ACOUSTIC — TIME EXPIRED — SEABED DETONATION' : '▸ ACOUSTIC — TERRAIN DETONATION', false);
@@ -2197,6 +2298,16 @@ function update() {
       t.x = t.ox + t.dx * t.progress;
       t.y = t.oy + t.dy * t.progress;
       t.z = t.oz + t.dz * t.progress;
+      // Heightfield terrain — standard torpedoes detonate on canyon walls
+      if (window._isHeightfield && window._canyonHeightGrid) {
+        var _stgx = Math.max(0, Math.min(127, ~~t.x));
+        var _stgz = Math.max(0, Math.min(127, ~~t.z));
+        if ((window._canyonHeightGrid[_stgz][_stgx] / 255) * (window._hfTerrainScale || 16) > t.y) {
+          spawnExplosion(t.x, Math.max(0.5, t.y), t.z, false);
+          playExplosion(false);
+          return false;
+        }
+      }
     }
 
     // Hit enemy (armed after travelling minimum safe distance)
@@ -2585,14 +2696,14 @@ function movePlayer(dx,dy,dz) {
     if (ny >= GRID.H && state.viewMode !== 'surfaced') {
       state.preSurfaceView = (state.viewMode === 'command') ? 'command' : 'periscope';
       state.viewMode = 'surfaced';
-      surfaceBearing = -state.periAngleH;
+      surfaceBearing = state.periAngleH;
       setAmbientMode('surface');
       addEvent('▸ SURFACED — HULL RECHARGING', false);
       setTimeout(()=>addEvent('⚠ EXPOSED — ENEMY SHIPS ALERTED', true), 800);
     } else if (ny >= GRID.H - 1 && ny < GRID.H && state.viewMode === 'periscope') {
       state.preSurfaceView = 'periscope';
       state.viewMode = 'surface';
-      surfaceBearing = -state.periAngleH;
+      surfaceBearing = state.periAngleH;
       setAmbientMode('surface');
       addEvent('▸ PERISCOPE UP — SURFACE SCAN', false);
       setTimeout(()=>addEvent('▸ SHIPS ON SURFACE — PICK YOUR TARGET', true), 1000);
@@ -2606,6 +2717,8 @@ function movePlayer(dx,dy,dz) {
       const returnTo = state.preSurfaceView || 'periscope';
       state.preSurfaceView = null;
       state.viewMode = returnTo;
+      // Sync periscope bearing from whatever direction we were facing at the surface
+      if (returnTo === 'periscope') state.periAngleH = surfaceBearing;
       scopeMaskCanvas.style.display = returnTo === 'periscope' ? '' : 'none';
       setAmbientMode('underwater');
       playDiveSignal();
@@ -4341,6 +4454,14 @@ function renderPeriscope() {
       drawQueue.push({ depth: pp.depth, kind: 'squid', s });
     });
 
+    // Torpedo pickups
+    if (state.torpPickups) state.torpPickups.forEach(function(p) {
+      if (p.collected) return;
+      const pp = projectPeriscope(p.x, p.y, p.z);
+      if (!pp || pp.depth < 0.1 || pp.depth > 80) return;
+      drawQueue.push({ depth: pp.depth, kind: 'torpPickup', p });
+    });
+
     // Sort farthest first
     drawQueue.sort(function(a, b) { return b.depth - a.depth; });
 
@@ -4394,6 +4515,8 @@ function renderPeriscope() {
         drawMegalodonPeri(item.m);
       } else if (item.kind === 'squid') {
         drawSquidPeri(item.s);
+      } else if (item.kind === 'torpPickup') {
+        drawTorpPickupPeri(item.p);
       }
     }
     ctx.restore();
@@ -4560,6 +4683,22 @@ function renderPeriscope() {
     });
   }
 
+  // ── ANGELS MISSION ENEMY TORPEDO — orange/amber trail ──
+  if (window._angelsEnemyTorp) {
+    var _at = window._angelsEnemyTorp;
+    for (var _ai = 0; _ai <= 16; _ai++) {
+      var _atp = projectPeriscope(_at.x - (_at.dx||0)*_ai*0.4, _at.y, _at.z - (_at.dz||0)*_ai*0.4);
+      if (!_atp || _atp.depth < 0.05) continue;
+      var _af = 1 - _ai/16;
+      var _ar = Math.max(1, Math.min(14, (_ai===0?9:4)*_af/Math.max(0.3,_atp.depth*0.3)));
+      ctx.beginPath(); ctx.arc(_atp.sx, _atp.sy, _ar, 0, Math.PI*2);
+      if (_ai===0) { ctx.fillStyle='rgba(255,140,0,'+_af+')'; ctx.shadowBlur=22; ctx.shadowColor='#ff8800'; }
+      else if (_ai<5) { ctx.fillStyle='rgba(255,100,0,'+(_af*0.9)+')'; ctx.shadowBlur=8; ctx.shadowColor='#ff5500'; }
+      else { ctx.fillStyle='rgba(200,60,0,'+(_af*0.6)+')'; ctx.shadowBlur=3; ctx.shadowColor='#cc3000'; }
+      ctx.fill(); ctx.shadowBlur=0;
+    }
+  }
+
   // Remote players are rendered via drawQueue (depth-sorted with terrain)
 
   // ── MUZZLE FLASH ──
@@ -4643,6 +4782,9 @@ function renderPeriscope() {
 
   // ── EXPLOSIONS IN PERISCOPE ──
   drawExplosions();
+
+  // Angels mission: rotating sonar sweep (drawn before scope mask clips the circle)
+  if (window._angelsDrawOnPeri) window._angelsDrawOnPeri(ctx, pcx, pcy, Math.min(W, H) * 0.52);
 
   // ── SCOPE MASK (circular vignette) ──
   scopeMaskCanvas.width = W;
@@ -4874,7 +5016,7 @@ function setupPeriDrag() {
     if (!active) return;
     const dx = x - lastX, dy = y - lastY;
     if (state.viewMode === 'surface' || state.viewMode === 'surfaced') {
-      surfaceBearing -= dx * 0.006;
+      surfaceBearing += dx * 0.006;
     } else {
       state.periAngleH += dx * 0.006;
       state.periAngleV = Math.max(-0.6, Math.min(0.8, state.periAngleV + dy * 0.004));
@@ -4939,7 +5081,7 @@ setupPeriDrag();
     if (!active) return;
     const dx = e.clientX - lastX;
     if (state.viewMode === 'surface' || state.viewMode === 'surfaced') {
-      surfaceBearing -= dx * RAD_PER_PX;
+      surfaceBearing += dx * RAD_PER_PX;
     } else {
       state.periAngleH += dx * RAD_PER_PX;
     }
@@ -5104,8 +5246,8 @@ function movePeriStrafe(dir) {
   const speedMult = state.silentRunning ? 0.5 : 1.0;
   const _isSurf = state.viewMode === 'surface' || state.viewMode === 'surfaced';
   const _heading = _isSurf ? surfaceBearing : state.periAngleH;
-  // Surface view uses normal screen-x (+fx = right), periscope negates it — flip sign
-  const _sign = _isSurf ? 1 : -1;
+  // Both views negate fx in projection — same strafe sign for both
+  const _sign = -1;
   const strafeX =  Math.cos(_heading) * _sign * dir * speedMult;
   const strafeZ =  Math.sin(_heading) * _sign * dir * speedMult;
   periStrafeAccumX += strafeX;
@@ -5418,7 +5560,7 @@ function drawPeriFwdSlider() {
   const ppx = mm(state.player.x, state.player.z);
   const arrowLen = 14;
   // Use surfaceBearing in surface mode, periAngleH otherwise
-  const _bearingForArrow = state.viewMode === 'surface' ? -surfaceBearing : state.periAngleH;
+  const _bearingForArrow = state.viewMode === 'surface' ? surfaceBearing : state.periAngleH;
   const arrowDx = -Math.sin(_bearingForArrow) * arrowLen;
   const arrowDy =  Math.cos(_bearingForArrow) * arrowLen;
 
@@ -5738,20 +5880,26 @@ document.getElementById('peri-btn-signal').addEventListener('click', () => {
 
 // ── ACOUSTICS PANEL ──
 (function(){
-  const panel  = document.getElementById('acoustics-panel');
+  const panel   = document.getElementById('acoustics-panel');
   const openBtn = document.getElementById('peri-btn-acoustics');
-  let _vol = 1.0;
+  let _vol = 0.2;
+
+  function updateVol() {
+    document.getElementById('aco-vol-val').textContent = Math.round(_vol * 100) + '%';
+    if (window._musicVolume) window._musicVolume(_vol); // sets game music + intro music
+  }
 
   openBtn.addEventListener('click', () => {
     const open = panel.style.display === 'none' || panel.style.display === '';
     panel.style.display = open ? 'flex' : 'none';
     openBtn.classList.toggle('open', open);
+    if (open) {
+      // Push current local _vol into the engine each time the panel opens
+      // (handles the case where music.js loaded after this IIFE ran)
+      updateVol();
+    }
   });
 
-  function updateVol() {
-    document.getElementById('aco-vol-val').textContent = Math.round(_vol * 100) + '%';
-    if (window._musicVolume) window._musicVolume(_vol);
-  }
   document.getElementById('aco-vol-up').addEventListener('click', () => {
     _vol = Math.min(1.0, Math.round((_vol + 0.1) * 10) / 10); updateVol();
   });
@@ -6892,6 +7040,15 @@ window.BATTLEGROUNDS = BATTLEGROUNDS;
 
 // Launch with current grid — exposed to window for multiplayer
 function launchGame(planGrid) {
+  // Clear angels mission overrides so other battlegrounds aren't affected
+  window._angelsDrawSonar = null;
+  window._angelsUpdate = null;
+  window._angelsEnemyTorp = null;
+  window._angelsDrawOnPeri = null;
+  var _angTh = document.getElementById('ang-throttle');
+  if (_angTh) _angTh.style.display = 'none';
+  var _angSl = document.querySelector('#sonar-wrap > div:first-child');
+  if (_angSl) _angSl.textContent = 'TACTICAL · SONAR';
   stopIntroMusic();
   if (window._musicStop) window._musicStop();
   if (window._musicStart) window._musicStart();
@@ -6976,6 +7133,17 @@ function launchGame(planGrid) {
   state.aimCursor = null;
   state.firingSolution = null;
   state.muzzleFlash = 0;
+
+  // Torpedo pickups — only in multiplayer (limited ammo mode)
+  state.torpPickups = [];
+  if (window._mpLimitedTorps) {
+    state.torpCount = 20;
+    window._mpLimitedTorps = false;
+    spawnTorpPickups(window._mpPickupSeed || 12345);
+    window._mpPickupSeed = undefined;
+  } else {
+    state.torpCount = Infinity;
+  }
 
   // Reset stats
   state.score = 0;
@@ -7066,6 +7234,20 @@ function launchGame(planGrid) {
 }
 window.launchGame = launchGame; // expose for multiplayer
 window._applyHullDamage = function(dmg, msg) { applyHullDamage(dmg, msg); };
+window._killEnemy = function() { state.enemy.alive = false; };
+window._getPlayerPos = function() { return { x: state.player.x, y: state.player.y, z: state.player.z }; };
+window._addEvent = function(msg, warn) { addEvent(msg, !!warn); };
+window._movePlayerFwd = function(speed) {
+  var h = state.periAngleH;
+  state.player.x = Math.max(0, Math.min(GRID.W - 1, state.player.x + Math.sin(h) * speed));
+  state.player.z = Math.max(0, Math.min(GRID.D - 1, state.player.z + Math.cos(h) * speed));
+};
+window._angelsEnemyTorp = null;
+window._getNoisemakerPositions = function() {
+  return (state.noisemakers || []).map(function(nm) {
+    return { x: nm.x, y: nm.y, z: nm.z, age: nm.age };
+  });
+};
 window._mpOnPlayerDied = function(playerId, killedBy, username) {
   var name = username || (window._mpRemotePlayers && window._mpRemotePlayers[playerId] && window._mpRemotePlayers[playerId].username) || 'ENEMY';
   if (killedBy && killedBy === window._mpMyUserId) {
@@ -7102,9 +7284,19 @@ window._endMissionClean = function() {
 window._spawnExtraEnemies = function(n) {
   var names = ['CHARLIE', 'DELTA', 'ECHO'];
   for (var i = 0; i < n; i++) {
-    var pos = getEnemySpawn();
+    var ex, ey, ez;
+    if (window._isHeightfield && window._canyonHeightGrid) {
+      // Use findSafeHfSpawn so they land in open water, not inside canyon walls
+      var tryX = 3 + Math.floor(Math.random() * (GRID.W - 6));
+      var tryZ = 3 + Math.floor(Math.random() * (GRID.D - 6));
+      var sp = findSafeHfSpawn(tryX, tryZ);
+      ex = sp.x; ey = sp.y; ez = sp.z;
+    } else {
+      var pos = getEnemySpawn();
+      ex = pos.x; ey = GRID.H * 0.4; ez = pos.z;
+    }
     state.extraEnemies.push({
-      x: pos.x, y: GRID.H * 0.4, z: pos.z,
+      x: ex, y: ey, z: ez,
       heading: Math.random() * Math.PI * 2,
       alive: true, hits: 0,
       bubbling: false, bubbleTimer: 0,
@@ -7140,6 +7332,12 @@ function updateExtraEnemiesAI() {
       en.depthTarget = Math.max(1, Math.min(GRID.H - 1, GRID.H * (0.12 + Math.random() * 0.72)));
     }
     en.y += (en.depthTarget - en.y) * 0.004;
+    // Heightfield: never sink below terrain at current position
+    if (window._isHeightfield && window._canyonHeightGrid) {
+      var _egx = Math.max(0, Math.min(127, ~~en.x)), _egz = Math.max(0, Math.min(127, ~~en.z));
+      var _eTerrH = (window._canyonHeightGrid[_egz][_egx] / 255) * (window._hfTerrainScale || 16);
+      if (en.y < _eTerrH + 2) en.y = _eTerrH + 2;
+    }
 
     // ── STATE TRANSITIONS ──
     if (en.aiState === 'patrol' && dist < 38 && en.stateTimer > 120) {
@@ -7178,8 +7376,13 @@ function updateExtraEnemiesAI() {
     var spd = en.aiState === 'hunt' ? 0.13 : 0.09;
     var nx = en.x + Math.sin(en.heading) * spd;
     var nz = en.z + Math.cos(en.heading) * spd;
+    var _nxHfClear = true;
+    if (window._isHeightfield && window._canyonHeightGrid) {
+      var _nxgx = Math.max(0, Math.min(127, ~~nx)), _nxgz = Math.max(0, Math.min(127, ~~nz));
+      _nxHfClear = (window._canyonHeightGrid[_nxgz][_nxgx] / 255) * (window._hfTerrainScale || 16) < en.y - 0.5;
+    }
     if (nx > 1 && nx < GRID.W - 1 && nz > 1 && nz < GRID.D - 1 &&
-        !(FLOOR_PLAN[~~nz] && FLOOR_PLAN[~~nz][~~nx])) {
+        !(FLOOR_PLAN[~~nz] && FLOOR_PLAN[~~nz][~~nx]) && _nxHfClear) {
       en.x = nx; en.z = nz;
     } else {
       // Nudge heading away from wall, wide arc
@@ -7188,7 +7391,19 @@ function updateExtraEnemiesAI() {
     }
 
     // ── FIRE ──
-    if (dist < 30 && Date.now() > en.lastFired) {
+    // Line-of-sight check — don't fire through canyon walls
+    var _enHasLoS = true;
+    if (window._isHeightfield && window._canyonHeightGrid) {
+      var _losHg = window._canyonHeightGrid, _losTs = window._hfTerrainScale || 16;
+      for (var _li = 1; _li <= 6; _li++) {
+        var _lt = _li / 6;
+        var _lix = Math.max(0, Math.min(127, ~~(en.x + (state.player.x - en.x) * _lt)));
+        var _liz = Math.max(0, Math.min(127, ~~(en.z + (state.player.z - en.z) * _lt)));
+        var _liy = en.y + (state.player.y - en.y) * _lt;
+        if ((_losHg[_liz][_lix] / 255) * _losTs > _liy) { _enHasLoS = false; break; }
+      }
+    }
+    if (dist < 30 && Date.now() > en.lastFired && _enHasLoS) {
       en.lastFired = Date.now() + 7000 + Math.random() * 6000;
       var elen = dist || 1;
       var off = 2.0;
@@ -7211,6 +7426,13 @@ function updateExtraEnemiesAI() {
 }
 window.spawnExplosion = spawnExplosion;
 window.playExplosion = playExplosion;
+
+// Called by multiplayer.js when another player collects a pickup
+window._mpCollectPickup = function(id) {
+  if (!state.torpPickups) return;
+  const p = state.torpPickups.find(function(p) { return p.id === id; });
+  if (p) p.collected = true;
+};
 
 // ── CAMPAIGN MISSION SYSTEMS ──
 
@@ -9334,7 +9556,7 @@ function renderSurfacePeriscope() {
     const fx = rx*cosB + rz*sinB;
     const fz = -rx*sinB + rz*cosB;
     if (fz <= 0.3) return null;
-    const sx = pcx + (fx/fz)*fovScale;
+    const sx = pcx - (fx/fz)*fovScale;
     const sy = horizonY - (ry/fz)*fovScale*2;
     return {sx, sy, depth:fz};
   }
@@ -9433,7 +9655,7 @@ function renderSurfacePeriscope() {
     while (relAng < -Math.PI) relAng += Math.PI * 2;
     if (Math.abs(relAng) > 1.25) return;
     const depthFade = 1 - Math.abs(relAng) / 1.25;
-    const sx3 = pcx + Math.tan(relAng) * fovScale * 0.85;
+    const sx3 = pcx - Math.tan(relAng) * fovScale * 0.85;
     const sy3 = pt.yFrac * horizonY + Math.sin(f * 0.004 + pt.drift * 5) * 1.5;
     if (sy3 < 0 || sy3 > horizonY + 20) return;
     ctx.beginPath();
@@ -9676,8 +9898,8 @@ function renderSurfacePeriscope() {
     const a=Math.max(0,0.11-gd/gridRange*0.09);
     ctx.strokeStyle=`rgba(0,200,240,${a})`; ctx.lineWidth=0.5;
     ctx.beginPath();
-    ctx.moveTo(pcx+(f1x/f1z)*fovScale, Math.min(H,horizonY+(1/f1z)*fovScale*0.28));
-    ctx.lineTo(pcx+(f2x/f2z)*fovScale, Math.min(H,horizonY+(1/f2z)*fovScale*0.28));
+    ctx.moveTo(pcx-(f1x/f1z)*fovScale, Math.min(H,horizonY+(1/f1z)*fovScale*0.28));
+    ctx.lineTo(pcx-(f2x/f2z)*fovScale, Math.min(H,horizonY+(1/f2z)*fovScale*0.28));
     ctx.stroke();
   }
   for (let gl=-gridRange; gl<=gridRange; gl+=gridStep) {
@@ -9687,8 +9909,8 @@ function renderSurfacePeriscope() {
     const a2=Math.max(0,0.09-Math.abs(gl)/gridRange*0.07);
     ctx.strokeStyle=`rgba(0,200,240,${a2})`; ctx.lineWidth=0.5;
     ctx.beginPath();
-    ctx.moveTo(pcx+(f1x2/f1z2)*fovScale, Math.min(H,horizonY+(1/f1z2)*fovScale*0.28));
-    ctx.lineTo(pcx+(f2x2/f2z2)*fovScale, Math.min(H,horizonY+(1/f2z2)*fovScale*0.28));
+    ctx.moveTo(pcx-(f1x2/f1z2)*fovScale, Math.min(H,horizonY+(1/f1z2)*fovScale*0.28));
+    ctx.lineTo(pcx-(f2x2/f2z2)*fovScale, Math.min(H,horizonY+(1/f2z2)*fovScale*0.28));
     ctx.stroke();
   }
   ctx.restore();
@@ -9709,7 +9931,7 @@ function renderSurfacePeriscope() {
     const rx=pt.x-state.player.x, rz=pt.z-state.player.z;
     const fx=rx*cosB3+rz*sinB3, fz=-rx*sinB3+rz*cosB3;
     if (fz<0.2) return;
-    const sx=pcx+(fx/fz)*fovScale;
+    const sx=pcx-(fx/fz)*fovScale;
     const sy=horizonY+(1/fz)*fovScale*0.26;
     if (sx<-20||sx>W+20||sy>H) return;
     const fade=1-pt.age/80;
@@ -9723,7 +9945,7 @@ function renderSurfacePeriscope() {
     const rx=t.x-state.player.x, rz=t.z-state.player.z;
     const fx=rx*cosB3+rz*sinB3, fz=-rx*sinB3+rz*cosB3;
     if (fz<0.2) return;
-    const sx=pcx+(fx/fz)*fovScale, sy=horizonY+(1/fz)*fovScale*0.26;
+    const sx=pcx-(fx/fz)*fovScale, sy=horizonY+(1/fz)*fovScale*0.26;
     if (sy>H) return;
     const p=0.8+0.2*Math.sin(f*0.3);
     ctx.beginPath(); ctx.arc(sx,sy,6*p,0,Math.PI*2);
@@ -10092,7 +10314,8 @@ if (false) (function() {
 // ── INTRO MUSIC ──
 var _introMusic = new Audio('/Sounds/OST/ost_hymn.mp3');
 _introMusic.loop = true;
-_introMusic.volume = 0.75;
+_introMusic.volume = 0.2;            // match game music default (20%)
+window._introMusic = _introMusic;   // expose so music.js setVolume() can reach it
 var _introAudioUnlocked = false;
 
 function _tryPlayIntroMusic() {

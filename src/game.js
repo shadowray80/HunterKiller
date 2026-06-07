@@ -9607,6 +9607,63 @@ function drawShipPoints(ctx2d, ship, yLevel, projectFn) {
 
 // ── SURFACE PERISCOPE VIEW ──
 
+// Screen-space animated wave point cloud for surface/surfaced views.
+// Uses a perspective-correct row/column grid so near waves are large and
+// wide-spaced; far waves are tiny and dense — same colour palette as the
+// submerged drawWavePointCloud so both views feel consistent.
+function drawSurfaceWavePoints(pcx, horizonY, bearing) {
+  const ta  = state.animFrame * 0.011;
+  const px  = state.player.x, pz = state.player.z;
+  const cosB = Math.cos(bearing), sinB = Math.sin(bearing);
+  const oceanH = H - horizonY;
+
+  const PAL = [
+    [0,18,88],[0,48,128],[0,88,168],[0,128,198],
+    [10,168,224],[48,204,240],[100,228,255],[178,244,255]
+  ];
+
+  ctx.save();
+
+  const rowStep = 4;
+  const nRows   = Math.floor(oceanH / rowStep);
+
+  for (let ri = 1; ri <= nRows; ri++) {
+    const t       = ri / nRows;                          // 0=horizon, 1=bottom
+    const sy_base = horizonY + ri * rowStep;
+
+    // Perspective: near rows (t→1) are large, widely spaced; horizon rows tiny, dense
+    const worldDist = Math.max(0.5, 50 * Math.pow(1 - t, 2.3));
+    const colStep   = Math.max(3, 26 * (1 - t) + 3);
+    const halfW     = W * (0.10 + t * 0.54);
+    const rowAlpha  = Math.min(0.90, t * 1.05 + 0.08);
+
+    for (let sx = pcx - halfW; sx <= pcx + halfW; sx += colStep) {
+      // Approximate world X/Z from screen column + bearing
+      const offX = (sx - pcx) / (W * 0.45);
+      const wx = px + cosB * worldDist - sinB * offX * worldDist * 1.3;
+      const wz = pz + sinB * worldDist + cosB * offX * worldDist * 1.3;
+
+      // Three-frequency animated wave (same formula as submerged view)
+      const wh = 0.55 * Math.sin(wx * 0.22 + ta * 1.4 + wz * 0.11)
+               + 0.28 * Math.sin(wx * 0.44 - ta * 0.9 + wz * 0.37 + 1.3)
+               + 0.12 * Math.sin(wx * 0.78 + ta * 2.0 - wz * 0.58);
+
+      // Wave height nudges the dot up/down (near waves ripple more)
+      const sy = sy_base + wh * t * 6.0;
+
+      const hf    = Math.max(0, Math.min(1, (wh + 0.95) / 1.9));
+      const [cr, cg, cb] = PAL[Math.min(7, hf * 8 | 0)];
+      const a     = rowAlpha * (0.32 + hf * 0.68);
+      const dotSz = Math.max(0.7, t * 4.0 * (0.40 + hf * 0.60));
+
+      ctx.fillStyle = `rgba(${cr},${cg},${cb},${a.toFixed(2)})`;
+      ctx.fillRect(sx - dotSz, sy - dotSz, dotSz * 2, dotSz * 2);
+    }
+  }
+
+  ctx.restore();
+}
+
 function renderSurfacePeriscope() {
   const pcx = W/2, pcy = H * 0.44;
   const horizonY = pcy;
@@ -9746,21 +9803,8 @@ function renderSurfacePeriscope() {
   water.addColorStop(1, '#010508');
   ctx.fillStyle = water; ctx.fillRect(0, horizonY, W, H-horizonY);
 
-  // Wave lines — perspective
-  for (let row = 0; row < 22; row++) {
-    const t2 = row/22;
-    const waveY = horizonY + Math.pow(t2,1.7)*(H-horizonY)*0.92;
-    const waveAlpha = 0.025 + t2*0.1;
-    const waveAnim = f*0.007*(1-t2*0.6);
-    const waveW = W*(0.25+t2*0.75);
-    const waveX = (W-waveW)/2;
-    ctx.beginPath();
-    for (let x = 0; x <= waveW; x += 3) {
-      const wy = waveY + Math.sin(x/waveW*Math.PI*5+waveAnim+row*0.7)*(0.5+t2*2.5);
-      x===0 ? ctx.moveTo(waveX+x, wy) : ctx.lineTo(waveX+x, wy);
-    }
-    ctx.strokeStyle = `rgba(0,80,130,${waveAlpha})`; ctx.lineWidth=0.7+t2*1.2; ctx.stroke();
-  }
+  // ── ANIMATED WAVE POINT CLOUD (replaces old wireframe lines) ──
+  drawSurfaceWavePoints(pcx, horizonY, surfaceBearing);
 
   // Specular glints
   for (let i = 0; i < 20; i++) {

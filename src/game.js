@@ -9634,19 +9634,25 @@ function drawSurfaceWavePoints(pcx, horizonY, bearing) {
   const rowStep = 5;
   const nRows   = Math.floor(oceanH / rowStep);
 
+  // Clip drawing to the ocean area so no dots bleed into the sky
+  ctx.beginPath();
+  ctx.rect(0, horizonY, W, H - horizonY);
+  ctx.clip();
+
   // Two-pass: first all dim/far dots (cheap fillRect), then bright/near peaks (arc + glow)
-  // This batches the expensive shadowBlur state changes to the fewest dots.
   const glowPass = [];
 
-  for (let ri = 1; ri <= nRows; ri++) {
-    const t       = ri / nRows;
+  // ri=0 starts AT the horizon line so the water fills all the way up
+  for (let ri = 0; ri <= nRows; ri++) {
+    const t       = ri / Math.max(1, nRows);
     const sy_base = horizonY + ri * rowStep;
 
-    const worldDist = Math.max(0.4, 64 * Math.pow(1 - t, 1.80));
-    const colStep   = Math.max(5, 30 * (1 - t) + 5);
+    const worldDist = Math.max(0.4, 68 * Math.pow(1 - t, 1.70));
+    const colStep   = Math.max(3, 22 * (1 - t) + 3);   // tight near horizon
     const rowOff    = (ri % 2) * colStep * 0.5;
-    const halfW     = W * (0.07 + t * 0.60);
-    const rowAlpha  = Math.min(0.95, t * 1.08 + 0.04);
+    const halfW     = W * (0.05 + t * 0.62);
+    // Horizon rows get a real base alpha so they're always visible
+    const rowAlpha  = Math.min(0.95, 0.30 + t * 0.65);
 
     for (let sx = pcx - halfW + rowOff; sx <= pcx + halfW; sx += colStep) {
       const offX = (sx - pcx) / (W * 0.42);
@@ -9658,12 +9664,12 @@ function drawSurfaceWavePoints(pcx, horizonY, bearing) {
                + 0.22 * Math.sin(wx * 0.78 + ta * 2.00 - wz * 0.58)
                + 0.10 * Math.sin(wx * 1.30 + ta * 3.10 - wz * 1.10 + 2.4);
 
-      // Stable jitter + slow drift
+      // Stable jitter + slow drift (reduced near horizon so far dots stay put)
       const seed  = Math.floor(sx * 0.1) * 137 + ri * 29;
-      const jx    = Math.sin(seed * 127.3) * colStep * 0.36;
-      const jy    = Math.sin(seed *  93.7) * rowStep * 0.36;
-      const driftX = Math.sin(ta * 1.1 + wx * 0.6 + wz * 0.4) * 2.0;
-      const driftY = Math.cos(ta * 0.9 + wz * 0.5 + wx * 0.3) * 1.8;
+      const jx    = Math.sin(seed * 127.3) * colStep * 0.36 * t;
+      const jy    = Math.sin(seed *  93.7) * rowStep * 0.36 * t;
+      const driftX = Math.sin(ta * 1.1 + wx * 0.6 + wz * 0.4) * 2.0 * t;
+      const driftY = Math.cos(ta * 0.9 + wz * 0.5 + wx * 0.3) * 1.8 * t;
 
       const sy  = sy_base + wh * t * 14.0 + jy + driftY;
       const sxf = sx      + jx + driftX;

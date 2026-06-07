@@ -8117,10 +8117,10 @@ function drawWavePointCloud(surfaceFrac) {
   const FOV_SCALE = (W * 0.5) / Math.tan(0.7) * (state.periZoom || 1);
   const CX = W * 0.5, CY = H * 0.44;
 
-  // 8-step depth palette: deep navy trough → bright cyan peak
+  // 8-step depth palette: near-black trough → white-cyan peak
   const PAL = [
-    [0, 18, 88], [0, 48, 128], [0, 88, 168], [0, 128, 198],
-    [10, 168, 224], [48, 204, 240], [100, 228, 255], [178, 244, 255]
+    [0,  8, 35], [0, 28,  72], [0,  68, 128], [0, 120, 185],
+    [0, 175, 228], [18, 218, 252], [95, 242, 255], [215, 252, 255]
   ];
 
   ctx.save();
@@ -9617,63 +9617,87 @@ function drawSurfaceWavePoints(pcx, horizonY, bearing) {
   const cosB = Math.cos(bearing), sinB = Math.sin(bearing);
   const oceanH = H - horizonY;
 
+  // Vivid teal-cyan palette: deep navy trough → bright white-cyan peak
   const PAL = [
-    [0,18,88],[0,48,128],[0,88,168],[0,128,198],
-    [10,168,224],[48,204,240],[100,228,255],[178,244,255]
+    [0,  8, 35],    // near-black trough
+    [0, 28, 72],    // deep navy
+    [0, 68,128],    // mid-trough teal
+    [0,120,185],    // mid
+    [0,175,228],    // upper mid — vivid teal
+    [18,218,252],   // bright teal
+    [95,242,255],   // cyan
+    [215,252,255],  // near-white peak
   ];
 
   ctx.save();
 
-  // Wider row spacing = less grid-like, more breathing room between rows
-  const rowStep = 6;
+  const rowStep = 5;
   const nRows   = Math.floor(oceanH / rowStep);
 
+  // Two-pass: first all dim/far dots (cheap fillRect), then bright/near peaks (arc + glow)
+  // This batches the expensive shadowBlur state changes to the fewest dots.
+  const glowPass = [];
+
   for (let ri = 1; ri <= nRows; ri++) {
-    const t       = ri / nRows;          // 0=horizon, 1=bottom of screen
+    const t       = ri / nRows;
     const sy_base = horizonY + ri * rowStep;
 
-    // Lower exponent → points extend much further toward horizon
-    const worldDist = Math.max(0.4, 62 * Math.pow(1 - t, 1.85));
-    // More column spacing = less grid feeling; stagger alternate rows by half-step
-    const colStep   = Math.max(6, 34 * (1 - t) + 6);
-    const rowOff    = (ri % 2) * colStep * 0.5;   // hex-brick offset breaks grid
-    const halfW     = W * (0.08 + t * 0.58);
-    const rowAlpha  = Math.min(0.88, t * 1.0 + 0.06);
+    const worldDist = Math.max(0.4, 64 * Math.pow(1 - t, 1.80));
+    const colStep   = Math.max(5, 30 * (1 - t) + 5);
+    const rowOff    = (ri % 2) * colStep * 0.5;
+    const halfW     = W * (0.07 + t * 0.60);
+    const rowAlpha  = Math.min(0.95, t * 1.08 + 0.04);
 
     for (let sx = pcx - halfW + rowOff; sx <= pcx + halfW; sx += colStep) {
-      // Map screen column to approximate world offset
       const offX = (sx - pcx) / (W * 0.42);
       const wx = px + cosB * worldDist - sinB * offX * worldDist * 1.35;
       const wz = pz + sinB * worldDist + cosB * offX * worldDist * 1.35;
 
-      // Bigger amplitude waves — more dramatic undulation
-      const wh = 0.80 * Math.sin(wx * 0.22 + ta * 1.4 + wz * 0.11)
-               + 0.42 * Math.sin(wx * 0.44 - ta * 0.9 + wz * 0.37 + 1.3)
-               + 0.20 * Math.sin(wx * 0.78 + ta * 2.0 - wz * 0.58)
-               + 0.10 * Math.sin(wx * 1.3  + ta * 3.1 - wz * 1.1  + 2.4);
+      const wh = 0.82 * Math.sin(wx * 0.22 + ta * 1.40 + wz * 0.11)
+               + 0.44 * Math.sin(wx * 0.44 - ta * 0.90 + wz * 0.37 + 1.3)
+               + 0.22 * Math.sin(wx * 0.78 + ta * 2.00 - wz * 0.58)
+               + 0.10 * Math.sin(wx * 1.30 + ta * 3.10 - wz * 1.10 + 2.4);
 
-      // Stable structural jitter (position-based — no frame flicker)
-      const seed = Math.floor(sx * 0.1) * 137 + ri * 29;
-      const jx   = Math.sin(seed * 127.3) * colStep * 0.38;
-      const jy   = Math.sin(seed *  93.7) * rowStep * 0.38;
-      // Slow time-drift gives organic life to the points
-      const driftX = Math.sin(ta * 1.1 + wx * 0.6 + wz * 0.4) * 2.2;
+      // Stable jitter + slow drift
+      const seed  = Math.floor(sx * 0.1) * 137 + ri * 29;
+      const jx    = Math.sin(seed * 127.3) * colStep * 0.36;
+      const jy    = Math.sin(seed *  93.7) * rowStep * 0.36;
+      const driftX = Math.sin(ta * 1.1 + wx * 0.6 + wz * 0.4) * 2.0;
       const driftY = Math.cos(ta * 0.9 + wz * 0.5 + wx * 0.3) * 1.8;
 
-      // Near waves ripple much more in screen Y
-      const sy  = sy_base + wh * t * 11.0 + jy + driftY;
+      const sy  = sy_base + wh * t * 14.0 + jy + driftY;
       const sxf = sx      + jx + driftX;
 
-      const maxWh = 1.52; // 0.80+0.42+0.20+0.10
+      const maxWh = 1.58;
       const hf    = Math.max(0, Math.min(1, (wh + maxWh) / (maxWh * 2)));
-      const [cr, cg, cb] = PAL[Math.min(7, hf * 8 | 0)];
-      const a     = rowAlpha * (0.28 + hf * 0.72);
-      const dotSz = Math.max(0.7, t * 4.8 * (0.38 + hf * 0.62));
+      const palIdx = Math.min(7, hf * 8 | 0);
+      const [cr, cg, cb] = PAL[palIdx];
+      // Troughs barely visible; peaks fully saturated
+      const a     = rowAlpha * (0.18 + hf * 0.82);
+      const dotSz = Math.max(0.6, t * 5.2 * (0.32 + hf * 0.68));
 
-      ctx.fillStyle = `rgba(${cr},${cg},${cb},${a.toFixed(2)})`;
-      ctx.fillRect(sxf - dotSz, sy - dotSz, dotSz * 2, dotSz * 2);
+      if (hf > 0.62 && dotSz > 2.0) {
+        // Bright crest — defer to glow pass
+        glowPass.push({ sxf, sy, dotSz, cr, cg, cb, a });
+      } else {
+        // Dim/small dot — cheap square
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${a.toFixed(2)})`;
+        ctx.fillRect(sxf - dotSz, sy - dotSz, dotSz * 2, dotSz * 2);
+      }
     }
   }
+
+  // Glow pass: round dots with bloom for wave crests
+  for (let i = 0; i < glowPass.length; i++) {
+    const { sxf, sy, dotSz, cr, cg, cb, a } = glowPass[i];
+    ctx.shadowBlur  = dotSz * 3.5;
+    ctx.shadowColor = `rgba(0,210,255,${(a * 0.65).toFixed(2)})`;
+    ctx.fillStyle   = `rgba(${cr},${cg},${cb},${a.toFixed(2)})`;
+    ctx.beginPath();
+    ctx.arc(sxf, sy, dotSz, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
 
   ctx.restore();
 }

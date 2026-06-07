@@ -311,13 +311,18 @@ async function _renderWaitingRoom() {
     readyBtn.classList.toggle('is-ready', _isReady);
   }
 
-  // Launch button — host just needs all OTHER players to be ready (host is ready by being host)
+  // Launch button — host can always launch; show ready count as a hint
   const others = players.filter(p => p.player_id !== _user?.id);
-  const allReady = _isHost
-    ? (others.length >= 1 && others.every(p => p.ready))
-    : (players.length >= 1 && players.every(p => p.ready));
+  const readyCount = others.filter(p => p.ready).length;
   const launchBtn = document.getElementById('mp-launch-btn');
-  if (launchBtn) launchBtn.disabled = !allReady;
+  if (launchBtn) {
+    launchBtn.disabled = false;
+    launchBtn.textContent = others.length === 0
+      ? 'LAUNCH →'
+      : readyCount === others.length
+        ? `LAUNCH ✓ (${readyCount}/${others.length} READY)`
+        : `LAUNCH (${readyCount}/${others.length} READY)`;
+  }
 }
 
 export async function toggleReady() {

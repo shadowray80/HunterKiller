@@ -1664,7 +1664,7 @@ text-align: center;
 #intro-screen {
 position: fixed;
 top: 0; left: 0; right: 0; bottom: 0;
-background: var(--navy) url('/Images/Splash_ScreenV2.png') center top / cover no-repeat;
+background: var(--navy) url('/Images/Splash_ScreenV3.png') center top / cover no-repeat;
 z-index: 110;
 display: flex;
 align-items: center;
@@ -1685,7 +1685,7 @@ border: 1px solid rgba(0,180,220,0.18);
 box-shadow: 0 0 60px rgba(0,0,0,0.7);
 }
 .intro-title-operation {
-font-family: var(--mono);
+font-family: var(--ui);
 font-size: 11px;
 letter-spacing: 0.55em;
 color: var(--teal-dim);

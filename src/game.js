@@ -9631,63 +9631,58 @@ function drawSurfaceWavePoints(pcx, horizonY, bearing) {
 
   ctx.save();
 
-  const rowStep = 5;
+  const rowStep = 16;                              // ~3x row spacing
   const nRows   = Math.floor(oceanH / rowStep);
 
-  // Clip drawing to the ocean area so no dots bleed into the sky
+  // Clip to ocean so no dots bleed into sky
   ctx.beginPath();
   ctx.rect(0, horizonY, W, H - horizonY);
   ctx.clip();
 
-  // Two-pass: first all dim/far dots (cheap fillRect), then bright/near peaks (arc + glow)
   const glowPass = [];
 
-  // ri=0 starts AT the horizon line so the water fills all the way up
   for (let ri = 0; ri <= nRows; ri++) {
     const t       = ri / Math.max(1, nRows);
     const sy_base = horizonY + ri * rowStep;
 
-    const worldDist = Math.max(0.5, 70 * Math.pow(1 - t, 1.55));
-    // Perspective-correct: horizon = dense tiny dots, near = sparse large dots
-    const colStep   = Math.max(2, t * 20 + 2);
+    const worldDist = Math.max(0.5, 75 * Math.pow(1 - t, 1.50));
+    // 5x wider col spacing than before — dense at horizon, sparse up close
+    const colStep   = Math.max(10, t * 110 + 10);
     const rowOff    = (ri % 2) * colStep * 0.5;
-    // Wider at horizon so the waterline feels full edge-to-edge
-    const halfW     = W * (0.30 + t * 0.32);
-    const rowAlpha  = Math.min(0.95, 0.30 + t * 0.65);
+    const halfW     = W * (0.32 + t * 0.30);
+    const rowAlpha  = Math.min(0.95, 0.32 + t * 0.63);
 
     for (let sx = pcx - halfW + rowOff; sx <= pcx + halfW; sx += colStep) {
       const offX = (sx - pcx) / (W * 0.42);
       const wx = px + cosB * worldDist - sinB * offX * worldDist * 1.35;
       const wz = pz + sinB * worldDist + cosB * offX * worldDist * 1.35;
 
-      const wh = 0.82 * Math.sin(wx * 0.22 + ta * 1.40 + wz * 0.11)
-               + 0.44 * Math.sin(wx * 0.44 - ta * 0.90 + wz * 0.37 + 1.3)
-               + 0.22 * Math.sin(wx * 0.78 + ta * 2.00 - wz * 0.58)
-               + 0.10 * Math.sin(wx * 1.30 + ta * 3.10 - wz * 1.10 + 2.4);
+      // Bigger, slower waves — open ocean swell frequencies
+      const wh = 1.20 * Math.sin(wx * 0.14 + ta * 0.90 + wz * 0.08)
+               + 0.65 * Math.sin(wx * 0.28 - ta * 0.65 + wz * 0.24 + 1.3)
+               + 0.32 * Math.sin(wx * 0.52 + ta * 1.30 - wz * 0.38)
+               + 0.15 * Math.sin(wx * 0.90 + ta * 2.20 - wz * 0.80 + 2.4);
 
-      // Stable jitter + slow drift (reduced near horizon so far dots stay put)
-      const seed  = Math.floor(sx * 0.1) * 137 + ri * 29;
-      const jx    = Math.sin(seed * 127.3) * colStep * 0.36 * t;
-      const jy    = Math.sin(seed *  93.7) * rowStep * 0.36 * t;
-      const driftX = Math.sin(ta * 1.1 + wx * 0.6 + wz * 0.4) * 2.0 * t;
-      const driftY = Math.cos(ta * 0.9 + wz * 0.5 + wx * 0.3) * 1.8 * t;
+      // Jitter + drift scaled with row size
+      const seed  = Math.floor(sx * 0.05) * 137 + ri * 29;
+      const jx    = Math.sin(seed * 127.3) * colStep * 0.32 * t;
+      const jy    = Math.sin(seed *  93.7) * rowStep * 0.32 * t;
+      const driftX = Math.sin(ta * 1.1 + wx * 0.6 + wz * 0.4) * 4.5 * t;
+      const driftY = Math.cos(ta * 0.9 + wz * 0.5 + wx * 0.3) * 4.0 * t;
 
-      const sy  = sy_base + wh * t * 14.0 + jy + driftY;
+      // Much larger screen displacement — open ocean swells
+      const sy  = sy_base + wh * t * 52.0 + jy + driftY;
       const sxf = sx      + jx + driftX;
 
-      const maxWh = 1.58;
+      const maxWh = 2.32;   // 1.20+0.65+0.32+0.15
       const hf    = Math.max(0, Math.min(1, (wh + maxWh) / (maxWh * 2)));
-      const palIdx = Math.min(7, hf * 8 | 0);
-      const [cr, cg, cb] = PAL[palIdx];
-      // Troughs barely visible; peaks fully saturated
-      const a     = rowAlpha * (0.18 + hf * 0.82);
-      const dotSz = Math.max(0.6, t * 5.2 * (0.32 + hf * 0.68));
+      const [cr, cg, cb] = PAL[Math.min(7, hf * 8 | 0)];
+      const a     = rowAlpha * (0.16 + hf * 0.84);
+      const dotSz = Math.max(1.5, t * 12.0 * (0.30 + hf * 0.70));
 
-      if (hf > 0.62 && dotSz > 2.0) {
-        // Bright crest — defer to glow pass
+      if (hf > 0.58 && dotSz > 3.5) {
         glowPass.push({ sxf, sy, dotSz, cr, cg, cb, a });
       } else {
-        // Dim/small dot — cheap square
         ctx.fillStyle = `rgba(${cr},${cg},${cb},${a.toFixed(2)})`;
         ctx.fillRect(sxf - dotSz, sy - dotSz, dotSz * 2, dotSz * 2);
       }

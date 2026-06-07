@@ -25,6 +25,11 @@ export const TEAMS = {
 let _myTeam = 'alpha';
 window._mpMyTeam = null; // set at game launch
 
+// ── AI CONFIG ──
+let _aiAlpha = 0;  // AI wingmen on player's team
+let _aiBravo = 2;  // AI opponents
+let _aiInterval = null;
+
 // ── MAPS AVAILABLE FOR MULTIPLAYER ──
 const MP_MAPS = [
   { id: 'canyon',   name: 'THE CANYON',       tag: 'TERRAIN',    hf: true  },
@@ -51,10 +56,36 @@ export async function initMultiplayer() {
   _username = localStorage.getItem('hk_username') || null;
   const disp = document.getElementById('mp-username-display');
   if (disp) disp.textContent = _username || '---';
+  _wireAIPickers();
   await _joinLobbyPresence();
   _listenForPings();
   _subscribeToSessions();
   showView('lobby');
+}
+
+function _wireAIPickers() {
+  function wire(team, initVal) {
+    let val = initVal;
+    const valEl = document.getElementById(`mp-ai-${team}-val`);
+    const dn = document.getElementById(`mp-ai-${team}-dn`);
+    const up = document.getElementById(`mp-ai-${team}-up`);
+    if (!valEl || !dn || !up) return;
+    valEl.textContent = val;
+    dn.addEventListener('click', () => {
+      if (val <= 0) return;
+      val--;
+      valEl.textContent = val;
+      if (team === 'alpha') _aiAlpha = val; else _aiBravo = val;
+    });
+    up.addEventListener('click', () => {
+      if (val >= 3) return;
+      val++;
+      valEl.textContent = val;
+      if (team === 'alpha') _aiAlpha = val; else _aiBravo = val;
+    });
+  }
+  wire('alpha', _aiAlpha);
+  wire('bravo', _aiBravo);
 }
 
 // ── VIEWS ──
@@ -173,12 +204,11 @@ export async function createGame() {
   _setCreateStatus('');
 
   const maxP = parseInt(document.getElementById('mp-max-players').value) || 4;
-  const aiFill = document.getElementById('mp-ai-fill').checked;
   const code = 'HK-' + Math.random().toString(36).substr(2, 4).toUpperCase();
 
   const { error } = await supabase.from('sessions').insert({
     id: code, map_id: _currentMap, mode: _currentMode,
-    max_players: maxP, ai_fill: aiFill, host_id: _user.id, status: 'waiting'
+    max_players: maxP, ai_fill: false, host_id: _user.id, status: 'waiting'
   });
 
   if (btn) btn.textContent = 'CREATE GAME →';
@@ -289,16 +319,27 @@ async function _renderWaitingRoom() {
     </div>`;
   }
 
+  // AI slot rows — only the host sees AI config at this point
+  function aiRow(team, i) {
+    const names = { alpha: 'WOLFPACK', bravo: 'KRAKEN' };
+    return `<div class="mp-waiting-player ai-slot">
+      <span class="mp-wp-name">⚙ ${names[team] || team} AI #${i + 1}</span>
+      <span class="mp-wp-status ai">◉ STANDING BY</span>
+    </div>`;
+  }
+  const alphaAI = _isHost ? Array.from({ length: _aiAlpha }, (_, i) => aiRow('alpha', i)).join('') : '';
+  const bravoAI = _isHost ? Array.from({ length: _aiBravo }, (_, i) => aiRow('bravo', i)).join('') : '';
+
   const list = document.getElementById('mp-waiting-players');
   if (list) {
     list.innerHTML = `
       <div class="mp-team-col alpha">
-        <div class="mp-team-label">◈ ALPHA</div>
-        ${alpha.map(playerRow).join('') || '<div class="mp-empty">—</div>'}
+        <div class="mp-team-label">◈ WOLFPACK (ALPHA)</div>
+        ${alpha.map(playerRow).join('')}${alphaAI || (!alpha.length ? '<div class="mp-empty">—</div>' : '')}
       </div>
       <div class="mp-team-col bravo">
-        <div class="mp-team-label">◈ BRAVO</div>
-        ${bravo.map(playerRow).join('') || '<div class="mp-empty">—</div>'}
+        <div class="mp-team-label">◈ KRAKEN (BRAVO)</div>
+        ${bravo.map(playerRow).join('')}${bravoAI || (!bravo.length ? '<div class="mp-empty">—</div>' : '')}
       </div>`;
   }
 
@@ -646,9 +687,124 @@ async function _launchGame(mapId, mode) {
     const sw = document.getElementById('sonar-wrap');
     if (sw) sw.style.display = '';
   }, 400);
+
+  // Spawn AI players after game world is ready
+  if (_isHost && (_aiAlpha > 0 || _aiBravo > 0)) {
+    setTimeout(() => _startAIPlayers(), 1200);
+  }
+}
+
+// ── AI PLAYERS ──────────────────────────────────────────────────────────────
+
+function _startAIPlayers() {
+  if (_aiInterval) { clearInterval(_aiInterval); _aiInterval = null; }
+
+  const GRID = 78; // approximate grid size
+  const aiNames = { alpha: 'WOLFPACK', bravo: 'KRAKEN' };
+
+  function spawnAI(team, idx) {
+    const id = `ai_${team}_${idx}`;
+    // Spread spawns: alpha starts near player (front half), bravo starts in back half
+    const side = team === 'alpha' ? 0.1 : 0.55;
+    window._mpRemotePlayers[id] = {
+      id,
+      username: `${aiNames[team]}-${idx + 1}`,
+      x: GRID * (side + Math.random() * 0.35),
+      y: 3 + Math.random() * 6,
+      z: GRID * (side + Math.random() * 0.35),
+      heading: Math.random() * Math.PI * 2,
+      team,
+      sr: false,
+      _depthTarget: 3 + Math.random() * 6,
+      _nextDepth: Date.now() + 5000,
+      _nextTurn: Date.now() + Math.random() * 3000,
+    };
+  }
+
+  for (let i = 0; i < _aiAlpha; i++) spawnAI('alpha', i);
+  for (let i = 0; i < _aiBravo; i++) spawnAI('bravo', i);
+
+  // Update AI at 8fps
+  _aiInterval = setInterval(_tickAI, 125);
+}
+
+function _tickAI() {
+  const rp = window._mpRemotePlayers;
+  if (!rp) return;
+  const now = Date.now();
+  const allAI = Object.values(rp).filter(p => p.id && p.id.startsWith('ai_'));
+  const allEntities = Object.values(rp); // includes humans + AI
+
+  allAI.forEach(ai => {
+    const isAlpha = ai.team === 'alpha';
+
+    // Find nearest enemy entity
+    let nearestDist = Infinity, nearestPos = null;
+
+    // Check human player
+    const playerTeam = window._mpMyTeam || 'alpha';
+    if (playerTeam !== ai.team && window.state?.player) {
+      const p = window.state.player;
+      const dx = p.x - ai.x, dz = p.z - ai.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d < nearestDist) { nearestDist = d; nearestPos = { x: p.x, z: p.z }; }
+    }
+
+    // Check other remote players/AI on opposite team
+    allEntities.forEach(other => {
+      if (!other || other.id === ai.id || other.team === ai.team) return;
+      const dx = other.x - ai.x, dz = other.z - ai.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d < nearestDist) { nearestDist = d; nearestPos = { x: other.x, z: other.z }; }
+    });
+
+    const SPEED = 0.18;
+    const MAX_TURN = 0.04;
+
+    if (nearestPos && nearestDist < 35) {
+      // Hunt — steer toward nearest enemy
+      const targetH = Math.atan2(nearestPos.x - ai.x, nearestPos.z - ai.z);
+      let diff = targetH - ai.heading;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      ai.heading += Math.sign(diff) * Math.min(Math.abs(diff), MAX_TURN);
+    } else {
+      // Patrol — gradual random turns
+      if (now > (ai._nextTurn || 0)) {
+        ai.heading += (Math.random() - 0.5) * 1.2;
+        ai._nextTurn = now + 4000 + Math.random() * 6000;
+      }
+    }
+
+    // Move
+    ai.x += Math.sin(ai.heading) * SPEED;
+    ai.z += Math.cos(ai.heading) * SPEED;
+
+    // Bounce off bounds
+    if (ai.x < 3)    { ai.heading = Math.PI - ai.heading; ai.x = 3; }
+    if (ai.x > GRID) { ai.heading = Math.PI - ai.heading; ai.x = GRID; }
+    if (ai.z < 3)    { ai.heading = -ai.heading;           ai.z = 3; }
+    if (ai.z > GRID) { ai.heading = -ai.heading;           ai.z = GRID; }
+
+    // Smooth depth wander
+    if (now > (ai._nextDepth || 0)) {
+      ai._depthTarget = 2 + Math.random() * 8;
+      ai._nextDepth = now + 6000 + Math.random() * 8000;
+    }
+    if (ai._depthTarget !== undefined) ai.y += (ai._depthTarget - ai.y) * 0.02;
+
+    // Host broadcasts AI positions so human guests also see them
+    if (_gameChannel) {
+      _gameChannel.send({
+        type: 'broadcast', event: 'pos',
+        payload: { id: ai.id, username: ai.username, x: ai.x, y: ai.y, z: ai.z, heading: ai.heading, team: ai.team, sr: false }
+      });
+    }
+  });
 }
 
 export async function leaveSession() {
+  if (_aiInterval) { clearInterval(_aiInterval); _aiInterval = null; }
   if (_currentCode) {
     await supabase.from('session_players').delete().eq('session_id', _currentCode).eq('player_id', _user.id);
     if (_sessionChannel) supabase.removeChannel(_sessionChannel);
@@ -699,6 +855,11 @@ function _listenForPings() {
 // ── END GAME — save kills/deaths to Supabase ──
 export async function mpEndGame(kills, deaths) {
   _vcCleanup();
+  if (_aiInterval) { clearInterval(_aiInterval); _aiInterval = null; }
+  // Remove AI entries from remote players
+  if (window._mpRemotePlayers) {
+    Object.keys(window._mpRemotePlayers).forEach(id => { if (id.startsWith('ai_')) delete window._mpRemotePlayers[id]; });
+  }
   if (!_currentCode || !_user) return;
   await supabase.from('session_players')
     .update({ kills, deaths })

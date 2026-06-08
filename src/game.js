@@ -2833,8 +2833,9 @@ function camDragMove(x, y) {
   // Horizontal → rotate camera
   camRotY += dx * 0.008;
   // Vertical → move sub in camera-forward direction (screen-up = forward)
+  // dy > 0 = drag down; positive rz = down on screen, so drag-down must give negative speed
   if (dy !== 0) {
-    const speed = -dy / ISO_SCALE;
+    const speed = dy / ISO_SCALE;
     const nx = Math.max(0.6, Math.min(GRID.W-0.6, state.player.x + Math.sin(camRotY) * speed));
     const nz = Math.max(0.6, Math.min(GRID.D-0.6, state.player.z + Math.cos(camRotY) * speed));
     if (!isOccupied(nx, state.player.y, nz)) {

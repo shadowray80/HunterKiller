@@ -1274,8 +1274,12 @@ function drawSonar() {
 
   // ── PLAYER SUB (always at correct world position) ──
   const pp = mm(state.player.x, state.player.z);
-  // Heading indicator: command view uses camera rotation; other views use sub heading
-  const _sonarHeading = (state.viewMode === 'command') ? camRotY : state.periAngleH + Math.PI;
+  // Heading indicator: command uses camera rotation; surface modes use surfaceBearing; else periAngleH
+  const _sonarHeading = (state.viewMode === 'command')
+    ? camRotY
+    : (state.viewMode === 'surface' || state.viewMode === 'surfaced')
+      ? surfaceBearing + Math.PI
+      : state.periAngleH + Math.PI;
   sc.save();
   sc.translate(pp.x, pp.y);
   sc.rotate(_sonarHeading);

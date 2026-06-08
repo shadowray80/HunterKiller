@@ -2776,19 +2776,18 @@ function setupDragZone(el, onDelta) {
 
 // Left zone: XZ (drag right=+X, drag up=+Z)
 // Left zone: screen-relative movement (Desert Strike style)
-// Drag delta is in screen space — unrotate by camRotY to get world XZ direction
+// Forward/backward only — drag up moves sub toward top of screen in camera direction.
+// No lateral movement; rotate the environment (horizontal canvas drag) to steer.
 setupDragZone(document.getElementById('zone-move'), (dx, dy) => {
-  // Screen up (-dy) and screen right (+dx) need to be mapped to world X/Z
-  // The camera rotates the world by camRotY, so we rotate the input by -camRotY
-  const cos = Math.cos(-camRotY);
-  const sin = Math.sin(-camRotY);
-  // Screen space: right=+dx, up=-dy (dy is inverted — drag up = negative dy)
-  const sx =  dx;
-  const sz = -dy; // up on screen = forward
-  // Rotate into world space
-  const wx = Math.round(sx * cos - sz * sin);
-  const wz = Math.round(sx * sin + sz * cos);
-  if (wx !== 0 || wz !== 0) movePlayer(wx, 0, wz);
+  if (dy === 0) return;
+  const speed = -dy / ISO_SCALE;  // drag up (dy<0) → positive speed → moves toward top
+  const nx = Math.max(0.6, Math.min(GRID.W - 0.6, state.player.x + Math.sin(camRotY) * speed));
+  const nz = Math.max(0.6, Math.min(GRID.D - 0.6, state.player.z + Math.cos(camRotY) * speed));
+  if (!isOccupied(nx, state.player.y, nz)) {
+    state.player.x = nx;
+    state.player.z = nz;
+  }
+  centreOnPlayer();
 });
 
 // Right zone: depth
@@ -2832,10 +2831,9 @@ function camDragMove(x, y) {
   }
   // Horizontal → rotate camera
   camRotY += dx * 0.008;
-  // Vertical → move sub in camera-forward direction (screen-up = forward)
-  // dy > 0 = drag down; positive rz = down on screen, so drag-down must give negative speed
+  // Vertical → move sub toward top of screen (drag up = dy<0 = positive speed = +rz = up)
   if (dy !== 0) {
-    const speed = dy / ISO_SCALE;
+    const speed = -dy / ISO_SCALE;
     const nx = Math.max(0.6, Math.min(GRID.W-0.6, state.player.x + Math.sin(camRotY) * speed));
     const nz = Math.max(0.6, Math.min(GRID.D-0.6, state.player.z + Math.cos(camRotY) * speed));
     if (!isOccupied(nx, state.player.y, nz)) {

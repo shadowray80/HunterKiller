@@ -5560,8 +5560,9 @@ function drawPeriFwdSlider() {
   // So heading on minimap: angle from up = periAngleH (clockwise from north/up)
   const ppx = mm(state.player.x, state.player.z);
   const arrowLen = 14;
-  // Use surfaceBearing in surface mode, periAngleH otherwise
-  const _bearingForArrow = state.viewMode === 'surface' ? surfaceBearing : state.periAngleH;
+  // Use surfaceBearing in surface/surfaced modes, periAngleH when submerged
+  const _bearingForArrow = (state.viewMode === 'surface' || state.viewMode === 'surfaced')
+    ? surfaceBearing : state.periAngleH;
   const arrowDx = -Math.sin(_bearingForArrow) * arrowLen;
   const arrowDy =  Math.cos(_bearingForArrow) * arrowLen;
 
@@ -5580,17 +5581,16 @@ function drawPeriFwdSlider() {
   c.lineTo(ppx.x + arrowDx, ppx.y + arrowDy);
   c.stroke();
 
-  // Arrowhead
+  // Arrowhead — use same bearing as the arrow line
   const tipX = ppx.x + arrowDx;
   const tipY = ppx.y + arrowDy;
-  const aH = state.periAngleH;
-  const perpA = aH + Math.PI/2;
+  const perpA = _bearingForArrow + Math.PI / 2;
   c.beginPath();
   c.moveTo(tipX, tipY);
-  c.lineTo(tipX - Math.sin(aH)*5 + Math.sin(perpA)*3,
-           tipY + Math.cos(aH)*5 + Math.cos(perpA)*3);
-  c.lineTo(tipX - Math.sin(aH)*5 - Math.sin(perpA)*3,
-           tipY + Math.cos(aH)*5 - Math.cos(perpA)*3);
+  c.lineTo(tipX - Math.sin(_bearingForArrow)*5 + Math.sin(perpA)*3,
+           tipY + Math.cos(_bearingForArrow)*5 + Math.cos(perpA)*3);
+  c.lineTo(tipX - Math.sin(_bearingForArrow)*5 - Math.sin(perpA)*3,
+           tipY + Math.cos(_bearingForArrow)*5 - Math.cos(perpA)*3);
   c.closePath();
   c.fillStyle = '#00e5ff'; c.fill();
   c.shadowBlur = 0;

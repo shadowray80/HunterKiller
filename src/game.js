@@ -1651,9 +1651,10 @@ function drawSub(sub, color, label, hidden=false, alpha=1.0) {
   const colHi   = isEnemy ? 'rgba(255,150,150,0.38)' : 'rgba(120,235,255,0.42)';
   const colDim  = isEnemy ? 'rgba(255,100,100,0.22)' : 'rgba(0,200,255,0.22)';
 
-  // Forward vector in world space → screen angle (bow = +X axis in local space)
-  const fwdX = isEnemy ? Math.sin(sub.heading) : Math.sin(state.periAngleH);
-  const fwdZ = isEnemy ? Math.cos(sub.heading)  : -Math.cos(state.periAngleH);
+  // Forward vector: enemy subs use their own heading; player sub is always locked
+  // to camera-forward so it appears fixed (propeller toward us, bow up-screen).
+  const fwdX = isEnemy ? Math.sin(sub.heading) : Math.sin(camRotY);
+  const fwdZ = isEnemy ? Math.cos(sub.heading) : Math.cos(camRotY);
   const sp2  = project(sub.x + fwdX * 2, sub.y, sub.z + fwdZ * 2);
   const screenAngle = Math.atan2(sp2.sy - sp.sy, sp2.sx - sp.sx);
 
@@ -2829,8 +2830,9 @@ function camDragMove(x, y) {
     if (Math.abs(dx) < CAM_DRAG_THRESHOLD && Math.abs(dy) < CAM_DRAG_THRESHOLD) return;
     camDragMoved = true;
   }
-  // Horizontal → rotate camera
+  // Horizontal → rotate environment; sync sub heading so periscope entry is consistent
   camRotY += dx * 0.008;
+  state.periAngleH = camRotY;
   // Vertical → move sub toward top of screen (drag up = dy<0 = positive speed = +rz = up)
   if (dy !== 0) {
     const speed = -dy / ISO_SCALE;

@@ -153,7 +153,6 @@ function _laStartCountdown() {
   _laLastSec = 3;
   var btn = document.getElementById('la-icbm-btn'); if (btn) btn.style.display = 'none';
   if (window._addEvent) window._addEvent('⟁ ICBM LAUNCH SEQUENCE — INITIATED', true);
-  _laPlayMissileSound();
 }
 
 // ── FIRE ──
@@ -167,6 +166,7 @@ function _laFireMissile(st) {
   };
   _laLaunchState = 'flying';
   _laSmokeRings = [];
+  _laPlayMissileSound();
   if (window._addEvent) window._addEvent(
     underHoleNow ? '◎ ICBM AWAY — TRAJECTORY NOMINAL' : '◎ ICBM AWAY — ICE IMPACT IMMINENT', true
   );
@@ -245,26 +245,27 @@ function _laUpdate() {
     if (!_laRevertGuard && window._goToPeriscope) { _laRevertGuard = true; window._goToPeriscope(); }
   } else if (state.viewMode === 'periscope') { _laRevertGuard = false; }
 
-  // ── Enemy fire rate control — occasional single torpedo only ──
+  // ── Enemy fire rate control — one shot per 12-18 s window ──
+  // Main enemy uses state.enemyLastFired (real-time clock); extra enemies use en.lastFired
   if (!_laEnemyFireOpen) {
     _laEnemyFireTimer--;
     if (_laEnemyFireTimer <= 0) {
       _laEnemyFireOpen = true;
-      _laEnemyFireTimer = 90; // 1.5-second fire window
+      _laEnemyFireTimer = 90; // 1.5-second window
     }
-    // Block enemy during cooldown
-    if (state.enemy && state.enemy.aiTimer < 220) state.enemy.aiTimer = 220;
+    // Block main enemy by keeping lastFired in the future
+    state.enemyLastFired = Date.now();
+    // Block extra enemies
+    if (state.extraEnemies) state.extraEnemies.forEach(function(e) {
+      e.lastFired = Date.now() + 15000;
+    });
   } else {
     _laEnemyFireTimer--;
     if (_laEnemyFireTimer <= 0) {
       _laEnemyFireOpen = false;
-      _laEnemyFireTimer = 720 + Math.floor(Math.random() * 360); // 12-18 s
+      _laEnemyFireTimer = 720 + Math.floor(Math.random() * 360); // 12-18 s until next window
     }
   }
-  // Extra enemies stay passive
-  if (state.extraEnemies) state.extraEnemies.forEach(function(e) {
-    if (e.aiTimer < 300) e.aiTimer = 300;
-  });
 
   // ── Countdown tick ──
   if (_laLaunchState === 'countdown') {

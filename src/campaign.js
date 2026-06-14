@@ -115,7 +115,7 @@ const MISSIONS = [
     subtitle: 'Mission 4 — Convoy Strike',
     mapId: 'dropoff',
     isHeightfield: true,
-    briefingImg: '/Images/ThroughTheAngels_MissionBriefing.png',
+    briefingImg: '/Images/SilentHunter_MissionBriefing.png',
     briefing:
       'CLASSIFICATION: TOP SECRET — FLASH\n' +
       'OPERATION PREDATOR — NORTH ATLANTIC\n\n' +

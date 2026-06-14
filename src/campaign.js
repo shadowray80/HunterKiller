@@ -67,37 +67,46 @@ const MISSIONS = [
   },
   {
     index: 1,
-    name: 'THE COURIER',
-    codename: 'CARDINAL',
-    subtitle: 'Mission 2 — Extraction',
-    mapId: 'bungalow',
-    isHeightfield: false,
-    briefingImg: '/Images/Rules/Command_view_floorplan.png',
+    name: 'THROUGH THE ANGELS',
+    codename: 'RED ROUTE',
+    subtitle: 'Mission 2 — Canyon Run',
+    objectiveType: 'angels2',
+    briefingImg: '/Images/ThroughTheAngels_MissionBriefing.png',
     briefing:
-      'CLASSIFICATION: EYES ONLY\n\n' +
-      'A CIA asset — codenamed CARDINAL — has gone silent inside a coastal facility. His intelligence is critical to the entire operation.\n\n' +
-      'You have a narrow window. A hostile submarine patrols these waters and will not hesitate to end your mission before it begins.\n\n' +
-      'Neutralise the contact. Then extract the asset. In that order.\n\n' +
-      'The asset does not leave without you.',
-    killTarget: 1,
-    enemyCount: { cadet: 1, captain: 1, commander: 1 },
+      'CLASSIFICATION: DEEP BLACK\n\n' +
+      'THE ANGELS — NORWEGIAN DEEP\n\n' +
+      'A labyrinth of volcanic pinnacles, sheer canyon walls, and blind passages. No chart covers this route. Intel suggests a Soviet fast-attack unit is already inside.\n\n' +
+      'Your orders: navigate the canyon from entry to exit. Do not stop. Do not let them stop you.\n\n' +
+      'ENVIRONMENT\n' +
+      'Tight canyon passages. Limited manoeuvring room. Enemy subs positioned at choke points — they know the terrain better than you.\n\n' +
+      'TACTICAL NOTES\n' +
+      'Use your speed controls — too fast and you\'ll hit the walls, too slow and you\'re a target. Countermeasures will deflect incoming torpedoes. Listen to the sonar pings — they tell you how close the torpedo is.\n\n' +
+      'THREATS: Canyon walls · Enemy submarines · Guided torpedoes',
+    killTarget: 0,
+    enemyCount: { cadet: 1, captain: 2, commander: 3 },
   },
   {
     index: 2,
     name: 'THROUGH THE TRENCH',
     codename: 'STYX',
     subtitle: 'Mission 3 — Terrain Run',
-    mapId: 'trench',
+    mapId: 'abyss',
     isHeightfield: true,
-    briefingImg: '/Images/Rules/trench.png',
+    briefingImg: '/Images/TheTrench_MissionBriefing.png',
     briefing:
-      'CLASSIFICATION: TOP SECRET\n\n' +
-      'The Lofoten Trench — 3,000 metres of sheer volcanic rock forming the world\'s most treacherous underwater canyon.\n\n' +
-      'A hostile submarine has been tracking you since the Gap. It knows these waters better than you do. The terrain will kill you if STYX doesn\'t first.\n\n' +
-      'Navigate the Trench. Use the rock for cover. Destroy all contacts before they destroy you.\n\n' +
-      'The canyon has no mercy, Commander.',
+      'CLASSIFICATION: TOP SECRET\n' +
+      'OPERATION STYX — LOFOTEN TRENCH\n\n' +
+      '3,000 metres of sheer volcanic rock. No charts. No margin for error.\n\n' +
+      'A hostile submarine has been shadowing you since the Gap. It knows this trench. You don\'t.\n\n' +
+      'Your orders: descend into the Trench, use the terrain for cover, and destroy all contacts before they destroy you. The rock walls will mask your signature — use them. STYX will be doing the same.\n\n' +
+      'The canyon has no mercy, Commander. Neither should you.\n\n' +
+      'THREATS: Terrain · Enemy submarine · Pursuit from above',
     killTarget: 1,
     enemyCount: { cadet: 1, captain: 1, commander: 2 },
+    spawnPoint: { x: 8, z: 64 },
+    startHeading: Math.PI / 2,
+    startSilent: true,
+    musicMode: 'trench',
   },
   {
     index: 3,
@@ -150,25 +159,6 @@ const MISSIONS = [
       'Whatever you decide — make it count.',
     killTarget: 1,
     enemyCount: { cadet: 1, captain: 1, commander: 3 },
-  },
-  {
-    index: 6,
-    name: 'THROUGH THE ANGELS',
-    codename: 'RED ROUTE',
-    subtitle: 'Mission 7 — Canyon Run',
-    objectiveType: 'angels',
-    briefingImg: '/Images/Rules/dropoff.png',
-    briefing:
-      'CLASSIFICATION: DEEP BLACK\n\n' +
-      'The Angels — a chain of volcanic pinnacles in the Norwegian Deep. No chart covers them. No one who has run them has reported back.\n\n' +
-      'A Soviet torpedo is in the water behind you. Proximity-fuzed. No countermeasures remaining.\n\n' +
-      'There is one way through. We call it the Red Route. A 4-unit gap between two pinnacles at the far end of the passage — too narrow for a Type 53 to navigate at speed.\n\n' +
-      'Thread it. The torpedo will not.\n\n' +
-      'Use the Engine Order Telegraph to set speed. Tap the heading compass to steer.\n' +
-      'The Arch requires depth below 16. The Needle requires precise heading at ½ speed or less.\n\n' +
-      'THREATS: Canyon walls · The Arch · Pursuing torpedo · The Angels themselves',
-    killTarget: 0,
-    enemyCount: { cadet: 0, captain: 0, commander: 0 },
   },
 ];
 
@@ -333,6 +323,32 @@ function launchMission(missionIndex, difficulty) {
   const mission = MISSIONS[missionIndex];
   const diff = DIFFICULTY_CONFIG[difficulty];
 
+  // ── ANGELS2 mission: command-view canyon run ──
+  if (mission.objectiveType === 'angels2') {
+    _missionKillCount = 0;
+    window._campaignMode = true;
+
+    window._onCampaignMissionComplete = function () {
+      window._onCampaignMissionComplete = null;
+      completeMission(missionIndex, difficulty);
+    };
+    window._onCampaignGameOver = function () {
+      window._onCampaignGameOver = null;
+      window._campaignMode = false;
+      setTimeout(function () { showMissionFailed(missionIndex, difficulty); }, 100);
+    };
+
+    hideAllCampaignScreens();
+    document.getElementById('intro-screen').style.display = 'none';
+
+    if (window.launchAngels2) {
+      window.launchAngels2(difficulty);
+    } else {
+      console.error('[campaign] launchAngels2 not available — angels2.js not loaded');
+    }
+    return;
+  }
+
   // ── ANGELS mission: self-contained canyon run (no battleground needed) ──
   if (mission.objectiveType === 'angels') {
     _missionKillCount = 0;
@@ -428,22 +444,28 @@ function launchMission(missionIndex, difficulty) {
 
   var extraCount = (mission.enemyCount[difficulty] || 1) - 1;
 
+  function _applyMissionStartOverrides(mission) {
+    var spawnRef = mission.spawnPoint || (mission.waypoints && mission.waypoints.find(function(w) { return w.id === 'A'; }));
+    if (spawnRef && window._setPlayerSpawn) window._setPlayerSpawn(spawnRef.x, spawnRef.z);
+    if (mission.startHeading !== undefined && window._setPlayerHeading) window._setPlayerHeading(mission.startHeading);
+    if (mission.startSilent && window._engageSilentRunning) window._engageSilentRunning();
+    if (mission.musicMode === 'trench' && window._musicTrench) window._musicTrench();
+  }
+
   if (mission.isHeightfield) {
     window._isHeightfield = true;
     bg.loadAsync().then(function (mapGrid) {
       window._pendingGrid = mapGrid;
       window.launchGame(mapGrid);
       if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
-      var spawnRef = mission.spawnPoint || (mission.waypoints && mission.waypoints.find(function(w) { return w.id === 'A'; }));
-      if (spawnRef && window._setPlayerSpawn) window._setPlayerSpawn(spawnRef.x, spawnRef.z);
+      _applyMissionStartOverrides(mission);
     });
   } else {
     window._isHeightfield = false;
     window._pendingGrid = null;
     window.launchGame(bg.makeGrid());
     if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
-    var spawnRef = mission.spawnPoint || (mission.waypoints && mission.waypoints.find(function(w) { return w.id === 'A'; }));
-    if (spawnRef && window._setPlayerSpawn) window._setPlayerSpawn(spawnRef.x, spawnRef.z);
+    _applyMissionStartOverrides(mission);
   }
 }
 

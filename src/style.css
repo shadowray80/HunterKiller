@@ -1078,6 +1078,44 @@ pointer-events: all;
 z-index: 12;
 }
 
+/* Command View — Engine Order Telegraph speed control */
+#cmd-throttle {
+display: none;
+position: absolute;
+left: 0; right: 0;
+bottom: 238px;
+height: 32px;
+flex-direction: row;
+background: rgba(0,6,16,0.88);
+border-top: 1px solid rgba(0,180,220,0.35);
+border-bottom: 1px solid rgba(0,180,220,0.35);
+overflow: hidden;
+pointer-events: all;
+z-index: 13;
+}
+.cmd-throt-zone {
+flex: 1;
+display: flex;
+align-items: center;
+justify-content: center;
+color: rgba(0,150,190,0.5);
+font-size: 8px;
+font-family: 'Share Tech Mono', monospace;
+letter-spacing: 0.15em;
+border-right: 1px solid rgba(0,150,190,0.2);
+cursor: pointer;
+user-select: none;
+-webkit-user-select: none;
+touch-action: manipulation;
+transition: background 0.12s, color 0.12s;
+}
+.cmd-throt-zone:last-child { border-right: none; }
+.cmd-throt-zone.active {
+background: rgba(0,180,220,0.18);
+color: #00e5ff;
+text-shadow: 0 0 8px rgba(0,220,255,0.75);
+}
+
 /* Angels Mission — Engine Order Telegraph throttle bar */
 #ang-throttle {
 display: none;
@@ -2821,7 +2859,7 @@ pointer-events: none;
 /* ── CAMPAIGN OBJECTIVE BAR ── */
 #campaign-objective-bar {
   position: absolute;
-  bottom: 237px;
+  bottom: 270px;
   left: 0; right: 0;
   z-index: 8;
   background: rgba(2,13,26,0.82);

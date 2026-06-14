@@ -20,6 +20,7 @@ const _MUS = (() => {
     twoWives:  '/Sounds/OST/ost_twowives.mp3',
     redRoute:  '/Sounds/OST/ost_redroute.mp3',
     kaboom:    '/Sounds/OST/ost_kaboom.mp3',
+    course:    '/Sounds/OST/ost_course.mp3',
   };
 
   const DISPLAY = {
@@ -29,22 +30,25 @@ const _MUS = (() => {
     twoWives:  'TWO WIVES',
     redRoute:  'RED ROUTE I',
     kaboom:    'KABOOM!!!',
+    course:    'COURSE',
   };
 
   const LISTS = {
     ambient: ['nuclear', 'redRoute'],
     stealth: ['ancestral', 'twoWives'],
     combat:  ['chopper', 'kaboom'],
+    trench:  ['twoWives', 'course'],
   };
 
-  let _vol      = 0.2;   // master volume — default 20%
-  let _mode     = 'ambient';
-  let _cur      = null;  // { key, el, startVol } — currently playing / fading in
-  let _prev     = null;  // el fading out
-  let _fadeIv   = null;
-  let _combatTO = null;
-  let _trackTO  = null;  // 2-minute rotation timer
-  const _pool   = {};
+  let _vol          = 0.2;   // master volume — default 20%
+  let _mode         = 'ambient';
+  let _preCombatMode = 'ambient';
+  let _cur          = null;  // { key, el, startVol } — currently playing / fading in
+  let _prev         = null;  // el fading out
+  let _fadeIv       = null;
+  let _combatTO     = null;
+  let _trackTO      = null;  // 2-minute rotation timer
+  const _pool       = {};
 
   function _el(key) {
     if (!_pool[key]) {
@@ -144,20 +148,23 @@ const _MUS = (() => {
   function setCombat(on) {
     if (_combatTO) { clearTimeout(_combatTO); _combatTO = null; }
     if (on) {
+      _preCombatMode = _mode;
       _mode = 'combat';
       _el('chopper'); _el('kaboom');
       _crossfade(_pickRandom('combat'), 1.5);
     } else {
       _combatTO = setTimeout(() => {
         if (_mode === 'combat') {
-          _mode = 'ambient';
-          _crossfade(_pickRandom('ambient'), 5);
+          const returnMode = LISTS[_preCombatMode] ? _preCombatMode : 'ambient';
+          _mode = returnMode;
+          _crossfade(_pickRandom(returnMode), 5);
         }
       }, 8000);
     }
   }
 
   function setStealth(on) {
+    if (_mode === 'trench') return; // trench mission holds its own music
     if (on && _mode !== 'combat') {
       _mode = 'stealth';
       _el('ancestral'); _el('twoWives');
@@ -176,7 +183,19 @@ const _MUS = (() => {
     if (window._introMusic) window._introMusic.volume = _vol;
   }
 
-  return { start, stop, setCombat, setStealth, setVolume };
+  function forceTrack(key) {
+    _mode = 'ambient';
+    _el(key);
+    _crossfade(key, 2);
+  }
+
+  function startTrench() {
+    _mode = 'trench';
+    _el('twoWives'); _el('course');
+    _crossfade('twoWives', 2);
+  }
+
+  return { start, stop, setCombat, setStealth, setVolume, forceTrack, startTrench };
 })();
 
 window._musicStart   = ()  => _MUS.start();
@@ -184,3 +203,5 @@ window._musicStop    = ()  => _MUS.stop();
 window._musicCombat  = on  => _MUS.setCombat(on);
 window._musicStealth = on  => _MUS.setStealth(on);
 window._musicVolume  = v   => _MUS.setVolume(v);
+window._musicForce   = key => _MUS.forceTrack(key);
+window._musicTrench  = ()  => _MUS.startTrench();

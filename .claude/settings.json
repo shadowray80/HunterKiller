@@ -1,8 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(Get-ChildItem -Path \"f:\\\\HunterKiller\\\\hsd\" -Force | Select-Object Name, @{Name=\"Type\";Expression={if\\($_.PSIsContainer\\){\"Directory\"}else{\"File\"}}} | Format-Table -AutoSize)",
-      "PowerShell(\\(Get-Item \"f:\\\\HunterKiller\\\\hsd\\\\src\\\\game.js\"\\).Length / 1KB)",
+      "PowerShell(*)",
       "Bash(npx vercel *)",
       "Read(//f/Thankyoucards/app/**)",
       "Bash(git add *)",
@@ -30,7 +29,30 @@
       "Bash(gh release *)",
       "Bash(npm install *)",
       "Bash(npm run *)",
-      "Bash(npm list *)"
+      "Bash(npm list *)",
+      "Bash(gh pr *)",
+      "PowerShell(gh pr list --state all --limit 10)",
+      "Bash(dir \"F:\\\\HunterKiller\\\\Images\\\\\")",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(grep -v \"//\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); const src=fs.readFileSync\\('src/campaign.js','utf8'\\); new Function\\(src\\); console.log\\('OK'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); new Function\\(fs.readFileSync\\('src/campaign.js','utf8'\\)\\); console.log\\('OK'\\);\")",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(curl -s http://localhost:5174)",
+      "Bash('[data-mission=\\\\\"6\\\\\"]')",
+      "Bash('[data-diff=\\\\\"captain\\\\\"]')",
+      "Bash('#cpb-launch-btn')",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"require\\('./node_modules/playwright'\\)\")",
+      "Bash(curl -s http://localhost:5174/src/missions/angels.js)",
+      "Bash(Select-String -Path \"f:\\\\HunterKiller\\\\hsd\\\\src\\\\game.js\" -Pattern \"function drawSonar|function update\\\\b|updateEnemyAI|sonar-canvas|_campaignExitBeacon\")",
+      "Bash(Select-Object -First 30)",
+      "Bash(awk -F: '{print NR\": \"$0}')",
+      "Bash(Get-ChildItem -Path \"F:\\\\HunterKiller\\\\hsd\\\\public\\\\Images\\\\\" -ErrorAction SilentlyContinue | Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"F:\\\\HunterKiller\\\\Sounds\\\\\" -ErrorAction SilentlyContinue | Select-Object Name)",
+      "Bash(findstr \"dev\\\\|start\\\\|scripts\")"
     ],
     "additionalDirectories": [
       "F:\\HunterKiller\\Sounds",

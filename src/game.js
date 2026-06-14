@@ -581,6 +581,28 @@ function setAmbientMode(mode) {
 let furniture;
 furniture = buildFloorPlanGeometry();
 
+// ── TERRAIN HEIGHT CACHE — highest solid Y at each XZ cell ──
+let _terrainTopY = [];
+function _buildTerrainCache() {
+  _terrainTopY = [];
+  for (let gz = 0; gz < GRID.D; gz++) _terrainTopY[gz] = new Float32Array(GRID.W);
+  furniture.forEach(f => {
+    if (f.type === 'floor' || f.type === 'surface') return;
+    const x1 = Math.max(0, Math.floor(f.x1)), x2 = Math.min(GRID.W - 1, Math.ceil(f.x2));
+    const z1 = Math.max(0, Math.floor(f.z1)), z2 = Math.min(GRID.D - 1, Math.ceil(f.z2));
+    for (let gz = z1; gz <= z2; gz++)
+      for (let gx = x1; gx <= x2; gx++)
+        _terrainTopY[gz][gx] = Math.max(_terrainTopY[gz][gx], f.y2);
+  });
+}
+_buildTerrainCache();
+
+function getTerrainClearance() {
+  const gx = Math.max(0, Math.min(GRID.W - 1, Math.floor(state.player.x)));
+  const gz = Math.max(0, Math.min(GRID.D - 1, Math.floor(state.player.z)));
+  return state.player.y - (_terrainTopY[gz] ? _terrainTopY[gz][gx] : 0);
+}
+
 function buildFloorPlanGeometry() {
   const pieces = [];
   const GW = GRID.W, GD = GRID.D, GH = GRID.H;
@@ -970,7 +992,11 @@ function drawSonar() {
   const offZ = scy - (GRID.D/2) * scale;
 
   // world → minimap coords (top-down, world X = screen X, world Z = screen Y)
+  // Heightfield missions: Z-flip so the map orientation matches the 3D command view.
   function mm(wx, wz) {
+    if (window._isHeightfield) {
+      return { x: offX + wx * scale, y: offZ + (GRID.D - wz) * scale };
+    }
     return { x: offX + wx * scale, y: offZ + wz * scale };
   }
 
@@ -999,7 +1025,7 @@ function drawSonar() {
       for (let py = 0; py < sh; py++) {
         for (let px = 0; px < sw; px++) {
           const wx = (px - offX) / scale;
-          const wz = (py - offZ) / scale;
+          const wz = GRID.D - (py - offZ) / scale;
           const gx = Math.floor(wx), gz = Math.floor(wz);
           if (gx < 0 || gx >= GRID.W || gz < 0 || gz >= GRID.D || !hg[gz]) {
             hbuf[py * sw + px] = -1; continue;
@@ -1274,7 +1300,6 @@ function drawSonar() {
 
   // ── PLAYER SUB (always at correct world position) ──
   const pp = mm(state.player.x, state.player.z);
-  // Heading indicator: command uses camera rotation; surface modes use surfaceBearing; else periAngleH
   const _sonarHeading = (state.viewMode === 'command')
     ? camRotY
     : (state.viewMode === 'surface' || state.viewMode === 'surfaced')
@@ -1398,6 +1423,7 @@ function drawSonar() {
   sc.font='7px Share Tech Mono'; sc.textAlign='left'; sc.textBaseline='alphabetic';
   sc.fillStyle='rgba(0,180,220,0.5)';
   sc.fillText(`-${((GRID.H-state.player.y)*VOXEL_Y).toFixed(1)}m`, pp.x+5, pp.y-3);
+
 }
 
 let lastCamRotY = camRotY;
@@ -1446,24 +1472,43 @@ function render() {
     return {...p,sx,sy,depth};
   }).sort((a,b)=>b.depth-a.depth); // far to near
 
+  // Sub depth — split terrain rendering around the player sub for occlusion
+  const _subDepth = state.player.x * camFwd.x + state.player.z * camFwd.z - state.player.y * 0.3;
 
-  // Draw point cloud — with backface culling
+  // Helper to draw a cloud slice
   const camS = Math.sin(camRotY), camC = Math.cos(camRotY);
-  if (state.showDots) sorted.forEach(p => {
-    // Backface cull: face must point toward the isometric camera
-    if (p.nx * 0.82 * camS + p.ny * 0.55 + p.nz * 0.82 * camC <= 0) return;
-    const sz = p.type==='floor'||p.type==='surface' ? 0.8 : 1.0;
-    ctx.beginPath();
-    ctx.arc(p.sx, p.sy, sz, 0, Math.PI*2);
-    ctx.fillStyle = ptColor(p.type, 0.85, p.yFrac);
-    ctx.fill();
-  });
-
-  // Wireframe overlay
-  if (state.showWireframe) {
+  // Proximity colour: red (close) → orange → yellow → green → cyan (distant/normal)
+  const _PROX_R = 6.0, _PROX_R2 = _PROX_R * _PROX_R;
+  const _PROX_STOPS = [[255,30,0],[255,130,0],[255,220,0],[0,210,60],[0,229,255]];
+  const _proxColor = (t) => {
+    const n = _PROX_STOPS.length - 1;
+    const seg = Math.min(n - 1, Math.floor(t * n));
+    const f = t * n - seg;
+    const a = _PROX_STOPS[seg], b = _PROX_STOPS[seg + 1];
+    return `rgb(${Math.round(a[0]+(b[0]-a[0])*f)},${Math.round(a[1]+(b[1]-a[1])*f)},${Math.round(a[2]+(b[2]-a[2])*f)})`;
+  };
+  const _px = state.player.x, _py = state.player.y, _pz = state.player.z;
+  const _drawCloud = (pts) => {
+    pts.forEach(p => {
+      if (p.nx * 0.82 * camS + p.ny * 0.55 + p.nz * 0.82 * camC <= 0) return;
+      const sz = p.type==='floor'||p.type==='surface' ? 0.8 : 1.0;
+      const _dx = p.x - _px, _dy = p.y - _py, _dz = p.z - _pz;
+      const _d2 = _dx*_dx + _dy*_dy + _dz*_dz;
+      const fillColor = _d2 < _PROX_R2
+        ? _proxColor(Math.sqrt(_d2) / _PROX_R)
+        : ptColor(p.type, 0.85, p.yFrac);
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, sz, 0, Math.PI*2);
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+    });
+  };
+  // Helper to draw a wireframe slice
+  const _drawWire = (edges) => {
+    if (!edges.length) return;
     ctx.save();
     ctx.lineCap = 'round';
-    wallEdges.forEach(e => {
+    edges.forEach(e => {
       const pa = project(e.ax, e.ay, e.az);
       const pb = project(e.bx, e.by, e.bz);
       ctx.strokeStyle = e.type === 'terrain' ? `rgba(80,160,90,0.3)` : `rgba(0,200,255,0.45)`;
@@ -1471,7 +1516,20 @@ function render() {
       ctx.beginPath(); ctx.moveTo(pa.sx, pa.sy); ctx.lineTo(pb.sx, pb.sy); ctx.stroke();
     });
     ctx.restore();
-  }
+  };
+
+  // Split cloud and edges: far (behind sub) vs near (in front — will occlude sub)
+  const _farPts = [], _nearPts = [];
+  if (state.showDots) sorted.forEach(p => { (p.depth >= _subDepth ? _farPts : _nearPts).push(p); });
+  const _farEdges = [], _nearEdges = [];
+  if (state.showWireframe) wallEdges.forEach(e => {
+    const d = ((e.ax + e.bx) * 0.5) * camFwd.x + ((e.az + e.bz) * 0.5) * camFwd.z - ((e.ay + e.by) * 0.5) * 0.3;
+    (d >= _subDepth ? _farEdges : _nearEdges).push(e);
+  });
+
+  // ── BACK PASS: terrain behind the sub ──
+  _drawCloud(_farPts);
+  _drawWire(_farEdges);
 
   // Grid overlay on floor
   for (let gx=0;gx<=GRID.W;gx+=2) {
@@ -1583,7 +1641,24 @@ function render() {
     ctx.setLineDash([]);
   }
 
-  // Draw subs
+  // ── CLEARANCE RING around player sub ──
+  const _clr = getTerrainClearance();
+  const _clrColor = _clr <= 0   ? '#ff2200'
+                  : _clr < 0.7  ? '#ff6600'
+                  : _clr < 1.4  ? '#ffdd00'
+                  : '#00ff9d';
+  const _clrSp = project(state.player.x, state.player.y, state.player.z);
+  const _clrPulse = 0.45 + Math.sin(state.animFrame * 0.14) * 0.25;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(_clrSp.sx, _clrSp.sy, 30, 0, Math.PI * 2);
+  ctx.strokeStyle = _clrColor;
+  ctx.lineWidth = _clr < 1.4 ? 2.0 : 1.2;
+  ctx.globalAlpha = _clrPulse * (_clr < 0.7 ? 1.4 : 1.0);
+  ctx.stroke();
+  ctx.restore();
+
+  // ── DRAW SUBS ──
   drawSub(state.player, '#00e5ff', 'SUB ALPHA', false, 1.0);
 
   // ── MULTIPLAYER REMOTE SUBS in command view ──
@@ -1629,6 +1704,10 @@ function render() {
   // Draw squids
   if (state.squids) state.squids.forEach(function(s){ drawSquid(s); });
 
+  // ── FRONT PASS: terrain in front of / above the sub — occludes sub icon ──
+  _drawCloud(_nearPts);
+  _drawWire(_nearEdges);
+
   // Explosions — drawn on top of everything
   drawExplosions();
 
@@ -1651,8 +1730,6 @@ function drawSub(sub, color, label, hidden=false, alpha=1.0) {
   const colHi   = isEnemy ? 'rgba(255,150,150,0.38)' : 'rgba(120,235,255,0.42)';
   const colDim  = isEnemy ? 'rgba(255,100,100,0.22)' : 'rgba(0,200,255,0.22)';
 
-  // Forward vector: enemy subs use their own heading; player sub is always locked
-  // to camera-forward so it appears fixed (propeller toward us, bow up-screen).
   const fwdX = isEnemy ? Math.sin(sub.heading) : Math.sin(camRotY);
   const fwdZ = isEnemy ? Math.cos(sub.heading) : Math.cos(camRotY);
   const sp2  = project(sub.x + fwdX * 2, sub.y, sub.z + fwdZ * 2);
@@ -1660,7 +1737,7 @@ function drawSub(sub, color, label, hidden=false, alpha=1.0) {
 
   ctx.save();
   ctx.translate(sp.sx, sp.sy);
-  ctx.rotate(screenAngle); // orient hull along actual heading
+  ctx.rotate(screenAngle); // bow → screen-up (stern/propeller toward viewer)
   ctx.globalAlpha = alpha;
 
   const haloR = isEnemy ? 44 : 34;
@@ -1697,29 +1774,20 @@ function drawSub(sub, color, label, hidden=false, alpha=1.0) {
     ctx.beginPath(); ctx.moveTo(18,0); ctx.lineTo(-18,0);
     ctx.strokeStyle = colDim; ctx.lineWidth = 0.5; ctx.stroke();
 
-    // Sail — compact, swept-back, 1/3 from bow (x≈8)
+    // Conning tower — top-down deck overlay, centered on keel 1/3 from bow
+    // Viewed from above: a narrow oval sitting on the hull centreline
     ctx.beginPath();
-    ctx.moveTo(10,-6); ctx.lineTo(8,-15);
-    ctx.bezierCurveTo(8,-17, 14,-17, 14,-15);
-    ctx.lineTo(14,-6);
+    ctx.moveTo(13, -3.5);
+    ctx.bezierCurveTo(15, -2, 15, 2, 13, 3.5);
+    ctx.lineTo(8, 3.5);
+    ctx.bezierCurveTo(7, 2, 7, -2, 8, -3.5);
     ctx.closePath();
-    ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 1.1;
+    ctx.fillStyle = colHi; ctx.strokeStyle = col; ctx.lineWidth = 1.0;
     ctx.fill(); ctx.stroke();
 
-    // Periscope / mast cluster
-    ctx.beginPath(); ctx.moveTo(12,-15); ctx.lineTo(12,-20); ctx.lineTo(14,-20);
-    ctx.strokeStyle = col; ctx.lineWidth = 0.9; ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(10,-14); ctx.lineTo(10,-18);
-    ctx.strokeStyle = colHi; ctx.lineWidth = 0.7; ctx.stroke();
-
-    // Fairwater (sail) planes — horizontal fins each side of sail
-    [[-1],[1]].forEach(([s]) => {
-      ctx.beginPath();
-      ctx.moveTo(10, s*6); ctx.lineTo(6, s*10); ctx.lineTo(14, s*9); ctx.lineTo(14, s*6);
-      ctx.closePath();
-      ctx.fillStyle = colFill; ctx.strokeStyle = col; ctx.lineWidth = 0.8;
-      ctx.fill(); ctx.stroke();
-    });
+    // Periscope dot — centred on conning tower
+    ctx.beginPath(); ctx.arc(11, 0, 1.2, 0, Math.PI * 2);
+    ctx.fillStyle = col; ctx.globalAlpha = alpha; ctx.fill();
 
     // Stern cruciform X-planes
     [[-1],[1]].forEach(([s]) => {
@@ -2198,6 +2266,7 @@ function update() {
       if (_lk > _bestLock) { _bestLock = _lk; _bestTarget = { type, ref, x:wx, y:wy, z:wz }; }
     }
     if (state.enemy.alive) _checkGuidedLock(state.enemy, 'BRAVO', state.enemy.x, state.enemy.y, state.enemy.z);
+    if (state.extraEnemies) state.extraEnemies.forEach(xe => { if (xe.alive) _checkGuidedLock(xe, xe.name, xe.x, xe.y, xe.z); });
     if (state.whales)     state.whales.forEach(w  => { if (w.alive)  _checkGuidedLock(w,  'WHALE', w.x, w.y, w.z); });
     if (state.megalodons) state.megalodons.forEach(m => { if (m.alive) _checkGuidedLock(m,  'MEGA',  m.x, m.y, m.z); });
     if (state.squids)     state.squids.forEach(s   => { if (s.alive)  _checkGuidedLock(s,  'SQUID', s.x, s.y, s.z); });
@@ -2804,6 +2873,7 @@ setupDragZone(document.getElementById('zone-depth'), (dx, dy) => {
 let camDragActive = false;
 let camDragLastX = 0, camDragLastY = 0;
 let camDragMoved = false;
+let camDragType = null; // 'rotate' | 'move' — locked at first meaningful movement
 const CAM_DRAG_THRESHOLD = 6;
 
 function getControlsTop() {
@@ -2818,6 +2888,7 @@ function camDragStart(x, y) {
   if (y >= getControlsTop()) return;
   camDragActive = true;
   camDragMoved = false;
+  camDragType = null;
   camDragLastX = x;
   camDragLastY = y;
 }
@@ -2830,22 +2901,14 @@ function camDragMove(x, y) {
     if (Math.abs(dx) < CAM_DRAG_THRESHOLD && Math.abs(dy) < CAM_DRAG_THRESHOLD) return;
     camDragMoved = true;
   }
-  // Horizontal → rotate environment; sync sub heading so periscope entry is consistent
-  camRotY += dx * 0.008;
-  state.periAngleH = camRotY;
-  // Vertical → move sub toward top of screen (drag up = dy<0 = positive speed = +rz = up)
-  if (dy !== 0) {
-    const speed = -dy / ISO_SCALE;
-    const nx = Math.max(0.6, Math.min(GRID.W-0.6, state.player.x + Math.sin(camRotY) * speed));
-    const nz = Math.max(0.6, Math.min(GRID.D-0.6, state.player.z + Math.cos(camRotY) * speed));
-    if (!isOccupied(nx, state.player.y, nz)) {
-      state.player.x = nx;
-      state.player.z = nz;
-    }
-  }
-  centreOnPlayer();
   camDragLastX = x;
   camDragLastY = y;
+  // Horizontal drag rotates the environment (same as bearing compass drag)
+  if (dx !== 0) {
+    camRotY -= dx * (1 / 1.4) * (Math.PI / 180);
+    state.periAngleH = camRotY;
+    centreOnPlayer();
+  }
 }
 
 // Compute what cx/cy should be so the player sub sits at screen centre
@@ -2861,7 +2924,7 @@ function centreOnPlayer() {
   cx = W/2 - screenX;
   cy = H*0.42 + screenY;
 }
-function camDragEnd() { camDragActive = false; camDragMoved = false; }
+function camDragEnd() { camDragActive = false; camDragMoved = false; camDragType = null; }
 
 // Two-finger pan+zoom state
 let _pinchDist0 = 0, _pinchMidX = 0, _pinchMidY = 0;
@@ -2888,10 +2951,7 @@ canvas.addEventListener('touchmove', e => {
     const d = Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
     const midX = (t[0].clientX + t[1].clientX) / 2;
     const midY = (t[0].clientY + t[1].clientY) / 2;
-    // Pan: shift camera offset by midpoint delta
-    cx += midX - _pinchMidX;
-    cy += midY - _pinchMidY;
-    // Zoom: scale by distance ratio
+    // Zoom only — no pan. Sub stays centred; centreOnPlayer enforces this in the loop.
     ISO_SCALE = Math.max(ISO_MIN, Math.min(ISO_MAX, ISO_SCALE * d / _pinchDist0));
     _pinchDist0 = d;
     _pinchMidX = midX;
@@ -2921,6 +2981,26 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 //                A/D = strafe left/right perpendicular to periAngleH
 // Q/E = rise/dive   Z/X = rotate camera
 
+// Move 1 unit camera-forward (fwdSign) or perpendicular to it (strafeSign, +1=right)
+function _cmdMove(fwdSign, strafeSign) {
+  var fX = Math.sin(camRotY), fZ = Math.cos(camRotY);   // camera-forward
+  var sX = Math.cos(camRotY), sZ = -Math.sin(camRotY);  // right-strafe
+  var wx = fX * fwdSign + sX * strafeSign;
+  var wz = fZ * fwdSign + sZ * strafeSign;
+  var len = Math.sqrt(wx*wx + wz*wz);
+  if (len === 0) return;
+  var nx = Math.max(0.6, Math.min(GRID.W-0.6, state.player.x + wx/len));
+  var nz = Math.max(0.6, Math.min(GRID.D-0.6, state.player.z + wz/len));
+  var _hfOk = !window._isHeightfield || !window._canyonHeightGrid ||
+    (window._canyonHeightGrid[Math.max(0,Math.min(127,~~nz))][Math.max(0,Math.min(127,~~nx))] / 255) *
+    (window._hfTerrainScale || 16) <= state.player.y - 0.5;
+  if (_hfOk && !isOccupied(nx, state.player.y, nz)) {
+    state.player.x = nx; state.player.z = nz;
+  } else if (window._onWallCollision) {
+    window._onWallCollision();
+  }
+}
+
 // Move 1 cell in screen direction (sdx right+, sdz down+), rotated by camRotY
 function _cmdStep(sdx, sdz) {
   var cos = Math.cos(-camRotY), sin = Math.sin(-camRotY);
@@ -2944,21 +3024,30 @@ function _periStep(fX, fZ) {
 document.addEventListener('keydown', function(e) {
   var code = e.code || e.key;
   var isPeri = (state.viewMode === 'periscope' || state.viewMode === 'surface');
+  var isCmd  = (state.viewMode === 'command');
   var sinH = Math.sin(state.periAngleH);
   var cosH = Math.cos(state.periAngleH);
   switch(code) {
-    case 'ArrowUp':    case 'KeyW':
-      isPeri ? _periStep(-sinH,  cosH) : _cmdStep(0, -1); break;
-    case 'ArrowDown':  case 'KeyS':
-      isPeri ? _periStep( sinH, -cosH) : _cmdStep(0,  1); break;
-    case 'ArrowLeft':  case 'KeyA':
-      isPeri ? _periStep( cosH,  sinH) : _cmdStep( 1, 0); break;
-    case 'ArrowRight': case 'KeyD':
-      isPeri ? _periStep(-cosH, -sinH) : _cmdStep(-1, 0); break;
+    case 'ArrowUp':
+      isCmd ? movePlayer(0, 1, 0) : isPeri ? _periStep(-sinH, cosH) : _cmdStep(0, -1); break;
+    case 'ArrowDown':
+      isCmd ? movePlayer(0, -1, 0) : isPeri ? _periStep(sinH, -cosH) : _cmdStep(0, 1); break;
+    case 'ArrowLeft':
+      isCmd ? (ISO_SCALE = Math.max(ISO_MIN, ISO_SCALE - 1)) : isPeri ? _periStep(cosH, sinH) : _cmdStep(1, 0); break;
+    case 'ArrowRight':
+      isCmd ? (ISO_SCALE = Math.min(ISO_MAX, ISO_SCALE + 1)) : isPeri ? _periStep(-cosH, -sinH) : _cmdStep(-1, 0); break;
+    case 'KeyW':
+      isPeri ? _periStep(-sinH,  cosH) : isCmd ? _cmdMove(1, 0)  : _cmdStep(0, -1); break;
+    case 'KeyS':
+      isPeri ? _periStep( sinH, -cosH) : isCmd ? _cmdMove(-1, 0) : _cmdStep(0,  1); break;
+    case 'KeyA':
+      isPeri ? _periStep( cosH,  sinH) : isCmd ? _cmdMove(0, -1) : _cmdStep( 1, 0); break;
+    case 'KeyD':
+      isPeri ? _periStep(-cosH, -sinH) : isCmd ? _cmdMove(0,  1) : _cmdStep(-1, 0); break;
     case 'KeyQ': case 'KeyE': movePlayer(0,  1, 0); break;
     case 'KeyC': case 'c':   movePlayer(0, -1, 0); break;
-    case 'KeyZ': case 'z': camRotY -= 0.15; break;
-    case 'KeyX': case 'x': camRotY += 0.15; break;
+    case 'KeyZ': case 'z': camRotY += 0.15; break;
+    case 'KeyX': case 'x': camRotY -= 0.15; break;
     case 'KeyP': case 'p': doPing(); break;
     case 'KeyT': case 't': doTorpedoMode(); break;
     case 'KeyF': case 'f': doFire(); break;
@@ -3228,7 +3317,7 @@ function setScoreboard(on) {
 
 // ── WEAPON SELECT ──
 document.getElementById('peri-btn-weapon').addEventListener('click', () => {
-  const _modes = ['torpedo', 'guided', 'acoustic', 'mine', 'dmine', 'amine'];
+  const _modes = ['torpedo', 'acoustic', 'guided', 'mine', 'dmine', 'amine'];
   state.weaponMode = _modes[(_modes.indexOf(state.weaponMode) + 1) % _modes.length];
   const btn = document.getElementById('peri-btn-weapon');
   btn.classList.remove('mine-mode', 'guided-mode', 'acoustic-mode', 'dmine-mode', 'amine-mode');
@@ -3627,6 +3716,13 @@ function _steerHomingTorp(t) {
 function _updateAcousticTorp(t) {
   if (t.heading === undefined) t.heading = Math.atan2(t.dx, t.dz);
 
+  // Run straight for 3 seconds before sonar activates (~90 frames at 30fps)
+  if (!t.acousticArmed) {
+    if ((t.frames || 0) < 90) return;
+    t.acousticArmed = true;
+    addEvent('◉ ACOUSTIC SONAR ACTIVE — HUNTING', false);
+  }
+
   const PING_INTERVAL = 90; // ping every 3 seconds at 30fps
   t.pingTimer = (t.pingTimer || 0) + 1;
   t.pingRings = t.pingRings || [];
@@ -3764,13 +3860,24 @@ function updateEnemyAI() {
     var _bSpd = en.aiState === 'cover' ? 0.20 : en.aiState === 'flank' ? 0.18 : 0.15;
     var _bnx = en.x + Math.sin(en.heading) * _bSpd;
     var _bnz = en.z + Math.cos(en.heading) * _bSpd;
-    if (!isOccupied(_bnx, en.y, _bnz) && _bnx > 0.5 && _bnx < GRID.W-0.5 && _bnz > 0.5 && _bnz < GRID.D-0.5) {
+    // Heightfield: explicit terrain check — don't enter a cell where terrain is above us
+    var _bnHfOk = true;
+    if (window._isHeightfield && window._canyonHeightGrid) {
+      var _bnhgx = Math.max(0, Math.min(GRID.W-1, ~~_bnx)), _bnhgz = Math.max(0, Math.min(GRID.D-1, ~~_bnz));
+      _bnHfOk = (window._canyonHeightGrid[_bnhgz][_bnhgx] / 255) * (window._hfTerrainScale || GRID.H) < en.y - 0.5;
+    }
+    if (_bnHfOk && !isOccupied(_bnx, en.y, _bnz) && _bnx > 0.5 && _bnx < GRID.W-0.5 && _bnz > 0.5 && _bnz < GRID.D-0.5) {
       en.x = _bnx; en.z = _bnz;
     } else {
       var _bh2 = en.heading + Math.PI * 0.4 * (Math.random() < 0.5 ? 1 : -1);
       var _bnx2 = en.x + Math.sin(_bh2) * _bSpd;
       var _bnz2 = en.z + Math.cos(_bh2) * _bSpd;
-      if (!isOccupied(_bnx2, en.y, _bnz2) && _bnx2 > 0.5 && _bnx2 < GRID.W-0.5 && _bnz2 > 0.5 && _bnz2 < GRID.D-0.5) {
+      var _bn2HfOk = true;
+      if (window._isHeightfield && window._canyonHeightGrid) {
+        var _bn2hgx = Math.max(0, Math.min(GRID.W-1, ~~_bnx2)), _bn2hgz = Math.max(0, Math.min(GRID.D-1, ~~_bnz2));
+        _bn2HfOk = (window._canyonHeightGrid[_bn2hgz][_bn2hgx] / 255) * (window._hfTerrainScale || GRID.H) < en.y - 0.5;
+      }
+      if (_bn2HfOk && !isOccupied(_bnx2, en.y, _bnz2) && _bnx2 > 0.5 && _bnx2 < GRID.W-0.5 && _bnz2 > 0.5 && _bnz2 < GRID.D-0.5) {
         en.x = _bnx2; en.z = _bnz2; en.heading = _bh2;
       } else {
         en.heading += (Math.random() - 0.5) * Math.PI;
@@ -3779,9 +3886,20 @@ function updateEnemyAI() {
     // Smooth depth: pick a new target every 8-14 seconds, glide toward it
     if (!en.depthTarget) en.depthTarget = en.y;
     if (_enemyMoveTimer % 480 === 0 || Math.abs(en.y - en.depthTarget) < 0.3) {
-      en.depthTarget = Math.max(1, Math.min(GRID.H - 1, GRID.H * (0.15 + Math.random() * 0.65)));
+      var _bTerrFloor = 1;
+      if (window._isHeightfield && window._canyonHeightGrid) {
+        var _btgx = Math.max(0, Math.min(GRID.W-1, ~~en.x)), _btgz = Math.max(0, Math.min(GRID.D-1, ~~en.z));
+        _bTerrFloor = (window._canyonHeightGrid[_btgz][_btgx] / 255) * (window._hfTerrainScale || GRID.H) + 2;
+      }
+      en.depthTarget = Math.max(_bTerrFloor, Math.min(GRID.H - 1, GRID.H * (0.15 + Math.random() * 0.65)));
     }
     en.y += (en.depthTarget - en.y) * 0.003;
+    // Heightfield: never sink below terrain at current position
+    if (window._isHeightfield && window._canyonHeightGrid) {
+      var _bclgx = Math.max(0, Math.min(GRID.W-1, ~~en.x)), _bclgz = Math.max(0, Math.min(GRID.D-1, ~~en.z));
+      var _bclTerrH = (window._canyonHeightGrid[_bclgz][_bclgx] / 255) * (window._hfTerrainScale || GRID.H);
+      if (en.y < _bclTerrH + 2) { en.y = _bclTerrH + 2; en.depthTarget = Math.max(en.depthTarget, en.y); }
+    }
   }
 
   // ── STATE: HUNT ──
@@ -3790,8 +3908,8 @@ function updateEnemyAI() {
     // Fire if we have LOS and are in range
     if (canFire && los && dist2d < 42) {
       enemyFire();
-      // Only briefly break for cover — stay aggressive
-      var cover = findNearestCover(en.x, en.z, state.player.x, state.player.z);
+      // In heightfield canyon mode skip cover logic (FLOOR_PLAN-based, unreliable in terrain)
+      var cover = window._isHeightfield ? null : findNearestCover(en.x, en.z, state.player.x, state.player.z);
       if (cover && dist2d > 15) {
         en.aiState = 'cover';
         en.aiTarget = cover;
@@ -3801,28 +3919,36 @@ function updateEnemyAI() {
       }
       return;
     }
-    // Update heading toward player every 12 frames via BFS
+    // Update heading toward player every 12 frames
     if (_enemyMoveTimer % 12 === 0) {
-      var tx, tz;
-      if (silentBlind) {
-        if (state.enemyLastKnown) {
-          tx = Math.round(state.enemyLastKnown.x);
-          tz = Math.round(state.enemyLastKnown.z);
-        } else {
-          // Patrol random waypoints while searching — covers the whole map
-          if (!en.patrolTarget || (Math.abs(en.x-en.patrolTarget.x) < 3 && Math.abs(en.z-en.patrolTarget.z) < 3)) {
+      if (window._isHeightfield) {
+        // Canyon mode: steer directly — BFS uses FLOOR_PLAN which is all open in terrain maps
+        var _htx = silentBlind ? (state.enemyLastKnown ? state.enemyLastKnown.x : (en.patrolTarget ? en.patrolTarget.x : px)) : px;
+        var _htz = silentBlind ? (state.enemyLastKnown ? state.enemyLastKnown.z : (en.patrolTarget ? en.patrolTarget.z : pz)) : pz;
+        if (silentBlind && !state.enemyLastKnown) {
+          if (!en.patrolTarget || (Math.abs(en.x-en.patrolTarget.x) < 5 && Math.abs(en.z-en.patrolTarget.z) < 5))
             en.patrolTarget = { x: 3+Math.floor(Math.random()*(GRID.W-6)), z: 3+Math.floor(Math.random()*(GRID.D-6)) };
-          }
-          tx = en.patrolTarget.x; tz = en.patrolTarget.z;
         }
+        en.heading = Math.atan2(_htx - en.x, _htz - en.z);
       } else {
-        tx = px; tz = pz;
+        var tx, tz;
+        if (silentBlind) {
+          if (state.enemyLastKnown) {
+            tx = Math.round(state.enemyLastKnown.x); tz = Math.round(state.enemyLastKnown.z);
+          } else {
+            if (!en.patrolTarget || (Math.abs(en.x-en.patrolTarget.x) < 3 && Math.abs(en.z-en.patrolTarget.z) < 3))
+              en.patrolTarget = { x: 3+Math.floor(Math.random()*(GRID.W-6)), z: 3+Math.floor(Math.random()*(GRID.D-6)) };
+            tx = en.patrolTarget.x; tz = en.patrolTarget.z;
+          }
+        } else {
+          tx = px; tz = pz;
+        }
+        var next = bfsStep(ex, ez, Math.max(1,Math.min(GRID.W-2,tx)), Math.max(1,Math.min(GRID.D-2,tz)));
+        if (next) en.heading = Math.atan2(next.x - ex, next.z - ez);
       }
-      var next = bfsStep(ex, ez, Math.max(1,Math.min(GRID.W-2,tx)), Math.max(1,Math.min(GRID.D-2,tz)));
-      if (next) en.heading = Math.atan2(next.x - ex, next.z - ez);
     }
-    // Frequently switch to flank to cut off the player
-    if (en.aiTimer === 0 && Math.random() < 0.55) {
+    // Frequently switch to flank to cut off the player (not in canyon mode)
+    if (!window._isHeightfield && en.aiTimer === 0 && Math.random() < 0.55) {
       var fpos = findFlankPos(en.x, en.z, state.player.x, state.player.z);
       if (fpos) {
         en.aiState = 'flank';
@@ -3840,6 +3966,7 @@ function updateEnemyAI() {
   // ── STATE: COVER ──
   // Break toward a wall/corner that blocks LOS, reload there
   else if (en.aiState === 'cover') {
+    if (window._isHeightfield) { en.aiState = 'hunt'; en.aiTimer = 60; return; }
     var tgt = en.aiTarget;
     if (!tgt) { en.aiState = 'hunt'; en.aiTimer = 60; return; }
     var dtx = Math.abs(en.x - tgt.x), dtz = Math.abs(en.z - tgt.z);
@@ -3895,6 +4022,7 @@ function updateEnemyAI() {
   // ── STATE: FLANK ──
   // Circle round to a new angle on the player, then open fire
   else if (en.aiState === 'flank') {
+    if (window._isHeightfield) { en.aiState = 'hunt'; en.aiTimer = 60; return; }
     var ftgt = en.aiTarget;
     if (!ftgt) { en.aiState = 'hunt'; en.aiTimer = 60; return; }
     var fdtx = Math.abs(en.x - ftgt.x), fdtz = Math.abs(en.z - ftgt.z);
@@ -4117,11 +4245,60 @@ function drawDepthGauge() {
   dg.fillText(`-${depthM}m`, gw/2, gh - 4);
 }
 
+// ── BEARING COMPASS (shared: periscope + command view) ──
+const periCompassCanvas = document.getElementById('peri-compass-canvas');
+const periCompassCtx = periCompassCanvas.getContext('2d');
+
+function drawBearingCompass() {
+  const pc = periCompassCtx;
+  var _cw = periCompassCanvas.offsetWidth || 260;
+  if (periCompassCanvas.width !== _cw) periCompassCanvas.width = _cw;
+  const cpW = periCompassCanvas.width;
+  pc.fillStyle = 'rgba(0,5,15,0.9)';
+  pc.fillRect(0, 0, cpW, 48);
+  const bearingDeg = ((state.periAngleH * 180 / Math.PI + 180) % 360 + 360) % 360;
+  const centreX = cpW / 2;
+  pc.font = '7px Share Tech Mono';
+  for (let d = -90; d <= 90; d += 5) {
+    const deg = (bearingDeg + d + 360) % 360;
+    const px = centreX + d * 1.4;
+    if (d % 30 === 0) {
+      const labels = ['N','030','060','E','120','150','S','210','240','W','300','330'];
+      const label = labels[Math.round(deg/30) % 12];
+      pc.fillStyle = label==='N'||label==='E'||label==='S'||label==='W' ? '#00ff9d' : 'rgba(0,200,255,0.7)';
+      pc.textAlign = 'center';
+      pc.fillText(label, px, 10);
+      pc.strokeStyle = 'rgba(0,200,255,0.5)';
+      pc.lineWidth = 1.5;
+      pc.beginPath(); pc.moveTo(px, 13); pc.lineTo(px, 22); pc.stroke();
+    } else if (d % 10 === 0) {
+      pc.strokeStyle = 'rgba(0,150,200,0.35)';
+      pc.lineWidth = 0.8;
+      pc.beginPath(); pc.moveTo(px, 16); pc.lineTo(px, 22); pc.stroke();
+    } else {
+      pc.strokeStyle = 'rgba(0,120,160,0.2)';
+      pc.lineWidth = 0.5;
+      pc.beginPath(); pc.moveTo(px, 18); pc.lineTo(px, 22); pc.stroke();
+    }
+  }
+  pc.strokeStyle = '#00e5ff';
+  pc.lineWidth = 2;
+  pc.beginPath(); pc.moveTo(centreX, 12); pc.lineTo(centreX, 26); pc.stroke();
+  pc.fillStyle = '#00e5ff';
+  pc.font = 'bold 8px Share Tech Mono';
+  pc.textAlign = 'center';
+  pc.fillText(padL(bearingDeg.toFixed(0),3,'0')+'°', centreX, 10);
+  drawHullBar(pc, 30, periCompassCanvas.width);
+  const dM = ((GRID.H - state.player.y)*VOXEL_Y).toFixed(1);
+  document.getElementById('peri-depth').textContent = `-${dM}m`;
+  document.getElementById('peri-bearing').textContent = padL(bearingDeg.toFixed(0),3,'0')+'°';
+  document.getElementById('peri-torps').textContent = state.torpCount;
+  document.getElementById('peri-hull').textContent = state.hull + '%';
+}
+
 // ── PERISCOPE RENDERER ──
 const scopeMaskCanvas = document.getElementById('scope-mask');
 const scopeCtx = scopeMaskCanvas.getContext('2d');
-const periCompassCanvas = document.getElementById('peri-compass-canvas');
-const periCompassCtx = periCompassCanvas.getContext('2d');
 
 // Crush depth: fraction of track (from seabed upward) that is forbidden based on hull
 function getCrushFrac() { return Math.max(0, (1 - state.hull / 100) * 0.85); }
@@ -4559,7 +4736,7 @@ function renderPeriscope() {
     if (pp.sx < -80 || pp.sx > W+80 || pp.sy < -80 || pp.sy > H+80) return;
     const alpha = Math.max(0, 1 - pp.depth / 62) * 1.2;
     if (alpha < 0.02) return;
-    const s = Math.max(0.6, Math.min(50, periPointSize / pp.depth));
+    const s = Math.max(0.6, Math.min(8, periPointSize / pp.depth));
     ctx.fillStyle = ptColor(p.type, Math.min(1, alpha), p.yFrac);
     ctx.fillRect(pp.sx - s * 0.5, pp.sy - s * 0.5, s, s);
   });
@@ -4583,13 +4760,13 @@ function renderPeriscope() {
       const maxD = Math.max(pa.depth, pb.depth);
       if (maxD > 55) return;
       const minD = Math.min(pa.depth, pb.depth);
-      let a = Math.max(0, 1 - maxD / 50) * (minD < 8 ? 0.75 : 0.45);
+      let a = Math.max(0, 1 - maxD / 50) * 0.55;
       if (state.silentRunning) {
         const midX = (e.ax + e.bx) * 0.5, midZ = (e.az + e.bz) * 0.5;
         a *= silentRevealAlpha(midX, midZ);
       }
       if (a < 0.02) return;
-      ctx.lineWidth = (minD < 8 ? Math.max(0.6, 1.8 / minD) : 0.5) * wireframeScale;
+      ctx.lineWidth = 0.5 * wireframeScale;
       ctx.strokeStyle = `rgba(0,200,255,${a})`;
       ctx.beginPath(); ctx.moveTo(pa.sx, pa.sy); ctx.lineTo(pb.sx, pb.sy); ctx.stroke();
     });
@@ -4935,56 +5112,7 @@ function renderPeriscope() {
   }
 
   // ── BEARING COMPASS ──
-  const pc = periCompassCtx;
-  // Sync canvas resolution to actual display width so hull bars are crisp
-  var _cw = periCompassCanvas.offsetWidth || 260;
-  if (periCompassCanvas.width !== _cw) periCompassCanvas.width = _cw;
-  const cpW = periCompassCanvas.width;
-  pc.fillStyle = 'rgba(0,5,15,0.9)';
-  pc.fillRect(0, 0, cpW, 48);
-  const bearingDeg = ((state.periAngleH * 180 / Math.PI + 180) % 360 + 360) % 360;
-  const centreX = cpW / 2;
-  pc.font = '7px Share Tech Mono';
-  for (let d = -90; d <= 90; d += 5) {
-    const deg = (bearingDeg + d + 360) % 360;
-    const px = centreX + d * 1.4;
-    if (d % 30 === 0) {
-      const labels = ['N','030','060','E','120','150','S','210','240','W','300','330'];
-      const label = labels[Math.round(deg/30) % 12];
-      pc.fillStyle = label==='N'||label==='E'||label==='S'||label==='W' ? '#00ff9d' : 'rgba(0,200,255,0.7)';
-      pc.textAlign = 'center';
-      pc.fillText(label, px, 10);
-      pc.strokeStyle = 'rgba(0,200,255,0.5)';
-      pc.lineWidth = 1.5;
-      pc.beginPath(); pc.moveTo(px, 13); pc.lineTo(px, 22); pc.stroke();
-    } else if (d % 10 === 0) {
-      pc.strokeStyle = 'rgba(0,150,200,0.35)';
-      pc.lineWidth = 0.8;
-      pc.beginPath(); pc.moveTo(px, 16); pc.lineTo(px, 22); pc.stroke();
-    } else {
-      pc.strokeStyle = 'rgba(0,120,160,0.2)';
-      pc.lineWidth = 0.5;
-      pc.beginPath(); pc.moveTo(px, 18); pc.lineTo(px, 22); pc.stroke();
-    }
-  }
-  // Centre marker
-  pc.strokeStyle = '#00e5ff';
-  pc.lineWidth = 2;
-  pc.beginPath(); pc.moveTo(centreX, 12); pc.lineTo(centreX, 26); pc.stroke();
-  // Current bearing readout
-  pc.fillStyle = '#00e5ff';
-  pc.font = 'bold 8px Share Tech Mono';
-  pc.textAlign = 'center';
-  pc.fillText(padL(bearingDeg.toFixed(0),3,'0')+'°', centreX, 10);
-  // Hull integrity bar below bearing strip
-  drawHullBar(pc, 30, periCompassCanvas.width);
-
-  // Update periscope HUD
-  const dM = ((GRID.H - state.player.y)*VOXEL_Y).toFixed(1);
-  document.getElementById('peri-depth').textContent = `-${dM}m`;
-  document.getElementById('peri-bearing').textContent = padL(bearingDeg.toFixed(0),3,'0')+'°';
-  document.getElementById('peri-torps').textContent = state.torpCount;
-  document.getElementById('peri-hull').textContent = state.hull + '%';
+  drawBearingCompass();
 
   // Contact status
   const showContact = state.forceReveal || state.revealAlpha > 0;
@@ -5088,10 +5216,48 @@ setupPeriDrag();
     const dx = e.clientX - lastX;
     if (state.viewMode === 'surface' || state.viewMode === 'surfaced') {
       surfaceBearing += dx * RAD_PER_PX;
+    } else if (state.viewMode === 'command') {
+      camRotY -= dx * RAD_PER_PX;
+      state.periAngleH = camRotY;
+      centreOnPlayer();
     } else {
       state.periAngleH += dx * RAD_PER_PX;
     }
     lastX = e.clientX;
+    e.preventDefault();
+  });
+  el.addEventListener('pointerup',     () => { active = false; });
+  el.addEventListener('pointercancel', () => { active = false; });
+})();
+
+// ── SONAR CANVAS DRAG → move sub (command view only) ──
+// Pure up/down joystick: drag up = sub moves away from viewer (toward top of main screen).
+// Uses camera-forward direction (sin/cos camRotY) so movement is always toward screen top
+// regardless of how much the environment has been rotated.
+(function setupSonarDrag() {
+  const el = document.getElementById('sonar-canvas');
+  let lastY = 0, active = false;
+  el.addEventListener('pointerdown', e => {
+    if (state.viewMode !== 'command') return;
+    active = true; lastY = e.clientY;
+    el.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  el.addEventListener('pointermove', e => {
+    if (!active) return;
+    const dy = e.clientY - lastY;
+    if (dy !== 0) {
+      // 50px drag ≈ 3 world units — fine control in tight canyons
+      const speed = -dy * 0.06;
+      const nx = Math.max(0.6, Math.min(GRID.W-0.6, state.player.x + Math.sin(camRotY) * speed));
+      const nz = Math.max(0.6, Math.min(GRID.D-0.6, state.player.z + Math.cos(camRotY) * speed));
+      if (!isOccupied(nx, state.player.y, nz)) {
+        state.player.x = nx;
+        state.player.z = nz;
+      }
+      centreOnPlayer();
+    }
+    lastY = e.clientY;
     e.preventDefault();
   });
   el.addEventListener('pointerup',     () => { active = false; });
@@ -5112,6 +5278,9 @@ function goToCommand() {
   document.getElementById('peri-btn-back').textContent = '⊙ PERISCOPE';
   // Hide circular vignette — it only belongs in periscope view
   scopeMaskCanvas.style.display = 'none';
+  // Hide sonar minimap — the fwd-wrap area is the movement joystick in command view
+  document.getElementById('sonar-wrap').style.display = 'none';
+  document.getElementById('cmd-throttle').style.display = 'flex';
   const flash = document.getElementById('view-transition');
   flash.classList.add('flash');
   setTimeout(() => flash.classList.remove('flash'), 200);
@@ -5125,6 +5294,10 @@ function goToPeriscope() {
   document.getElementById('peri-btn-back').textContent = '◈ COMMAND';
   // Restore circular vignette for periscope view
   scopeMaskCanvas.style.display = '';
+  // Restore sonar minimap to its previous on/off state
+  setTacticalSonar(_tacticalOn);
+  document.getElementById('cmd-throttle').style.display = 'none';
+  _cmdThrottle = 0; _updateCmdThrottleUI();
   const flash = document.getElementById('view-transition');
   flash.classList.add('flash');
   setTimeout(() => flash.classList.remove('flash'), 200);
@@ -5199,14 +5372,49 @@ let periStrafeAccumX = 0, periStrafeAccumZ = 0;
     const dy = e.clientY - lastY;
     lastX = e.clientX; lastY = e.clientY;
 
+    if (state.viewMode === 'command') {
+      // Vertical drag: forward/back in camera-forward direction (up the screen)
+      if (dy !== 0) {
+        const speed = -dy * 0.06;
+        const nx = Math.max(0.6, Math.min(GRID.W-0.6, state.player.x + Math.sin(camRotY) * speed));
+        const nz = Math.max(0.6, Math.min(GRID.D-0.6, state.player.z + Math.cos(camRotY) * speed));
+        const _hfBlocked = window._isHeightfield && window._canyonHeightGrid
+          ? (() => { const _hgx = Math.max(0, Math.min(127, ~~nx)), _hgz = Math.max(0, Math.min(127, ~~nz));
+              return (window._canyonHeightGrid[_hgz][_hgx] / 255) * (window._hfTerrainScale || 16) > state.player.y - 0.5; })()
+          : false;
+        if (!isOccupied(nx, state.player.y, nz) && !_hfBlocked) {
+          state.player.x = nx;
+          state.player.z = nz;
+        } else if (window._onWallCollision) {
+          window._onWallCollision();
+        }
+      }
+      // Horizontal drag: strafe perpendicular to camera-forward (right = +1)
+      if (dx !== 0) {
+        const speed = dx * 0.06;
+        const sx = Math.max(0.6, Math.min(GRID.W-0.6, state.player.x + Math.cos(camRotY) * speed));
+        const sz = Math.max(0.6, Math.min(GRID.D-0.6, state.player.z - Math.sin(camRotY) * speed));
+        const _sfBlocked = window._isHeightfield && window._canyonHeightGrid
+          ? (() => { const _hgx = Math.max(0, Math.min(127, ~~sx)), _hgz = Math.max(0, Math.min(127, ~~sz));
+              return (window._canyonHeightGrid[_hgz][_hgx] / 255) * (window._hfTerrainScale || 16) > state.player.y - 0.5; })()
+          : false;
+        if (!isOccupied(sx, state.player.y, sz) && !_sfBlocked) {
+          state.player.x = sx;
+          state.player.z = sz;
+        } else if (window._onWallCollision) {
+          window._onWallCollision();
+        }
+      }
+      return;
+    }
+
     // Vertical drag = forward/back in facing direction
-    accumFwd += dy; // drag up = positive = forward
+    accumFwd += dy;
     while (accumFwd >= STEP_PX)  { movePeriDir( 1); accumFwd -= STEP_PX; }
     while (accumFwd <= -STEP_PX) { movePeriDir(-1); accumFwd += STEP_PX; }
 
     // Horizontal drag = strafe
-    // Periscope projection negates screen-X, so the sign must flip vs command view
-    accumStrafe += (state.viewMode === 'command') ? -dx : dx;
+    accumStrafe += dx;
     while (accumStrafe >= STEP_PX)  { movePeriStrafe( 1); accumStrafe -= STEP_PX; }
     while (accumStrafe <= -STEP_PX) { movePeriStrafe(-1); accumStrafe += STEP_PX; }
   }
@@ -5266,6 +5474,33 @@ function movePeriStrafe(dir) {
     periStrafeAccumZ -= stepZ;
   }
 }
+
+// ── COMMAND VIEW SPEED CONTROL ──
+const CMD_SPEEDS = [0, 0.06, 0.14, 0.28]; // world units/tick (STOP, 1/3, 2/3, FULL)
+let _cmdThrottle = 0;
+
+function _updateCmdThrottleUI() {
+  document.querySelectorAll('.cmd-throt-zone').forEach((z, i) => {
+    z.classList.toggle('active', i === _cmdThrottle);
+  });
+}
+
+(function() {
+  const bar = document.getElementById('cmd-throttle');
+  if (!bar) return;
+  function handle(e) {
+    const zone = e.target.closest('.cmd-throt-zone');
+    if (!zone) return;
+    const i = parseInt(zone.dataset.speed, 10);
+    if (!isNaN(i)) {
+      _cmdThrottle = Math.max(0, Math.min(CMD_SPEEDS.length - 1, i));
+      _updateCmdThrottleUI();
+    }
+  }
+  bar.addEventListener('click', handle);
+  bar.addEventListener('touchstart', e => { e.preventDefault(); handle(e); }, { passive: false });
+  _updateCmdThrottleUI();
+})();
 
 // Depth — drag up = rise (increase world Y toward surface), drag down = dive
 makePeriSlider('peri-depth-slider-wrap', (dir) => {
@@ -5661,21 +5896,22 @@ function periFireTorpedo() {
     return;
   }
 
-  // ── ACOUSTIC TORPEDO ──
-  if (state.weaponMode === 'acoustic') {
+  // ── ACOUSTIC TORPEDO (periscope / surface only — command view handled below) ──
+  if (state.weaponMode === 'acoustic' && state.viewMode !== 'command') {
     if (state.torpCount !== Infinity && state.torpCount <= 0) { addEvent('⚠ NO TORPEDOES', true); return; }
-    const _ah = state.periAngleH;
-    const _adx = -Math.sin(_ah), _adz = Math.cos(_ah);
+    const _adx = -Math.sin(state.periAngleH) * Math.cos(state.periAngleV);
+    const _ady = -Math.sin(state.periAngleV);
+    const _adz =  Math.cos(state.periAngleH) * Math.cos(state.periAngleV);
     const _aox = state.player.x + _adx * 1.5, _aoz = state.player.z + _adz * 1.5;
     state.torpedoes.push({
       ox: _aox, oy: state.player.y, oz: _aoz,
       x:  _aox, y:  state.player.y, z:  _aoz,
-      dx: _adx, dy: 0, dz: _adz,
+      dx: _adx, dy: _ady, dz: _adz,
       heading: Math.atan2(_adx, _adz),
       speed: 0.22, progress: 0, frames: 0,
-      isAcoustic: true,
-      lockTarget: state.enemy.alive ? { type:'enemy', ref:state.enemy, x:state.enemy.x, y:state.enemy.y, z:state.enemy.z } : null,
-      pingTimer: 0, pingRings: [], vy: 0
+      isAcoustic: true, acousticArmed: false,
+      lockTarget: null,
+      pingTimer: 0, pingRings: [], vy: _ady
     });
     if (state.torpCount !== Infinity) state.torpCount--;
     state.torpsFired++;
@@ -5684,7 +5920,7 @@ function periFireTorpedo() {
     if (state.silentRunning) revealPlayerToEnemy(420);
     if (!state.battleStations) document.getElementById('btn-battlestations').click();
     playTorpedoLaunch();
-    addEvent('◉ ACOUSTIC AWAY — PINGING FOR LOCK', false);
+    addEvent('◉ ACOUSTIC AWAY — SONAR ARMS IN 3s', false);
     addEvent('▸ STAY QUIET — IT HUNTS BY SOUND', false);
     document.getElementById('torp-count').textContent = state.torpCount === Infinity ? '∞' : state.torpCount;
     return;
@@ -5758,6 +5994,81 @@ function periFireTorpedo() {
     addEvent('⊛ SURFACE TORPEDO AWAY', false);
     return;
   }
+  if (state.viewMode === 'command') {
+    if (state.torpCount !== Infinity && state.torpCount <= 0) { addEvent('⚠ NO TORPEDOES REMAINING', true); return; }
+    const _ndx = Math.sin(camRotY);
+    const _ndz = Math.cos(camRotY);
+    const _ox = state.player.x + _ndx * 1.5;
+    const _oz = state.player.z + _ndz * 1.5;
+
+    if (state.weaponMode === 'acoustic') {
+      // Acoustic: fires straight, sonar arms after 3 seconds
+      state.torpedoes.push({
+        ox: _ox, oy: state.player.y, oz: _oz,
+        x:  _ox, y:  state.player.y, z:  _oz,
+        dx: _ndx, dy: 0, dz: _ndz,
+        heading: Math.atan2(_ndx, _ndz),
+        speed: 0.22, progress: 0, frames: 0,
+        isAcoustic: true, acousticArmed: false,
+        lockTarget: null,
+        pingTimer: 0, pingRings: [], vy: 0
+      });
+      if (state.torpCount !== Infinity) state.torpCount--;
+      state.torpsFired++;
+      state.torpLastFired = Date.now();
+      state.muzzleFlash = 8;
+      if (!state.battleStations) document.getElementById('btn-battlestations').click();
+      playTorpedoLaunch();
+      addEvent('◉ ACOUSTIC AWAY — SONAR ARMS IN 3s', false);
+      document.getElementById('torp-count').textContent = state.torpCount === Infinity ? '∞' : state.torpCount;
+      return;
+    }
+
+    if (state.weaponMode === 'guided') {
+      // Guided: auto-locks nearest alive enemy (no crosshair in command view)
+      var _cmdTgt = null, _cmdTgtType = null, _cmdBestD = Infinity;
+      if (state.enemy.alive) { _cmdTgt = state.enemy; _cmdTgtType = 'BRAVO'; _cmdBestD = Math.hypot(state.enemy.x - state.player.x, state.enemy.z - state.player.z); }
+      state.extraEnemies.forEach(function(xe) {
+        if (!xe.alive) return;
+        var _d = Math.hypot(xe.x - state.player.x, xe.z - state.player.z);
+        if (_d < _cmdBestD) { _cmdBestD = _d; _cmdTgt = xe; _cmdTgtType = xe.name; }
+      });
+      if (!_cmdTgt) { addEvent('⚠ NO TARGETS', true); return; }
+      state.torpedoes.push({
+        ox: _ox, oy: state.player.y, oz: _oz,
+        x:  _ox, y:  state.player.y, z:  _oz,
+        dx: _ndx, dy: 0, dz: _ndz,
+        heading: Math.atan2(_ndx, _ndz),
+        speed: 0.38, progress: 0, frames: 0,
+        isHoming: true, lockStrength: 0.9,
+        lockedTargetRef: _cmdTgt, lockedTargetType: _cmdTgtType
+      });
+      if (window._mpBroadcastTorp) window._mpBroadcastTorp(state.torpedoes[state.torpedoes.length-1]);
+      if (state.torpCount !== Infinity) state.torpCount--;
+      state.torpsFired++;
+      state.torpLastFired = Date.now();
+      state.muzzleFlash = 8;
+      if (!state.battleStations) document.getElementById('btn-battlestations').click();
+      playTorpedoLaunch();
+      addEvent(`⊛ GUIDED TORPEDO AWAY — LOCKED: ${_cmdTgtType}`, false);
+      document.getElementById('torp-count').textContent = state.torpCount === Infinity ? '∞' : state.torpCount;
+      return;
+    }
+
+    // Standard torpedo — fires in camera-forward direction
+    state.torpedoes.push({ ox: _ox, oy: state.player.y, oz: _oz, x: _ox, y: state.player.y, z: _oz,
+      dx: _ndx, dy: 0, dz: _ndz, speed: 0.3, progress: 0 });
+    if (window._mpBroadcastTorp) window._mpBroadcastTorp(state.torpedoes[state.torpedoes.length-1]);
+    if (state.torpCount !== Infinity) state.torpCount--;
+    state.torpsFired++;
+    state.torpLastFired = Date.now();
+    document.getElementById('torp-count').textContent = state.torpCount === Infinity ? '∞' : state.torpCount;
+    state.muzzleFlash = 8;
+    playTorpedoLaunch();
+    addEvent('⊛ TORPEDO AWAY', false);
+    return;
+  }
+
   if (state.torpCount !== Infinity && state.torpCount <= 0) { addEvent('⚠ NO TORPEDOES REMAINING', true); return; }
 
   if (state.firingSolution) {
@@ -6218,6 +6529,24 @@ function loop(now) {
     drawPeriFwdSlider();
     updateSurfaceBtn();
   } else {
+    centreOnPlayer(); // command view: enforce sub-centred on every frame
+    // Auto-move at set throttle speed
+    if (_cmdThrottle > 0) {
+      const _spd = CMD_SPEEDS[_cmdThrottle];
+      const _nx = Math.max(0.6, Math.min(GRID.W-0.6, state.player.x + Math.sin(camRotY) * _spd));
+      const _nz = Math.max(0.6, Math.min(GRID.D-0.6, state.player.z + Math.cos(camRotY) * _spd));
+      const _hfBlk = window._isHeightfield && window._canyonHeightGrid
+        ? (() => { const _hgx = Math.max(0, Math.min(127, ~~_nx)), _hgz = Math.max(0, Math.min(127, ~~_nz));
+            return (window._canyonHeightGrid[_hgz][_hgx] / 255) * (window._hfTerrainScale || 16) > state.player.y - 0.5; })()
+        : false;
+      if (!isOccupied(_nx, state.player.y, _nz) && !_hfBlk) {
+        state.player.x = _nx;
+        state.player.z = _nz;
+      } else if (window._onWallCollision) {
+        window._onWallCollision();
+      }
+    }
+    drawBearingCompass();
     render();
     renderBSOverlay();
     if (state.ships) state.ships.forEach(ship => {
@@ -7100,6 +7429,7 @@ function launchGame(planGrid) {
   }
   furniture.length = 0;
   buildFloorPlanGeometry().forEach(f => furniture.push(f));
+  _buildTerrainCache();
   generateCloud();
 
   // Reset player and enemy to spawn points
@@ -7196,6 +7526,9 @@ function launchGame(planGrid) {
   state.viewMode = 'periscope';
   setAmbientMode('underwater');
   document.getElementById('periscope-overlay').classList.add('active');
+  scopeMaskCanvas.style.display = '';
+  document.getElementById('cmd-throttle').style.display = 'none';
+  _cmdThrottle = 0; _updateCmdThrottleUI();
   document.getElementById('peri-btn-back').textContent = '◈ COMMAND';
   document.getElementById('torpedo-aim-hint').style.display = 'none'; // shown only in torpedo aim mode
   addEvent('▸ SYSTEMS ONLINE — ALL UNITS SYNCED', false);
@@ -7243,6 +7576,9 @@ window._applyHullDamage = function(dmg, msg) { applyHullDamage(dmg, msg); };
 window._killEnemy = function() { state.enemy.alive = false; };
 window._getPlayerPos = function() { return { x: state.player.x, y: state.player.y, z: state.player.z }; };
 window._addEvent = function(msg, warn) { addEvent(msg, !!warn); };
+window._getGameState = function() { return state; };
+window._goToCommand = function() { goToCommand(); };
+window._playSonarPing = function(vol) { playShipSonar(vol != null ? vol : 0.5); };
 window._movePlayerFwd = function(speed) {
   var h = state.periAngleH;
   state.player.x = Math.max(0, Math.min(GRID.W - 1, state.player.x + Math.sin(h) * speed));
@@ -7274,6 +7610,30 @@ window._setPlayerSpawn = function(x, z) {
     state.player.x = x; state.player.z = z; state.player.y = 3;
   }
   if (typeof centreOnPlayer === 'function') centreOnPlayer();
+};
+
+window._setPlayerHeading = function(h) { state.player.heading = h; };
+
+window._engageSilentRunning = function() {
+  if (state.silentRunning) return;
+  state.silentRunning = true;
+  state.silentPings = [];
+  state.forceReveal = false;
+  state.enemyKnowsPlayer = true;
+  state.enemyKnowsTimer = 240;
+  state.enemyLastKnown = { x: state.player.x, z: state.player.z };
+  state.enemyPingTimer = 720 + Math.floor(Math.random() * 480);
+  state.playerNoise = 0;
+  _silentPreset = { cloudDensity, showWireframe: state.showWireframe, terrainFillOpacity, lineOpacity };
+  cloudDensity = DENSITY_MIN;
+  state.showWireframe = false;
+  terrainFillOpacity = 1.0;
+  lineOpacity = 0;
+  debouncedGenerateCloud();
+  var btn = document.getElementById('peri-btn-reveal-peri');
+  if (btn) { btn.textContent = '◎ SILENT'; btn.classList.add('silent-active'); }
+  addEvent('◎ SILENT RUNNING — ENGAGED', false);
+  if (window._musicStealth) window._musicStealth(true);
 };
 
 window._endMissionClean = function() {
@@ -7657,11 +8017,11 @@ function updateWhales() {
     whale.y += (Math.random() - 0.5) * 0.01;
     whale.y = Math.max(1.2, Math.min(GRID.H - 1.2, whale.y));
     if (whale.x < 2 || whale.x > GRID.W - 2) {
-      whale.heading = Math.PI - whale.heading;
+      whale.heading = -whale.heading;
       whale.x = Math.max(2, Math.min(GRID.W - 2, whale.x));
     }
     if (whale.z < 2 || whale.z > GRID.D - 2) {
-      whale.heading = -whale.heading;
+      whale.heading = Math.PI - whale.heading;
       whale.z = Math.max(2, Math.min(GRID.D - 2, whale.z));
     }
   });
@@ -7835,11 +8195,11 @@ function updateMegalodons() {
 
     // Boundary bounce
     if (meg.x < 2 || meg.x > GRID.W - 2) {
-      meg.heading = Math.PI - meg.heading;
+      meg.heading = -meg.heading;
       meg.x = Math.max(2, Math.min(GRID.W - 2, meg.x));
     }
     if (meg.z < 2 || meg.z > GRID.D - 2) {
-      meg.heading = -meg.heading;
+      meg.heading = Math.PI - meg.heading;
       meg.z = Math.max(2, Math.min(GRID.D - 2, meg.z));
     }
 
@@ -8006,8 +8366,8 @@ function updateSquids() {
     sq.z += Math.cos(sq.heading) * sq.speed;
     sq.y += Math.sin(sq.tentPhase * 0.3) * 0.008;
     sq.y = Math.max(1.5, Math.min(GRID.H - 1.5, sq.y));
-    if (sq.x < 2 || sq.x > GRID.W - 2) { sq.heading = Math.PI - sq.heading; sq.x = Math.max(2, Math.min(GRID.W-2, sq.x)); }
-    if (sq.z < 2 || sq.z > GRID.D - 2) { sq.heading = -sq.heading; sq.z = Math.max(2, Math.min(GRID.D-2, sq.z)); }
+    if (sq.x < 2 || sq.x > GRID.W - 2) { sq.heading = -sq.heading; sq.x = Math.max(2, Math.min(GRID.W-2, sq.x)); }
+    if (sq.z < 2 || sq.z > GRID.D - 2) { sq.heading = Math.PI - sq.heading; sq.z = Math.max(2, Math.min(GRID.D-2, sq.z)); }
   });
 }
 
@@ -10678,6 +11038,14 @@ document.getElementById('peri-btn-abort').addEventListener('click', function() {
   window._mpRemotePlayers = {};
   const _tb = document.getElementById('mp-team-badge');
   if (_tb) _tb.style.display = 'none';
+  // Clear campaign state so a new free-play game isn't affected
+  window._campaignMode = false;
+  window._angelsUpdate = null;
+  window._onWallCollision = null;
+  window._isHeightfield = false;
+  window._canyonHeightGrid = null;
+  var _abObjBar = document.getElementById('campaign-objective-bar');
+  if (_abObjBar) _abObjBar.style.display = 'none';
   document.getElementById('periscope-overlay').classList.remove('active');
   document.getElementById('hud').style.display = 'none';
   document.getElementById('controls-wrap').style.display = 'none';

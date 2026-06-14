@@ -7715,7 +7715,8 @@ window._killEnemy = function() { state.enemy.alive = false; };
 window._getPlayerPos = function() { return { x: state.player.x, y: state.player.y, z: state.player.z }; };
 window._addEvent = function(msg, warn) { addEvent(msg, !!warn); };
 window._getGameState = function() { return state; };
-window._goToCommand = function() { goToCommand(); };
+window._goToCommand    = function() { goToCommand(); };
+window._goToPeriscope  = function() { goToPeriscope(); };
 window._playSonarPing = function(vol) { playShipSonar(vol != null ? vol : 0.5); };
 window._movePlayerFwd = function(speed) {
   var h = state.periAngleH;

@@ -181,6 +181,17 @@ function _laUpdate() {
   _laHoleIcePx = _laGetHolePx(state.player.x, state.player.z);
   _laUnderHole  = _laHoleIcePx < LA_HOLE_THRESH;
 
+  // Enforce ice ceiling — cap player y so they can't breach solid ice
+  // _laUpdate runs before movePlayer, so capping here means ny = capped_y + dy stays sub-threshold
+  var _iceCeilY = LA_GRID_H - (_laHoleIcePx / 255) * LA_ICE_SCALE;
+  var _maxY = _laUnderHole ? LA_GRID_H + 1.5 : _iceCeilY - 1.2;
+  if (state.player.y > _maxY) state.player.y = _maxY;
+  // Revert illegal surface mode (can happen on first frame after a fast ascent)
+  if (!_laUnderHole && (state.viewMode === 'surface' || state.viewMode === 'surfaced')) {
+    state.player.y = Math.min(state.player.y, LA_GRID_H - 2);
+    if (window._goToPeriscope) window._goToPeriscope();
+  }
+
   if (_laLaunchState === 'countdown') {
     _laCountFrames--;
     var secsLeft = Math.ceil(_laCountFrames / 60);
@@ -370,6 +381,9 @@ function launchLaunchAuthority(difficulty) {
     // Reinstall hooks
     window._angelsUpdate    = _laUpdate;
     window._angelsDrawOnPeri = _laDraw;
+
+    // Start in periscope view
+    if (window._goToPeriscope) window._goToPeriscope();
 
     // Spawn at south-centre, periscope facing north
     if (window._setPlayerSpawn)   window._setPlayerSpawn(LA_SPAWN_X, LA_SPAWN_Z);

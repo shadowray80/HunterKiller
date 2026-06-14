@@ -1304,9 +1304,7 @@ function drawSonar() {
     ? camRotY
     : (state.viewMode === 'surface' || state.viewMode === 'surfaced')
       ? surfaceBearing + Math.PI
-      : window._isHeightfield
-        ? -state.periAngleH          // HF minimap is Z-flipped, so negate
-        : state.periAngleH + Math.PI;
+      : state.periAngleH + Math.PI;
   sc.save();
   sc.translate(pp.x, pp.y);
   sc.rotate(_sonarHeading);

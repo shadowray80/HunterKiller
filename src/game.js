@@ -6676,6 +6676,11 @@ function loop(now) {
     });
     drawPeriFwdSlider();
   }
+  // Mission overlay (surface/surfaced modes — periscope mode handled inside renderPeriscope)
+  if ((state.viewMode === 'surface' || state.viewMode === 'surfaced') && window._angelsDrawOnPeri) {
+    const _ow = ctx.canvas.width, _oh = ctx.canvas.height;
+    window._angelsDrawOnPeri(ctx, _ow / 2, _oh / 2, Math.min(_ow, _oh) * 0.52);
+  }
   drawWaypoints();
   drawSonar();
   drawDepthGauge();

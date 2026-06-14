@@ -346,11 +346,13 @@ function launchMission(missionIndex, difficulty) {
 
     window._onCampaignMissionComplete = function () {
       window._onCampaignMissionComplete = null;
+      if (window._launchAuthorityCleanup) { window._launchAuthorityCleanup(); window._launchAuthorityCleanup = null; }
       completeMission(missionIndex, difficulty);
     };
     window._onCampaignGameOver = function () {
       window._onCampaignGameOver = null;
       window._campaignMode = false;
+      if (window._launchAuthorityCleanup) { window._launchAuthorityCleanup(); window._launchAuthorityCleanup = null; }
       setTimeout(function () { showMissionFailed(missionIndex, difficulty); }, 100);
     };
 

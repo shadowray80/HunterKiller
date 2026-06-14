@@ -4560,60 +4560,76 @@ function renderPeriscope() {
 
   bg.addColorStop(0, '#000810');
   bg.addColorStop(Math.max(0, Math.min(1, surfaceScreenY/H - 0.05)), '#001825');
-  bg.addColorStop(Math.max(0, Math.min(1, surfaceScreenY/H)), '#003355');
+  bg.addColorStop(Math.max(0, Math.min(1, surfaceScreenY/H)), window._arcticSurface ? '#001e2e' : '#003355');
   bg.addColorStop(Math.min(1, surfaceScreenY/H + 0.03), '#001520');
   bg.addColorStop(1, '#000508');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
 
-  // ── SURFACE SHIMMER ──
+  // ── SURFACE / ICE SHIMMER ──
   const sy0 = surfaceScreenY;
   if (sy0 > -20 && sy0 < H + 20) {
-    // Shimmer lines
-    for (let i = 0; i < 18; i++) {
-      const shimX = (i * 47 + state.animFrame * 0.4) % W;
-      const shimW = 15 + Math.sin(state.animFrame * 0.03 + i) * 10;
-      const shimAlpha = 0.04 + Math.sin(state.animFrame * 0.05 + i * 0.7) * 0.03;
-      ctx.fillStyle = `rgba(0,180,255,${shimAlpha})`;
-      ctx.fillRect(shimX - shimW/2, sy0 - 2, shimW, 4);
-    }
-    // Surface line glow
-    const surfGrad = ctx.createLinearGradient(0, sy0 - 8, 0, sy0 + 8);
-    surfGrad.addColorStop(0, 'rgba(0,180,255,0)');
-    surfGrad.addColorStop(0.5, 'rgba(0,200,255,0.25)');
-    surfGrad.addColorStop(1, 'rgba(0,100,180,0)');
-    ctx.fillStyle = surfGrad;
-    ctx.fillRect(0, sy0 - 8, W, 16);
-
-    // Light rays from surface
-    if (surfaceFrac > 0.5) {
-      for (let r = 0; r < 5; r++) {
-        const rayX = (r * 137 + W * 0.2) % W;
-        const rayAlpha = 0.03 + Math.sin(state.animFrame * 0.02 + r) * 0.015;
-        ctx.beginPath();
-        ctx.moveTo(rayX, sy0);
-        ctx.lineTo(rayX - 20, sy0 + 180);
-        ctx.lineTo(rayX + 20, sy0 + 180);
-        ctx.closePath();
-        ctx.fillStyle = `rgba(0,160,220,${rayAlpha})`;
-        ctx.fill();
+    if (window._arcticSurface) {
+      // Cold ice shimmer — white/pale blue, no waves, no ships
+      for (let i = 0; i < 14; i++) {
+        const shimX = (i * 53 + state.animFrame * 0.08) % W;
+        const shimW = 22 + Math.sin(state.animFrame * 0.008 + i) * 12;
+        const shimAlpha = 0.025 + Math.sin(state.animFrame * 0.012 + i * 0.5) * 0.012;
+        ctx.fillStyle = `rgba(210,240,255,${shimAlpha})`;
+        ctx.fillRect(shimX - shimW/2, sy0 - 2, shimW, 4);
       }
+      const iceGrad = ctx.createLinearGradient(0, sy0 - 10, 0, sy0 + 10);
+      iceGrad.addColorStop(0, 'rgba(200,235,255,0)');
+      iceGrad.addColorStop(0.5, 'rgba(210,240,255,0.28)');
+      iceGrad.addColorStop(1, 'rgba(180,210,240,0)');
+      ctx.fillStyle = iceGrad;
+      ctx.fillRect(0, sy0 - 10, W, 20);
+      // No light rays, no waves, no ships in arctic mode
+    } else {
+      // Shimmer lines
+      for (let i = 0; i < 18; i++) {
+        const shimX = (i * 47 + state.animFrame * 0.4) % W;
+        const shimW = 15 + Math.sin(state.animFrame * 0.03 + i) * 10;
+        const shimAlpha = 0.04 + Math.sin(state.animFrame * 0.05 + i * 0.7) * 0.03;
+        ctx.fillStyle = `rgba(0,180,255,${shimAlpha})`;
+        ctx.fillRect(shimX - shimW/2, sy0 - 2, shimW, 4);
+      }
+      // Surface line glow
+      const surfGrad = ctx.createLinearGradient(0, sy0 - 8, 0, sy0 + 8);
+      surfGrad.addColorStop(0, 'rgba(0,180,255,0)');
+      surfGrad.addColorStop(0.5, 'rgba(0,200,255,0.25)');
+      surfGrad.addColorStop(1, 'rgba(0,100,180,0)');
+      ctx.fillStyle = surfGrad;
+      ctx.fillRect(0, sy0 - 8, W, 16);
+      // Light rays from surface
+      if (surfaceFrac > 0.5) {
+        for (let r = 0; r < 5; r++) {
+          const rayX = (r * 137 + W * 0.2) % W;
+          const rayAlpha = 0.03 + Math.sin(state.animFrame * 0.02 + r) * 0.015;
+          ctx.beginPath();
+          ctx.moveTo(rayX, sy0);
+          ctx.lineTo(rayX - 20, sy0 + 180);
+          ctx.lineTo(rayX + 20, sy0 + 180);
+          ctx.closePath();
+          ctx.fillStyle = `rgba(0,160,220,${rayAlpha})`;
+          ctx.fill();
+        }
+      }
+      // ── WATER SURFACE GRID + 3D WIREFRAME SHIPS ──
+      var depthVis = Math.max(0, (surfaceFrac - 0.70) / 0.30);
+      drawWavePointCloud(surfaceFrac);
+      drawWaterGrid(surfaceFrac);
+      if (depthVis > 0.02 && state.ships) state.ships.forEach(function(ship) {
+        if (!ship.alive && !ship.sinking) return;
+        var wy = ship.sinking ? ship.sinkY : GRID.H;
+        var sp = projectPeriscope(ship.x, wy, ship.z);
+        if (!sp || sp.depth > 55 || sp.depth < 0.1) return;
+        var alpha = (1 - sp.depth / 55) * depthVis;
+        if (ship.sinking) alpha *= Math.max(0.15, ship.sinkY / GRID.H);
+        if (alpha < 0.04) return;
+        drawShipWireframe3D(ship, alpha);
+      });
     }
-
-    // ── WATER SURFACE GRID + 3D WIREFRAME SHIPS ──
-    var depthVis = Math.max(0, (surfaceFrac - 0.70) / 0.30);
-    drawWavePointCloud(surfaceFrac);
-    drawWaterGrid(surfaceFrac);
-    if (depthVis > 0.02 && state.ships) state.ships.forEach(function(ship) {
-      if (!ship.alive && !ship.sinking) return;
-      var wy = ship.sinking ? ship.sinkY : GRID.H;
-      var sp = projectPeriscope(ship.x, wy, ship.z);
-      if (!sp || sp.depth > 55 || sp.depth < 0.1) return;
-      var alpha = (1 - sp.depth / 55) * depthVis;
-      if (ship.sinking) alpha *= Math.max(0.15, ship.sinkY / GRID.H);
-      if (alpha < 0.04) return;
-      drawShipWireframe3D(ship, alpha);
-    });
   }
 
   // ── COMBINED PAINTER: terrain quads + entities, depth-sorted ──
@@ -7688,6 +7704,7 @@ function launchGame(planGrid) {
   loop();
 }
 window.launchGame = launchGame; // expose for multiplayer
+window._projectPeriscope = function(wx, wy, wz) { return projectPeriscope(wx, wy, wz); };
 window._applyHullDamage = function(dmg, msg) { applyHullDamage(dmg, msg); };
 window._killEnemy = function() { state.enemy.alive = false; };
 window._getPlayerPos = function() { return { x: state.player.x, y: state.player.y, z: state.player.z }; };
@@ -11325,6 +11342,7 @@ document.getElementById('peri-btn-abort').addEventListener('click', function() {
   window._canyonHeightGrid = null;
   window._iceCeilingGrid = null;
   iceCeilingQuads.length = 0;
+  window._arcticSurface = false;
   var _abObjBar = document.getElementById('campaign-objective-bar');
   if (_abObjBar) _abObjBar.style.display = 'none';
   document.getElementById('periscope-overlay').classList.remove('active');

@@ -1304,7 +1304,9 @@ function drawSonar() {
     ? camRotY
     : (state.viewMode === 'surface' || state.viewMode === 'surfaced')
       ? surfaceBearing + Math.PI
-      : state.periAngleH + Math.PI;
+      : window._isHeightfield
+        ? -state.periAngleH          // HF minimap is Z-flipped, so negate
+        : state.periAngleH + Math.PI;
   sc.save();
   sc.translate(pp.x, pp.y);
   sc.rotate(_sonarHeading);
@@ -7615,7 +7617,7 @@ window._setPlayerSpawn = function(x, z) {
   if (typeof centreOnPlayer === 'function') centreOnPlayer();
 };
 
-window._setPlayerHeading = function(h) { state.player.heading = h; };
+window._setPlayerHeading = function(h) { state.player.heading = h; state.periAngleH = h; };
 
 window._engageSilentRunning = function() {
   if (state.silentRunning) return;

@@ -104,7 +104,7 @@ const MISSIONS = [
     killTarget: 1,
     enemyCount: { cadet: 1, captain: 1, commander: 2 },
     spawnPoint: { x: 20, z: 64 },
-    startHeading: Math.PI / 2,
+    startHeading: -Math.PI / 2,
     startSilent: true,
     musicMode: 'trench',
   },

@@ -5803,8 +5803,10 @@ function drawPeriFwdSlider() {
   // Use surfaceBearing in surface/surfaced modes, periAngleH when submerged
   const _bearingForArrow = (state.viewMode === 'surface' || state.viewMode === 'surfaced')
     ? surfaceBearing : state.periAngleH;
+  // Heightfield minimap Z-flips (+Z world = up on screen), so negate the Y component of the arrow
+  const _hfFlip = window._isHeightfield ? -1 : 1;
   const arrowDx = -Math.sin(_bearingForArrow) * arrowLen;
-  const arrowDy =  Math.cos(_bearingForArrow) * arrowLen;
+  const arrowDy = _hfFlip * Math.cos(_bearingForArrow) * arrowLen;
 
   // Glow halo
   const grd = c.createRadialGradient(ppx.x, ppx.y, 0, ppx.x, ppx.y, 16);
@@ -5821,16 +5823,16 @@ function drawPeriFwdSlider() {
   c.lineTo(ppx.x + arrowDx, ppx.y + arrowDy);
   c.stroke();
 
-  // Arrowhead — use same bearing as the arrow line
+  // Arrowhead — apply same Y-flip as arrow body
   const tipX = ppx.x + arrowDx;
   const tipY = ppx.y + arrowDy;
   const perpA = _bearingForArrow + Math.PI / 2;
   c.beginPath();
   c.moveTo(tipX, tipY);
   c.lineTo(tipX - Math.sin(_bearingForArrow)*5 + Math.sin(perpA)*3,
-           tipY + Math.cos(_bearingForArrow)*5 + Math.cos(perpA)*3);
+           tipY + _hfFlip*(Math.cos(_bearingForArrow)*5 + Math.cos(perpA)*3));
   c.lineTo(tipX - Math.sin(_bearingForArrow)*5 - Math.sin(perpA)*3,
-           tipY + Math.cos(_bearingForArrow)*5 - Math.cos(perpA)*3);
+           tipY + _hfFlip*(Math.cos(_bearingForArrow)*5 - Math.cos(perpA)*3));
   c.closePath();
   c.fillStyle = '#00e5ff'; c.fill();
   c.shadowBlur = 0;
@@ -7217,7 +7219,7 @@ var BATTLEGROUNDS = [
     desc: 'Large-scale deep ocean — 128×128 battle zone',
     tag: 'LARGE',
     isHeightfield: true,
-    gridW: 128, gridD: 128, gridH: 20,
+    gridW: 128, gridD: 128, gridH: 20, gridTerrainScale: 12,
     _hGrid: null,
     makeGrid: function() {
       var R=128,C=128,z,x; var g=[];
@@ -7238,10 +7240,11 @@ var BATTLEGROUNDS = [
               g[z][x]=0;
             }
           }
-          // No smoothing — keep cliff edges sharp
+          hg = _smoothHg(hg, GW, GD, 2); // smooth twice to soften sharp spikes
           self._hGrid=hg;
           window._canyonHeightGrid=hg;
           window._hfGridW=GW; window._hfGridD=GD; window._hfGridH=self.gridH;
+          window._hfTerrainScale=self.gridTerrainScale;
           resolve(g);
         }
         function proceduralFallback() {

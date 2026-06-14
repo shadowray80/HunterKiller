@@ -7640,6 +7640,10 @@ window._setPlayerSpawn = function(x, z) {
 
 window._setPlayerHeading = function(h) { state.player.heading = h; state.periAngleH = h; };
 
+window._removeEnemySub = function() {
+  if (state && state.enemy) state.enemy.alive = false;
+};
+
 window._initConvoyShips = function(convoy) {
   if (!convoy || !convoy.ships) return;
   if (!state.ships) state.ships = [];
@@ -9769,8 +9773,8 @@ function updateShips() {
     }
     if (!ship.alive) return;
 
-    // Convoy supply ships: straight-line movement, no AI, exit east side
     if (ship.isConvoy) {
+      // Convoy supply ships: straight-line movement only, no AI
       ship.x += Math.sin(ship.heading) * ship.speed;
       ship.z += Math.cos(ship.heading) * ship.speed;
       if (ship.onFire) {
@@ -9780,26 +9784,26 @@ function updateShips() {
       if (ship.x > GRID.W + 20) {
         ship.alive = false;
         addEvent(`▸ ${ship.label} — CONVOY ESCAPED`, true);
+        return;
       }
-      return;
-    }
+      // Fall through to torpedo check below
+    } else {
+      // Move forward
+      ship.x += Math.sin(ship.heading) * ship.speed;
+      ship.z += Math.cos(ship.heading) * ship.speed;
 
-    // Move forward
-    ship.x += Math.sin(ship.heading) * ship.speed;
-    ship.z += Math.cos(ship.heading) * ship.speed;
-
-    // Bounce off grid boundaries — negate the velocity component that caused the penetration.
-    // X wall: negate X component (sin) → heading = -heading
-    // Z wall: negate Z component (cos) → heading = π - heading
-    const margin = ship.length / 2;
-    if (ship.x < margin || ship.x > GRID.W - margin) {
-      ship.heading = -ship.heading;
-      ship.x = Math.max(margin, Math.min(GRID.W - margin, ship.x));
-    }
-    if (ship.z < margin || ship.z > GRID.D - margin) {
-      ship.heading = Math.PI - ship.heading;
-      ship.z = Math.max(margin, Math.min(GRID.D - margin, ship.z));
-    }
+      // Bounce off grid boundaries — negate the velocity component that caused the penetration.
+      // X wall: negate X component (sin) → heading = -heading
+      // Z wall: negate Z component (cos) → heading = π - heading
+      const margin = ship.length / 2;
+      if (ship.x < margin || ship.x > GRID.W - margin) {
+        ship.heading = -ship.heading;
+        ship.x = Math.max(margin, Math.min(GRID.W - margin, ship.x));
+      }
+      if (ship.z < margin || ship.z > GRID.D - margin) {
+        ship.heading = Math.PI - ship.heading;
+        ship.z = Math.max(margin, Math.min(GRID.D - margin, ship.z));
+      }
 
     // ── SHIP SONAR — detection, homing, ping sound ──
     if (ship.sonarTimer === undefined) {
@@ -9911,6 +9915,7 @@ function updateShips() {
       ship.shellTimer = undefined;
       ship.warningShotFired = false;
     }
+    } // end else (non-convoy ship AI)
 
     // Check torpedo hits
     state.torpedoes.forEach(t => {
@@ -9921,7 +9926,7 @@ function updateShips() {
       const dx = t.x - ship.x, dz = t.z - ship.z;
       const dist2d = Math.sqrt(dx*dx + dz*dz);
       if (!t.isMine && !t.isEnemy && t.y >= GRID.H - 1.5 && dist2d < ship.length/2 + 1.5) {
-        const maxHits = ship.type === 'supply' ? 5 : ship.type === 'destroyer' ? 3 : 2;
+        const maxHits = ship.type === 'supply' ? 3 : ship.type === 'destroyer' ? 3 : 2;
         const killBonus = ship.type === 'supply' ? 200 : ship.type === 'destroyer' ? 30 : 20;
         ship.hits++;
         addScore(10);

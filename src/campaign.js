@@ -128,14 +128,15 @@ const MISSIONS = [
     killTarget: 3,
     convoy: {
       heading: Math.PI / 2,
-      speed: 0.012,
+      speed: 0.018,
       ships: [
-        { label: 'CARGO-01', x: -15, z: 48 },
-        { label: 'CARGO-02', x: -45, z: 64 },
-        { label: 'CARGO-03', x: -75, z: 80 },
+        { label: 'CARGO-01', x: 3,   z: 48 },
+        { label: 'CARGO-02', x: -28, z: 64 },
+        { label: 'CARGO-03', x: -58, z: 80 },
       ],
     },
     enemyCount: { cadet: 1, captain: 1, commander: 1 },
+    noEnemySub: true,
     spawnPoint: { x: 40, z: 64 },
   },
   {
@@ -491,6 +492,7 @@ function launchMission(missionIndex, difficulty) {
       window.launchGame(mapGrid);
       if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
       _applyMissionStartOverrides(mission);
+      if (mission.noEnemySub && window._removeEnemySub) window._removeEnemySub();
       if (mission.convoy && window._initConvoyShips) window._initConvoyShips(mission.convoy);
     });
   } else {
@@ -499,6 +501,7 @@ function launchMission(missionIndex, difficulty) {
     window.launchGame(bg.makeGrid());
     if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
     _applyMissionStartOverrides(mission);
+    if (mission.noEnemySub && window._removeEnemySub) window._removeEnemySub();
     if (mission.convoy && window._initConvoyShips) window._initConvoyShips(mission.convoy);
   }
 }

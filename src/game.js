@@ -835,6 +835,7 @@ const ISO_MIN = 5, ISO_MAX = 30;
 // ── WALL EDGES + TERRAIN QUADS for wireframe / solid rendering ──
 const wallEdges = [];
 const terrainQuads = []; // flat [x0,y0,z0, x1,y1,z1, x2,y2,z2, x3,y3,z3] per quad
+const iceCeilingQuads = []; // ice ceiling: same layout but Y inverted from GRID.H
 function buildWallEdges() {
   wallEdges.length = 0;
   terrainQuads.length = 0;
@@ -879,6 +880,40 @@ function buildWallEdges() {
           const u = rng(), v = rng();
           const wy = h00*(1-u)*(1-v) + h10*u*(1-v) + h01*(1-u)*v + h11*u*v;
           cloudPoints.push({ x: gx+u, y: wy, z: gz+v, type:'terrain', nx:0, ny:1, nz:0, yFrac: Math.min(1, wy/_gts) });
+        }
+      }
+    }
+  }
+  // Ice ceiling quads + cloud points — inverted terrain hanging down from GRID.H
+  iceCeilingQuads.length = 0;
+  if (window._iceCeilingGrid) {
+    const icg = window._iceCeilingGrid;
+    const ITS = window._iceTerrainScale || 10;
+    const ICY = GRID.H;
+    const ICOLS = GRID.W, IROWS = GRID.D;
+    const iv = (gz, gx) => (icg[gz] && icg[gz][gx] !== undefined) ? (icg[gz][gx] / 255) * ITS : 0;
+    for (let gz = 0; gz < IROWS - 1; gz++) {
+      for (let gx = 0; gx < ICOLS - 1; gx++) {
+        const h00=iv(gz,gx), h10=iv(gz,gx+1), h01=iv(gz+1,gx), h11=iv(gz+1,gx+1);
+        if (h00 < 0.5 && h10 < 0.5 && h01 < 0.5 && h11 < 0.5) continue; // hole — skip
+        iceCeilingQuads.push(
+          gx,   ICY - h00, gz,
+          gx+1, ICY - h10, gz,
+          gx+1, ICY - h11, gz+1,
+          gx,   ICY - h01, gz+1
+        );
+      }
+    }
+    let _iceS = 54321;
+    const _iceR = () => { _iceS = ((_iceS * 1664525 + 1013904223) >>> 0); return _iceS / 4294967296; };
+    for (let gz = 0; gz < IROWS - 1; gz++) {
+      for (let gx = 0; gx < ICOLS - 1; gx++) {
+        const h00=iv(gz,gx), h10=iv(gz,gx+1), h01=iv(gz+1,gx), h11=iv(gz+1,gx+1);
+        for (let p = 0; p < 4; p++) {
+          const u = _iceR(), v = _iceR();
+          const iceH = h00*(1-u)*(1-v) + h10*u*(1-v) + h01*(1-u)*v + h11*u*v;
+          if (iceH < 0.5) continue;
+          cloudPoints.push({ x: gx+u, y: ICY - iceH, z: gz+v, type:'ice-ceiling', nx:0, ny:-1, nz:0, yFrac: iceH / ITS });
         }
       }
     }
@@ -950,6 +985,13 @@ function ptColor(type, alpha, yFrac) {
       const g2 = Math.round(12 + band * 168);
       const b2 = Math.round(22 + band * 148);
       return `rgba(0,${g2},${b2},${alpha*0.92})`;
+    }
+    case 'ice-ceiling': {
+      const f = yFrac !== undefined ? yFrac : 0.5;
+      const r = Math.round(60 + f * 80);
+      const g2 = Math.round(160 + f * 70);
+      const b2 = Math.round(210 + f * 45);
+      return `rgba(${r},${g2},${b2},${alpha * 0.82})`;
     }
     case 'floor':   return `rgba(0,120,160,${alpha*0.45})`;
     case 'surface': return `rgba(0,200,255,${alpha*0.65})`;
@@ -4602,6 +4644,28 @@ function renderPeriscope() {
       }
     }
 
+    // Ice ceiling quads
+    if (window._iceCeilingGrid && iceCeilingQuads.length > 0) {
+      for (let i = 0; i < iceCeilingQuads.length; i += 12) {
+        const p0 = projectPeriscope(iceCeilingQuads[i],   iceCeilingQuads[i+1],  iceCeilingQuads[i+2]);
+        const p1 = projectPeriscope(iceCeilingQuads[i+3], iceCeilingQuads[i+4],  iceCeilingQuads[i+5]);
+        const p2 = projectPeriscope(iceCeilingQuads[i+6], iceCeilingQuads[i+7],  iceCeilingQuads[i+8]);
+        const p3 = projectPeriscope(iceCeilingQuads[i+9], iceCeilingQuads[i+10], iceCeilingQuads[i+11]);
+        if (!p0 || !p1 || !p2 || !p3) continue;
+        const avgD = (p0.depth + p1.depth + p2.depth + p3.depth) * 0.25;
+        if (avgD > 55 || avgD < 0.3) continue;
+        if (p0.sx < -60 && p1.sx < -60 && p2.sx < -60 && p3.sx < -60) continue;
+        if (p0.sx > W+60 && p1.sx > W+60 && p2.sx > W+60 && p3.sx > W+60) continue;
+        if (p0.sy < -60 && p1.sy < -60 && p2.sy < -60 && p3.sy < -60) continue;
+        if (p0.sy > H+60 && p1.sy > H+60 && p2.sy > H+60 && p3.sy > H+60) continue;
+        const avgIceH = GRID.H - (iceCeilingQuads[i+1]+iceCeilingQuads[i+4]+iceCeilingQuads[i+7]+iceCeilingQuads[i+10])*0.25;
+        const yFrac = Math.min(1, avgIceH / (window._iceTerrainScale || 10));
+        const qwx = (iceCeilingQuads[i]+iceCeilingQuads[i+3]+iceCeilingQuads[i+6]+iceCeilingQuads[i+9])*0.25;
+        const qwz = (iceCeilingQuads[i+2]+iceCeilingQuads[i+5]+iceCeilingQuads[i+8]+iceCeilingQuads[i+11])*0.25;
+        drawQueue.push({ depth: avgD, kind: 'ice-quad', c: [p0.sx, p0.sy, p1.sx, p1.sy, p2.sx, p2.sy, p3.sx, p3.sy], yFrac, wx: qwx, wz: qwz });
+      }
+    }
+
     // Enemy sub
     const showEnemyP = state.silentRunning || state.forceReveal || state.revealAlpha > 0;
     if (state.enemy.alive && showEnemyP) {
@@ -4697,6 +4761,24 @@ function renderPeriscope() {
             ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(c[4], c[5]); ctx.stroke();
           }
         }
+      } else if (item.kind === 'ice-quad') {
+        const c = item.c, d = item.depth;
+        const distA = Math.max(0, 1 - d / 55);
+        const f = item.yFrac || 0;
+        const r = Math.round(40 + f * 80);
+        const g2 = Math.round(140 + f * 80);
+        const b2 = Math.round(200 + f * 55);
+        ctx.fillStyle = `rgba(${r},${g2},${b2},${terrainFillOpacity * 0.88})`;
+        ctx.beginPath();
+        ctx.moveTo(c[0], c[1]); ctx.lineTo(c[2], c[3]);
+        ctx.lineTo(c[4], c[5]); ctx.lineTo(c[6], c[7]);
+        ctx.closePath(); ctx.fill();
+        if (distA > 0.02 && lineOpacity > 0.01) {
+          ctx.strokeStyle = `rgba(100,220,255,${distA * lineOpacity * 0.8})`;
+          ctx.lineWidth = (state.showWireframe ? 0.8 : 0.3) * wireframeScale;
+          ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(c[4], c[5]); ctx.stroke();
+        }
       } else if (item.kind === 'enemy') {
         const eAlpha = state.silentRunning
           ? state.enemySilentAlpha
@@ -4750,8 +4832,8 @@ function renderPeriscope() {
   // ── POINT CLOUD — drawn after terrain fills so dots sit on the surface ──
   if (state.showDots) cloudPoints.forEach(p => {
     const dx = state.player.x - p.x, dy = state.player.y - p.y, dz = state.player.z - p.z;
-    // Skip back-face culling for terrain-surface dots — they must be visible from any angle
-    if (p.type !== 'terrain' && p.nx*dx + p.ny*dy + p.nz*dz <= 0) return;
+    // Skip back-face culling for terrain/ice-ceiling — visible from any angle below/above
+    if (p.type !== 'terrain' && p.type !== 'ice-ceiling' && p.nx*dx + p.ny*dy + p.nz*dz <= 0) return;
     const pp = projectPeriscope(p.x, p.y, p.z);
     if (!pp || pp.depth < 0.1 || pp.depth > 72) return;
     if (pp.sx < -80 || pp.sx > W+80 || pp.sy < -80 || pp.sy > H+80) return;
@@ -7454,6 +7536,16 @@ function launchGame(planGrid) {
   furniture.length = 0;
   buildFloorPlanGeometry().forEach(f => furniture.push(f));
   _buildTerrainCache();
+  // Apply ice ceiling grid set by arctic missions before calling launchGame
+  if (window._pendingIceCeilingGrid !== undefined) {
+    window._iceCeilingGrid = window._pendingIceCeilingGrid;
+    window._iceTerrainScale = window._pendingIceTerrainScale || 10;
+    window._pendingIceCeilingGrid = undefined;
+    window._pendingIceTerrainScale = undefined;
+  } else {
+    window._iceCeilingGrid = null;
+    iceCeilingQuads.length = 0;
+  }
   generateCloud();
 
   // Reset player and enemy to spawn points
@@ -11231,6 +11323,8 @@ document.getElementById('peri-btn-abort').addEventListener('click', function() {
   window._onWallCollision = null;
   window._isHeightfield = false;
   window._canyonHeightGrid = null;
+  window._iceCeilingGrid = null;
+  iceCeilingQuads.length = 0;
   var _abObjBar = document.getElementById('campaign-objective-bar');
   if (_abObjBar) _abObjBar.style.display = 'none';
   document.getElementById('periscope-overlay').classList.remove('active');

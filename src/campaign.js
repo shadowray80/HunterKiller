@@ -161,18 +161,20 @@ const MISSIONS = [
     name: 'LAUNCH AUTHORITY',
     codename: 'ARMAGEDDON',
     subtitle: 'Mission 6 — Final Orders',
-    mapId: 'dropoff',
-    isHeightfield: true,
-    briefingImg: '/Images/Rules/dropoff.png',
+    objectiveType: 'launchAuth',
+    briefingImg: '/Images/LaunchAuthority_MissionBriefing.png',
     briefing:
       'CLASSIFICATION: NUCLEAR — EYES ONLY — COMMANDING OFFICER\n\n' +
+      'ARCTIC OCEAN — BENEATH THE ICE SHELF\n\n' +
       'Fragmented ELF transmission received at 0347 hours. Authentication: partial. Source: unverified.\n\n' +
       'Content: Authorisation code FOXTROT-NINER-NINER — LAUNCH.\n\n' +
-      'A hostile submarine is moving to firing position. Bearing 320. Range unknown.\n\n' +
-      'You have contacts in the water. You have a decision to make. You have very little time.\n\n' +
+      'You are beneath the polar ice cap. The surface is sealed — solid ice in every direction. Somewhere above you, there are gaps. Natural fractures. Holes.\n\n' +
+      'One of them is large enough to launch through.\n\n' +
+      'A hostile submarine knows what you are doing. It is coming for you.\n\n' +
+      'Find the hole. Launch the missile. Do not let them stop you.\n\n' +
       'Whatever you decide — make it count.',
-    killTarget: 1,
-    enemyCount: { cadet: 1, captain: 1, commander: 3 },
+    killTarget: 0,
+    enemyCount: { cadet: 1, captain: 1, commander: 2 },
   },
 ];
 
@@ -336,6 +338,32 @@ function showMissionBriefing(missionIndex, difficulty) {
 function launchMission(missionIndex, difficulty) {
   const mission = MISSIONS[missionIndex];
   const diff = DIFFICULTY_CONFIG[difficulty];
+
+  // ── LAUNCH AUTHORITY mission: arctic under-ice, two heightfields ──
+  if (mission.objectiveType === 'launchAuth') {
+    _missionKillCount = 0;
+    window._campaignMode = true;
+
+    window._onCampaignMissionComplete = function () {
+      window._onCampaignMissionComplete = null;
+      completeMission(missionIndex, difficulty);
+    };
+    window._onCampaignGameOver = function () {
+      window._onCampaignGameOver = null;
+      window._campaignMode = false;
+      setTimeout(function () { showMissionFailed(missionIndex, difficulty); }, 100);
+    };
+
+    hideAllCampaignScreens();
+    document.getElementById('intro-screen').style.display = 'none';
+
+    if (window.launchLaunchAuthority) {
+      window.launchLaunchAuthority(difficulty);
+    } else {
+      console.error('[campaign] launchLaunchAuthority not available — launchAuthority.js not loaded');
+    }
+    return;
+  }
 
   // ── ANGELS2 mission: command-view canyon run ──
   if (mission.objectiveType === 'angels2') {

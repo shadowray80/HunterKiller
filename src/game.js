@@ -6676,8 +6676,8 @@ function loop(now) {
     });
     drawPeriFwdSlider();
   }
-  // Mission overlay (surface/surfaced modes — periscope mode handled inside renderPeriscope)
-  if ((state.viewMode === 'surface' || state.viewMode === 'surfaced') && window._angelsDrawOnPeri) {
+  // Mission overlay — periscope mode handled inside renderPeriscope; all other modes handled here
+  if (state.viewMode !== 'periscope' && window._angelsDrawOnPeri) {
     const _ow = ctx.canvas.width, _oh = ctx.canvas.height;
     window._angelsDrawOnPeri(ctx, _ow / 2, _oh / 2, Math.min(_ow, _oh) * 0.52);
   }
@@ -7710,6 +7710,7 @@ function launchGame(planGrid) {
 }
 window.launchGame = launchGame; // expose for multiplayer
 window._projectPeriscope = function(wx, wy, wz) { return projectPeriscope(wx, wy, wz); };
+window._projectCmd       = function(wx, wy, wz) { return project(wx, wy, wz); };
 window._applyHullDamage = function(dmg, msg) { applyHullDamage(dmg, msg); };
 window._killEnemy = function() { state.enemy.alive = false; };
 window._getPlayerPos = function() { return { x: state.player.x, y: state.player.y, z: state.player.z }; };

@@ -5273,6 +5273,7 @@ document.getElementById('btn-periscope').addEventListener('click', () => {
 // Switch to command viewport (map) — periscope UI stays visible
 function goToCommand() {
   state.viewMode = 'command';
+  camRotY = state.periAngleH; // keep heading consistent between views
   setAmbientMode('off');
   // Keep periscope overlay active — only the main canvas content changes
   document.getElementById('peri-btn-back').textContent = '⊙ PERISCOPE';
@@ -5290,6 +5291,7 @@ function goToCommand() {
 // Switch back to periscope underwater view
 function goToPeriscope() {
   state.viewMode = 'periscope';
+  state.periAngleH = camRotY; // keep heading consistent between views
   setAmbientMode('underwater');
   document.getElementById('peri-btn-back').textContent = '◈ COMMAND';
   // Restore circular vignette for periscope view
@@ -5376,7 +5378,7 @@ let periStrafeAccumX = 0, periStrafeAccumZ = 0;
       // Vertical drag: forward/back in camera-forward direction (up the screen)
       if (dy !== 0) {
         const speed = -dy * 0.06;
-        const nx = Math.max(0.6, Math.min(GRID.W-0.6, state.player.x + Math.sin(camRotY) * speed));
+        const nx = Math.max(0.6, Math.min(GRID.W-0.6, state.player.x - Math.sin(camRotY) * speed));
         const nz = Math.max(0.6, Math.min(GRID.D-0.6, state.player.z + Math.cos(camRotY) * speed));
         const _hfBlocked = window._isHeightfield && window._canyonHeightGrid
           ? (() => { const _hgx = Math.max(0, Math.min(127, ~~nx)), _hgz = Math.max(0, Math.min(127, ~~nz));
@@ -7615,7 +7617,7 @@ window._setPlayerSpawn = function(x, z) {
   if (typeof centreOnPlayer === 'function') centreOnPlayer();
 };
 
-window._setPlayerHeading = function(h) { state.player.heading = h; };
+window._setPlayerHeading = function(h) { state.player.heading = h; state.periAngleH = h; camRotY = h; };
 
 window._engageSilentRunning = function() {
   if (state.silentRunning) return;

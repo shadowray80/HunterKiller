@@ -1388,6 +1388,28 @@ function drawSonar() {
   if (state.ships) state.ships.forEach(function(ship) {
     if (!ship.alive && !ship.sinking) return;
     var sp2 = mm(ship.x, ship.z);
+    var shipAlpha = ship.sinking ? Math.max(0.3, ship.sinkY / GRID.H) : 1.0;
+
+    if (ship.type === 'supply') {
+      // Elongated amber blip oriented with ship heading
+      var shx = sp2.x + Math.sin(ship.heading) * 11, shz = sp2.y + Math.cos(ship.heading) * 11;
+      sc.beginPath(); sc.moveTo(sp2.x, sp2.y); sc.lineTo(shx, shz);
+      sc.strokeStyle = `rgba(255,160,0,${shipAlpha * 0.7})`; sc.lineWidth = 1.5; sc.stroke();
+      sc.save();
+      sc.translate(sp2.x, sp2.y);
+      sc.rotate(ship.heading - Math.PI / 2);
+      sc.beginPath(); sc.rect(-9, -3.5, 18, 7);
+      sc.fillStyle = `rgba(255,130,0,${shipAlpha})`;
+      sc.shadowBlur = 14; sc.shadowColor = '#ff8800';
+      sc.fill(); sc.shadowBlur = 0;
+      sc.strokeStyle = `rgba(255,200,80,${shipAlpha * 0.5})`; sc.lineWidth = 0.7; sc.stroke();
+      sc.restore();
+      sc.font = '6px Share Tech Mono'; sc.textAlign = 'center'; sc.textBaseline = 'alphabetic';
+      sc.fillStyle = `rgba(255,160,0,${shipAlpha * 0.9})`;
+      sc.fillText(ship.label, sp2.x, sp2.y - 10);
+      return;
+    }
+
     // Heading tick — small line showing ship direction
     var hx = sp2.x + Math.sin(ship.heading) * 7, hz = sp2.y + Math.cos(ship.heading) * 7;
     sc.beginPath(); sc.moveTo(sp2.x, sp2.y); sc.lineTo(hx, hz);
@@ -1397,7 +1419,6 @@ function drawSonar() {
     sc.translate(sp2.x, sp2.y);
     sc.rotate(Math.PI / 4);
     sc.beginPath(); sc.rect(-3, -3, 6, 6);
-    var shipAlpha = ship.sinking ? Math.max(0.3, ship.sinkY / GRID.H) : 1.0;
     sc.fillStyle = `rgba(255,220,60,${shipAlpha})`;
     sc.shadowBlur = 8; sc.shadowColor = '#ffdd00';
     sc.fill(); sc.shadowBlur = 0;
@@ -7619,6 +7640,27 @@ window._setPlayerSpawn = function(x, z) {
 
 window._setPlayerHeading = function(h) { state.player.heading = h; state.periAngleH = h; };
 
+window._initConvoyShips = function(convoy) {
+  if (!convoy || !convoy.ships) return;
+  if (!state.ships) state.ships = [];
+  convoy.ships.forEach(function(def) {
+    state.ships.push({
+      label: def.label,
+      type: 'supply',
+      isConvoy: true,
+      x: def.x,
+      z: def.z,
+      heading: convoy.heading,
+      speed: convoy.speed || 0.012,
+      length: 16, beam: 5,
+      alive: true, sinking: false, sinkY: GRID.H,
+      sinkVel: 0, tilt: 0,
+      col: '#ff9900',
+      hits: 0, onFire: false, fireTimer: 0,
+    });
+  });
+};
+
 window._engageSilentRunning = function() {
   if (state.silentRunning) return;
   state.silentRunning = true;
@@ -9050,6 +9092,91 @@ function _drawShipProfile(c, ship, cx, cy, halfLen, sc, screenAngle, tilt, alpha
   c.rotate(tilt);
   c.globalAlpha = alpha;
 
+  // ── SUPPLY SHIP (bulk cargo tanker) ──
+  if (ship.type === 'supply') {
+    var scol = '#ff9900';
+    var sdark = 'rgba(30,12,0,0.98)';
+    var smid  = 'rgba(50,22,0,0.97)';
+    var sfb = hl * 0.13, sdr = hl * 0.07, sdk = -sfb;
+
+    // Hull — long flat tanker
+    c.strokeStyle = scol; c.fillStyle = sdark; c.lineWidth = 1.2;
+    c.beginPath();
+    c.moveTo(-hl,       sdr * 0.3);
+    c.lineTo(-hl,      -sfb * 0.6);
+    c.lineTo(-hl*0.96,  sdk);
+    c.lineTo( hl*0.78,  sdk);
+    c.lineTo( hl*0.88,  sdk + sfb*0.3);
+    c.lineTo( hl,       0);
+    c.lineTo( hl*0.95,  sdr);
+    c.lineTo(-hl*0.98,  sdr);
+    c.closePath();
+    c.fill(); c.stroke();
+
+    // Rust belt stripe
+    c.strokeStyle = 'rgba(160,70,0,0.5)'; c.lineWidth = sfb * 0.14;
+    c.beginPath(); c.moveTo(-hl*0.95, -sfb*0.12); c.lineTo(hl*0.84, -sfb*0.12); c.stroke();
+    c.strokeStyle = scol;
+
+    // Cargo tanks / holds — row of rounded cylinders along deck
+    var tW = hl * 0.1, tH = sfb * 0.9;
+    var tankXs = [-hl*0.65, -hl*0.42, -hl*0.18, hl*0.06, hl*0.30, hl*0.54];
+    tankXs.forEach(function(tx) {
+      c.fillStyle = smid; c.lineWidth = 0.8;
+      c.beginPath(); c.rect(tx - tW/2, sdk - tH, tW, tH); c.fill(); c.stroke();
+      c.beginPath(); c.arc(tx, sdk - tH, tW/2, -Math.PI, 0); c.fill(); c.stroke();
+    });
+
+    // Bridge tower (at stern — port side in this view)
+    var bX = -hl*0.76, bW = hl*0.13, bH = sfb*2.3;
+    c.fillStyle = smid; c.lineWidth = 1.0;
+    c.beginPath(); c.rect(bX - bW/2, sdk - bH, bW, bH); c.fill(); c.stroke();
+    var b2W = bW*0.72, b2H = sfb*1.1;
+    c.beginPath(); c.rect(bX - b2W/2, sdk - bH - b2H, b2W, b2H); c.fill(); c.stroke();
+    // Bridge windows
+    c.fillStyle = 'rgba(255,140,40,0.65)'; c.shadowBlur = 4; c.shadowColor = '#ff8800';
+    for (var bwi = 0; bwi < 4; bwi++) {
+      c.fillRect(bX - b2W*0.35 + bwi*(b2W*0.7/3.2), sdk - bH - b2H*0.65, b2W*0.13, sfb*0.24);
+    }
+    c.shadowBlur = 0; c.strokeStyle = scol; c.fillStyle = smid;
+
+    // Funnel — single tall stack
+    var fnX = bX + bW*0.05, fnH = sfb*2.5, fnW = hl*0.038, fnRk = hl*0.018;
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(fnX - fnW,          sdk - bH);
+    c.lineTo(fnX - fnW - fnRk,  sdk - bH - fnH);
+    c.lineTo(fnX + fnW - fnRk,  sdk - bH - fnH);
+    c.lineTo(fnX + fnW,          sdk - bH);
+    c.closePath(); c.fill(); c.stroke();
+    c.beginPath(); c.rect(fnX - fnW*1.5 - fnRk, sdk - bH - fnH - 1.5, fnW*3, 2); c.fill(); c.stroke();
+    c.fillStyle = 'rgba(35,18,0,0.45)';
+    c.beginPath(); c.arc(fnX - fnRk*1.8, sdk - bH - fnH - 6, sfb*0.75, 0, Math.PI*2); c.fill();
+    c.fillStyle = smid;
+
+    // Aft mast
+    var maX = bX - bW*0.15, maBot = sdk - bH - b2H, maTop = maBot - sfb*2.8;
+    c.strokeStyle = scol; c.lineWidth = 0.8; c.shadowBlur = 3; c.shadowColor = scol;
+    c.beginPath(); c.moveTo(maX, maBot); c.lineTo(maX, maTop); c.stroke();
+    c.beginPath(); c.moveTo(maX - sfb*0.85, maTop + sfb*0.5); c.lineTo(maX + sfb*0.6, maTop + sfb*0.5); c.stroke();
+    c.shadowBlur = 0;
+
+    // Waterline
+    c.strokeStyle = 'rgba(255,140,0,0.18)'; c.lineWidth = 0.5;
+    c.setLineDash([5,4]);
+    c.beginPath(); c.moveTo(-hl*0.95, 0); c.lineTo(hl*0.90, 0); c.stroke();
+    c.setLineDash([]);
+
+    // Label
+    c.rotate(-screenAngle - tilt);
+    c.font = Math.round(Math.max(6, Math.min(10, hl * 0.11))) + 'px Share Tech Mono';
+    c.fillStyle = `rgba(255,160,50,${alpha * 0.85})`; c.textAlign = 'center';
+    c.fillText(ship.label, 0, maTop - 5);
+
+    c.restore();
+    return;
+  }
+
   var col   = '#00ccff';
   var dark  = 'rgba(0,8,22,0.98)';
   var mid   = 'rgba(0,18,38,0.97)';
@@ -9632,11 +9759,30 @@ function updateShips() {
         ship.sinking = false;
         ship.alive = false;
         addEvent(`▸ ${ship.label} LOST — RESTING ON SEABED`, false);
-        setTimeout(() => spawnShip(ship), 20000); // respawn after 20s
+        if (ship.isConvoy) {
+          if (window._onConvoyKill) window._onConvoyKill();
+        } else {
+          setTimeout(() => spawnShip(ship), 20000); // respawn after 20s
+        }
       }
       return;
     }
     if (!ship.alive) return;
+
+    // Convoy supply ships: straight-line movement, no AI, exit east side
+    if (ship.isConvoy) {
+      ship.x += Math.sin(ship.heading) * ship.speed;
+      ship.z += Math.cos(ship.heading) * ship.speed;
+      if (ship.onFire) {
+        ship.fireTimer = (ship.fireTimer || 0) + 1;
+        if (ship.fireTimer % 75 === 0) spawnFirePuff(ship.x, GRID.H, ship.z);
+      }
+      if (ship.x > GRID.W + 20) {
+        ship.alive = false;
+        addEvent(`▸ ${ship.label} — CONVOY ESCAPED`, true);
+      }
+      return;
+    }
 
     // Move forward
     ship.x += Math.sin(ship.heading) * ship.speed;
@@ -9775,8 +9921,8 @@ function updateShips() {
       const dx = t.x - ship.x, dz = t.z - ship.z;
       const dist2d = Math.sqrt(dx*dx + dz*dz);
       if (!t.isMine && !t.isEnemy && t.y >= GRID.H - 1.5 && dist2d < ship.length/2 + 1.5) {
-        const maxHits = ship.type === 'destroyer' ? 3 : 2;
-        const killBonus = ship.type === 'destroyer' ? 30 : 20;
+        const maxHits = ship.type === 'supply' ? 5 : ship.type === 'destroyer' ? 3 : 2;
+        const killBonus = ship.type === 'supply' ? 200 : ship.type === 'destroyer' ? 30 : 20;
         ship.hits++;
         addScore(10);
         if (ship.hits >= maxHits) {
@@ -9790,20 +9936,53 @@ function updateShips() {
           playExplosionShip();
           spawnExplosion(ship.x,                                    GRID.H, ship.z,                                    true);
           spawnExplosion(ship.x + (Math.random()-0.5)*ship.length,  GRID.H, ship.z + (Math.random()-0.5)*ship.length,  true);
-          setTimeout(() => {
-            spawnExplosion(ship.x + (Math.random()-0.5)*3, GRID.H, ship.z + (Math.random()-0.5)*3, true);
-            spawnExplosion(ship.x + (Math.random()-0.5)*4, GRID.H, ship.z + (Math.random()-0.5)*4, true);
-            playExplosionShip();
-          }, 300);
-          setTimeout(() => {
-            spawnExplosion(ship.x + (Math.random()-0.5)*2, GRID.H, ship.z + (Math.random()-0.5)*2, true);
-            spawnExplosion(ship.x + (Math.random()-0.5)*5, GRID.H, ship.z + (Math.random()-0.5)*5, false);
-          }, 750);
-          setTimeout(() => {
-            spawnExplosion(ship.x + (Math.random()-0.5)*3, GRID.H, ship.z + (Math.random()-0.5)*3, false);
-          }, 1300);
-          addEvent(`⊛ ${ship.label} DESTROYED (+${killBonus})`, false);
-          setTimeout(() => addEvent(`▸ ${ship.label} IS GOING DOWN`, false), 2000);
+          if (ship.type === 'supply') {
+            // ── CATASTROPHIC EXPLOSION — supply ship burns and breaks apart ──
+            const sx = ship.x, sz = ship.z, sl = ship.length;
+            for (let _i = 0; _i < 3; _i++)
+              spawnExplosion(sx + (Math.random()-0.5)*sl, GRID.H, sz + (Math.random()-0.5)*sl*0.6, true);
+            setTimeout(() => {
+              for (let _i = 0; _i < 5; _i++)
+                spawnExplosion(sx + (Math.random()-0.5)*sl, GRID.H, sz + (Math.random()-0.5)*sl*0.7, true);
+              playExplosionShip();
+            }, 200);
+            setTimeout(() => {
+              for (let _i = 0; _i < 4; _i++)
+                spawnExplosion(sx + (Math.random()-0.5)*sl, GRID.H, sz + (Math.random()-0.5)*sl*0.8, true);
+              playExplosionShip();
+            }, 550);
+            setTimeout(() => {
+              for (let _i = 0; _i < 5; _i++)
+                spawnExplosion(sx + (Math.random()-0.5)*sl*0.9, GRID.H, sz + (Math.random()-0.5)*sl*0.9, false);
+              playExplosionShip();
+            }, 950);
+            setTimeout(() => {
+              for (let _i = 0; _i < 4; _i++)
+                spawnExplosion(sx + (Math.random()-0.5)*sl, GRID.H, sz + (Math.random()-0.5)*sl*0.5, false);
+            }, 1400);
+            setTimeout(() => {
+              spawnExplosion(sx, GRID.H, sz, true);
+              spawnExplosion(sx + (Math.random()-0.5)*sl*0.5, GRID.H, sz + (Math.random()-0.5)*sl*0.3, true);
+              playExplosionShip();
+            }, 2200);
+            addEvent(`⊛ ${ship.label} DESTROYED — CARGO DETONATING (+${killBonus})`, false);
+            setTimeout(() => addEvent(`▸ ${ship.label} IS GOING DOWN FAST`, false), 2500);
+          } else {
+            setTimeout(() => {
+              spawnExplosion(ship.x + (Math.random()-0.5)*3, GRID.H, ship.z + (Math.random()-0.5)*3, true);
+              spawnExplosion(ship.x + (Math.random()-0.5)*4, GRID.H, ship.z + (Math.random()-0.5)*4, true);
+              playExplosionShip();
+            }, 300);
+            setTimeout(() => {
+              spawnExplosion(ship.x + (Math.random()-0.5)*2, GRID.H, ship.z + (Math.random()-0.5)*2, true);
+              spawnExplosion(ship.x + (Math.random()-0.5)*5, GRID.H, ship.z + (Math.random()-0.5)*5, false);
+            }, 750);
+            setTimeout(() => {
+              spawnExplosion(ship.x + (Math.random()-0.5)*3, GRID.H, ship.z + (Math.random()-0.5)*3, false);
+            }, 1300);
+            addEvent(`⊛ ${ship.label} DESTROYED (+${killBonus})`, false);
+            setTimeout(() => addEvent(`▸ ${ship.label} IS GOING DOWN`, false), 2000);
+          }
         } else {
           // ── HIT — catches fire ──
           ship.onFire = true;

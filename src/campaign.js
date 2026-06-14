@@ -112,18 +112,31 @@ const MISSIONS = [
     index: 3,
     name: 'SILENT HUNTER',
     codename: 'PREDATOR',
-    subtitle: 'Mission 4 — Hunt and Destroy',
-    mapId: 'abyss',
+    subtitle: 'Mission 4 — Convoy Strike',
+    mapId: 'dropoff',
     isHeightfield: true,
-    briefingImg: '/Images/Rules/abyss.png',
+    briefingImg: '/Images/ThroughTheAngels_MissionBriefing.png',
     briefing:
-      'CLASSIFICATION: TOP SECRET — FLASH\n\n' +
-      'Deep water. No terrain cover. No surface ships. Just you, the enemy, and 4,000 metres of black ocean below.\n\n' +
-      'An enemy submarine has been conducting acoustic surveillance of our communications arrays. It must be silenced permanently.\n\n' +
-      'This is a hunter-killer mission in the truest sense. Find it. Fix it. Destroy it.\n\n' +
-      'There is nowhere to hide down here, Commander. For either of you.',
-    killTarget: 1,
-    enemyCount: { cadet: 1, captain: 1, commander: 2 },
+      'CLASSIFICATION: TOP SECRET — FLASH\n' +
+      'OPERATION PREDATOR — NORTH ATLANTIC\n\n' +
+      'SIGINT confirms three enemy supply ships are crossing the drop-off at slow speed, heavily laden with munitions and fuel bound for the eastern front. They must not reach port.\n\n' +
+      'You have a narrow window. The convoy moves slow — use it. Torpedo run from depth, stay submerged, and don\'t surface. Enemy patrol boats are in the area.\n\n' +
+      'Three ships. Five hits each. All three must go down.\n\n' +
+      'THREATS: Surface escorts · Enemy submarine · Convoy crossing timer\n\n' +
+      'The supply line ends here, Commander.',
+    objectiveType: 'convoy',
+    killTarget: 3,
+    convoy: {
+      heading: Math.PI / 2,
+      speed: 0.012,
+      ships: [
+        { label: 'CARGO-01', x: -15, z: 48 },
+        { label: 'CARGO-02', x: -45, z: 64 },
+        { label: 'CARGO-03', x: -75, z: 80 },
+      ],
+    },
+    enemyCount: { cadet: 1, captain: 1, commander: 1 },
+    spawnPoint: { x: 40, z: 64 },
   },
   {
     index: 4,
@@ -397,17 +410,33 @@ function launchMission(missionIndex, difficulty) {
     : null;
 
   var isNavigate = mission.objectiveType === 'navigate';
+  var isConvoy   = mission.objectiveType === 'convoy';
 
   // Navigate mission: complete when exit beacon reached
   if (isNavigate) {
     window._onEnemySubKill = null;
+    window._onConvoyKill   = null;
     window._onCampaignMissionComplete = function () {
       window._onCampaignMissionComplete = null;
       completeMission(missionIndex, difficulty);
     };
+  } else if (isConvoy) {
+    // Convoy mission: complete when all supply ships sunk
+    window._onEnemySubKill = null;
+    window._onCampaignMissionComplete = null;
+    window._onConvoyKill = function () {
+      _missionKillCount++;
+      var objBar2 = document.getElementById('campaign-objective-bar');
+      if (objBar2) objBar2.textContent = '⊙ OBJECTIVE: INTERCEPT CONVOY — ' + _missionKillCount + ' / ' + _killTarget + ' DESTROYED';
+      if (_missionKillCount >= _killTarget) {
+        window._onConvoyKill = null;
+        setTimeout(function () { completeMission(missionIndex, difficulty); }, 3000);
+      }
+    };
   } else {
     // Destroy mission: complete when kill target reached
     window._onCampaignMissionComplete = null;
+    window._onConvoyKill = null;
     window._onEnemySubKill = function () {
       _missionKillCount++;
       if (_missionKillCount >= _killTarget) {
@@ -420,6 +449,7 @@ function launchMission(missionIndex, difficulty) {
   window._onCampaignGameOver = function () {
     window._onCampaignGameOver = null;
     window._onEnemySubKill = null;
+    window._onConvoyKill = null;
     window._onCampaignMissionComplete = null;
     window._campaignMode = false;
     window._campaignBriefingImg = null;
@@ -435,7 +465,9 @@ function launchMission(missionIndex, difficulty) {
   if (objBar) {
     objBar.textContent = isNavigate
       ? '⊙ OBJECTIVE: CLEAR CHECKPOINTS A → B → C → D → EXIT IN ORDER · AVOID SONAR BUOYS'
-      : '⊙ OBJECTIVE: DESTROY ALL ENEMY CONTACTS';
+      : isConvoy
+        ? '⊙ OBJECTIVE: INTERCEPT CONVOY — 0 / ' + _killTarget + ' DESTROYED'
+        : '⊙ OBJECTIVE: DESTROY ALL ENEMY CONTACTS';
     objBar.style.display = '';
   }
 
@@ -459,6 +491,7 @@ function launchMission(missionIndex, difficulty) {
       window.launchGame(mapGrid);
       if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
       _applyMissionStartOverrides(mission);
+      if (mission.convoy && window._initConvoyShips) window._initConvoyShips(mission.convoy);
     });
   } else {
     window._isHeightfield = false;
@@ -466,6 +499,7 @@ function launchMission(missionIndex, difficulty) {
     window.launchGame(bg.makeGrid());
     if (extraCount > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(extraCount);
     _applyMissionStartOverrides(mission);
+    if (mission.convoy && window._initConvoyShips) window._initConvoyShips(mission.convoy);
   }
 }
 
@@ -478,6 +512,7 @@ function completeMission(missionIndex, difficulty) {
   window._campaignExitBeacon = null;
   window._campaignCheckpoints = null;
   window._onCampaignMissionComplete = null;
+  window._onConvoyKill = null;
   var ob = document.getElementById('campaign-objective-bar');
   if (ob) ob.style.display = 'none';
   if (window._endMissionClean) window._endMissionClean();

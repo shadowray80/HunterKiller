@@ -22,7 +22,7 @@ let _laDifficulty     = 'captain';
 let _laUnderHole      = false;
 let _laHoleIcePx      = 255;
 let _laLaunchState    = 'idle';  // 'idle' | 'countdown' | 'flying' | 'done'
-let _laCountFrames    = 0;
+let _laCountStart     = 0;       // Date.now() when countdown started
 let _laLastSec        = -1;
 let _laMissile        = null;
 let _laCanvas         = null;
@@ -35,6 +35,11 @@ let _laEnemyFireOpen  = false;
 let _laEnemyFireTimer = 900;     // first window at 15 s
 // Smoke ring animation
 let _laSmokeRings     = [];
+// Iceberg obstacles
+let _laIcebergs       = [];
+// Ice ceiling command-view overlay
+let _laShowIceCeiling = false;
+let _laTSClickHandler = null;
 
 // ── COUNTDOWN MESSAGES (techy pre-launch chatter) ──
 const _LA_CD = {
@@ -87,6 +92,68 @@ function _laIsNewHole(x, z) {
     if (dx*dx + dz*dz < LA_MIN_HOLE_DIST * LA_MIN_HOLE_DIST) return false;
   }
   return true;
+}
+
+// ── ICEBERG GENERATION ──
+function _laFindHoleCenters() {
+  var icg = window._iceCeilingGrid; if (!icg) return [];
+  var visited = new Uint8Array(LA_GW * LA_GD);
+  var centers = [];
+  for (var z0 = 0; z0 < LA_GD; z0++) {
+    for (var x0 = 0; x0 < LA_GW; x0++) {
+      var idx0 = z0 * LA_GW + x0;
+      if (visited[idx0] || icg[z0][x0] >= LA_HOLE_THRESH) continue;
+      var stack = [idx0], sx = 0, sz = 0, cnt = 0;
+      while (stack.length) {
+        var i = stack.pop();
+        if (i < 0 || i >= LA_GW * LA_GD || visited[i]) continue;
+        var ix = i % LA_GW, iz = (i / LA_GW) | 0;
+        if (icg[iz][ix] >= LA_HOLE_THRESH) continue;
+        visited[i] = 1; sx += ix; sz += iz; cnt++;
+        stack.push(i + 1, i - 1, i + LA_GW, i - LA_GW);
+      }
+      if (cnt >= 4) centers.push({ x: sx / cnt, z: sz / cnt });
+    }
+  }
+  return centers;
+}
+
+function _laGenerateIcebergs(holeCenters) {
+  var bergs = [];
+  // Seeded PRNG so iceberg layout is deterministic per map
+  var s = 0x4af6c3b2;
+  function rng() { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return (s >>> 0) / 0xffffffff; }
+  var attempts = 0;
+  while (bergs.length < 10 && attempts < 700) {
+    attempts++;
+    var cx = 10 + rng() * (LA_GW - 20);
+    var cz = 10 + rng() * (LA_GD - 20);
+    var r  = 3.5 + rng() * 4.5;
+    var ok = true;
+    // Keep clear of every hole
+    for (var i = 0; i < holeCenters.length && ok; i++) {
+      var dh = holeCenters[i];
+      var d2 = (cx - dh.x) * (cx - dh.x) + (cz - dh.z) * (cz - dh.z);
+      if (d2 < (r + 16) * (r + 16)) ok = false;
+    }
+    // Keep clear of player spawn
+    if (ok) {
+      var dsx = cx - LA_SPAWN_X, dsz = cz - LA_SPAWN_Z;
+      if (dsx * dsx + dsz * dsz < (r + 14) * (r + 14)) ok = false;
+    }
+    // Keep clear of other icebergs
+    for (var j = 0; j < bergs.length && ok; j++) {
+      var dx = cx - bergs[j].x, dz = cz - bergs[j].z;
+      if (dx * dx + dz * dz < (r + bergs[j].r + 5) * (r + bergs[j].r + 5)) ok = false;
+    }
+    if (!ok) continue;
+    var gx = Math.max(0, Math.min(LA_GW - 1, Math.round(cx)));
+    var gz = Math.max(0, Math.min(LA_GD - 1, Math.round(cz)));
+    var floorH = window._canyonHeightGrid ? (window._canyonHeightGrid[gz][gx] / 255 * LA_FLOOR_SCALE) : 0;
+    var iceH   = window._iceCeilingGrid   ? (window._iceCeilingGrid[gz][gx]   / 255 * LA_ICE_SCALE)   : 0;
+    bergs.push({ x: cx, z: cz, r: r, yBot: floorH, yTop: LA_GRID_H - iceH });
+  }
+  return bergs;
 }
 
 // ── SOUND ──
@@ -152,8 +219,8 @@ function _laStartCountdown() {
     return;
   }
   _laLaunchState = 'countdown';
-  _laCountFrames = LA_COUNTDOWN_FRAMES;
-  _laLastSec = 3;
+  _laCountStart  = Date.now();
+  _laLastSec     = 3;
   var btn = document.getElementById('la-icbm-btn'); if (btn) btn.style.display = 'none';
   if (window._addEvent) window._addEvent('⟁ ICBM LAUNCH SEQUENCE — INITIATED', true);
 }
@@ -248,6 +315,25 @@ function _laUpdate() {
     if (!_laRevertGuard && window._goToPeriscope) { _laRevertGuard = true; window._goToPeriscope(); }
   } else if (state.viewMode === 'periscope') { _laRevertGuard = false; }
 
+  // ── Iceberg collision — push player out of any berg ──
+  if (_laIcebergs.length) {
+    var px = state.player.x, pz = state.player.z;
+    for (var _bi = 0; _bi < _laIcebergs.length; _bi++) {
+      var _b = _laIcebergs[_bi];
+      if (state.player.y < _b.yBot - 0.5 || state.player.y > _b.yTop + 0.5) continue;
+      var _bdx = px - _b.x, _bdz = pz - _b.z;
+      var _bd2 = _bdx * _bdx + _bdz * _bdz;
+      var _minD = _b.r + 0.9;
+      if (_bd2 < _minD * _minD) {
+        var _bd = Math.sqrt(_bd2) || 0.001;
+        var _push = (_minD - _bd) / _bd;
+        state.player.x += _bdx * _push;
+        state.player.z += _bdz * _push;
+        px = state.player.x; pz = state.player.z;
+      }
+    }
+  }
+
   // ── Enemy fire rate control — one shot per 12-18 s window ──
   // Main enemy uses state.enemyLastFired (real-time clock); extra enemies use en.lastFired
   if (!_laEnemyFireOpen) {
@@ -270,22 +356,16 @@ function _laUpdate() {
     }
   }
 
-  // ── Countdown tick ──
+  // ── Countdown tick (real-time) ──
   if (_laLaunchState === 'countdown') {
-    _laCountFrames--;
-    var secsLeft = Math.ceil(_laCountFrames / 60);
-    if (secsLeft !== _laLastSec && secsLeft >= 1) {
+    var _elapsed = (Date.now() - _laCountStart) / 1000;
+    var secsLeft = Math.max(0, Math.ceil(3 - _elapsed));
+    if (secsLeft !== _laLastSec) {
       _laLastSec = secsLeft;
-      if (_LA_CD[secsLeft] && window._addEvent) window._addEvent(_LA_CD[secsLeft], false);
+      if (secsLeft >= 1 && _LA_CD[secsLeft] && window._addEvent) window._addEvent(_LA_CD[secsLeft], false);
     }
-    if (_laCountFrames <= 0) {
-      // Check still under hole
-      if (_laGetHolePx(state.player.x, state.player.z) < LA_HOLE_THRESH) {
-        _laFireMissile(state);
-      } else {
-        // Moved out from under hole during countdown — fire anyway (hits ice)
-        _laFireMissile(state);
-      }
+    if (_elapsed >= 3) {
+      _laFireMissile(state);
     }
     return;
   }
@@ -313,17 +393,194 @@ function _laUpdate() {
     }
   }
 
+  // ── Torpedo–iceberg collision ──
+  if (_laIcebergs.length && state.torpedoes && state.torpedoes.length) {
+    state.torpedoes = state.torpedoes.filter(function(t) {
+      for (var _ti = 0; _ti < _laIcebergs.length; _ti++) {
+        var _tb = _laIcebergs[_ti];
+        if (t.y < _tb.yBot - 0.5 || t.y > _tb.yTop + 0.5) continue;
+        var _tdx = t.x - _tb.x, _tdz = t.z - _tb.z;
+        if (_tdx * _tdx + _tdz * _tdz < _tb.r * _tb.r) {
+          if (state.explosions) state.explosions.push({
+            x: t.x, y: t.y, z: t.z, r: 0,
+            maxR: 6 + Math.random() * 4, alpha: 1, isLarge: false,
+          });
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
   // Update ICBM button visibility
   _laUpdateIcbmBtn();
 }
 
+// ── ICEBERG RENDERER ──
+function _laDrawIcebergs(ctx, state) {
+  if (!_laIcebergs.length) return;
+  // Surface/surfaced use a periscope-like projection — don't mix with _projectCmd
+  var isCmd = (state.viewMode === 'command');
+  var proj  = isCmd ? window._projectCmd : window._projectPeriscope;
+  if (!proj) return;
+  var N = 8, VSTEPS = 6;
+  ctx.save();
+  _laIcebergs.forEach(function(berg) {
+    var prevRing = null;
+    for (var vi = 0; vi <= VSTEPS; vi++) {
+      var t  = vi / VSTEPS;
+      var wy = berg.yBot + (berg.yTop - berg.yBot) * t;
+      var cr = Math.round(80  + t * 120);
+      var cg = Math.round(165 + t * 70);
+      var cb = Math.round(215 + t * 40);
+      var ring = [];
+      for (var ni = 0; ni < N; ni++) {
+        var a  = (ni / N) * Math.PI * 2;
+        var wx = berg.x + Math.cos(a) * berg.r;
+        var wz = berg.z + Math.sin(a) * berg.r;
+        var p  = proj(wx, wy, wz);
+        ring.push(p || null);
+        if (!p) continue;
+        var depth = p.depth || 8;
+        if (!isCmd && (depth < 0.1 || depth > 130)) continue;
+        // Larger dots — previously too small to see
+        var sz    = isCmd ? 3.5 : Math.max(2.5, 10 / Math.max(0.5, depth * 0.12));
+        var alpha = isCmd ? 0.82 : Math.min(0.88, 3.0 / Math.max(0.6, depth * 0.1));
+        ctx.beginPath(); ctx.arc(p.sx, p.sy, sz, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(' + cr + ',' + cg + ',' + cb + ',' + alpha.toFixed(2) + ')';
+        ctx.fill();
+      }
+      // Horizontal ring wireframe
+      ctx.lineWidth = isCmd ? 1 : 1.5;
+      ctx.strokeStyle = 'rgba(' + cr + ',' + cg + ',' + cb + ',0.50)';
+      for (var ni2 = 0; ni2 < N; ni2++) {
+        var pa = ring[ni2], pb = ring[(ni2 + 1) % N];
+        if (!pa || !pb) continue;
+        if (!isCmd && ((pa.depth || 8) > 130 || (pb.depth || 8) > 130)) continue;
+        ctx.beginPath(); ctx.moveTo(pa.sx, pa.sy); ctx.lineTo(pb.sx, pb.sy); ctx.stroke();
+      }
+      // Vertical edge lines every other segment
+      if (prevRing) {
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(' + cr + ',' + cg + ',' + cb + ',0.35)';
+        for (var ni3 = 0; ni3 < N; ni3 += 2) {
+          var pc = prevRing[ni3], pd = ring[ni3];
+          if (!pc || !pd) continue;
+          if (!isCmd && ((pc.depth || 8) > 130 || (pd.depth || 8) > 130)) continue;
+          ctx.beginPath(); ctx.moveTo(pc.sx, pc.sy); ctx.lineTo(pd.sx, pd.sy); ctx.stroke();
+        }
+      }
+      prevRing = ring;
+    }
+  });
+  ctx.restore();
+}
+
+// ── ICE CEILING POINT CLOUD (command view) ──
+function _laDrawIceCeiling(ctx, state) {
+  var icg = window._iceCeilingGrid;
+  if (!icg || !window._projectCmd) return;
+  ctx.save();
+  var STEP = 3;
+  for (var gz = 0; gz < LA_GD; gz += STEP) {
+    for (var gx = 0; gx < LA_GW; gx += STEP) {
+      var icePx = icg[gz][gx];
+      if (icePx < LA_HOLE_THRESH) continue; // holes show as natural gaps
+      var t     = (icePx - LA_HOLE_THRESH) / (255 - LA_HOLE_THRESH);
+      var iceY  = LA_GRID_H - (icePx / 255 * LA_ICE_SCALE);
+      var p     = window._projectCmd(gx, iceY, gz);
+      if (!p) continue;
+      var r     = Math.round(80  + t * 140);
+      var g     = Math.round(160 + t * 75);
+      var b     = Math.round(215 + t * 40);
+      var alpha = (0.35 + t * 0.50).toFixed(2);
+      ctx.beginPath();
+      ctx.arc(p.sx, p.sy, 2, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+// ── PLAYER POSITION PROJECTED ONTO ICE (command view, always shown) ──
+function _laDrawPlayerOnIce(ctx, state) {
+  var icg = window._iceCeilingGrid;
+  if (!icg || !window._projectCmd) return;
+  var px    = Math.max(0, Math.min(LA_GW - 1, Math.round(state.player.x)));
+  var pz    = Math.max(0, Math.min(LA_GD - 1, Math.round(state.player.z)));
+  var icePx = icg[pz][px];
+  var iceY  = LA_GRID_H - (icePx / 255 * LA_ICE_SCALE);
+  var p     = window._projectCmd(state.player.x, iceY, state.player.z);
+  if (!p) return;
+  var pulse  = 0.5 + 0.5 * Math.sin(Date.now() * 0.003);
+  var rad    = 9 + pulse * 5;
+  var bright = Math.round(200 + pulse * 55);
+  var alpha  = (0.55 + pulse * 0.45).toFixed(2);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,' + bright + ',255,' + alpha + ')';
+  ctx.lineWidth   = 2;
+  ctx.shadowBlur  = 8 + pulse * 6;
+  ctx.shadowColor = 'rgba(0,180,255,0.8)';
+  ctx.beginPath(); ctx.arc(p.sx, p.sy, rad, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(p.sx - 15, p.sy); ctx.lineTo(p.sx + 15, p.sy);
+  ctx.moveTo(p.sx, p.sy - 15); ctx.lineTo(p.sx, p.sy + 15);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// ── TOP SECRET BUTTON → ICE CEILING TOGGLE ──
+function _laHookTopSecret() {
+  var btn = document.getElementById('peri-btn-battlestations');
+  if (!btn) return;
+  btn.textContent = 'TOP SECRET';
+  btn.classList.remove('active-btn');
+  _laTSClickHandler = function(e) {
+    e.stopImmediatePropagation();
+    _laShowIceCeiling = !_laShowIceCeiling;
+    btn.textContent = _laShowIceCeiling ? 'ICE VIEW' : 'TOP SECRET';
+    btn.classList.toggle('active-btn', _laShowIceCeiling);
+  };
+  btn.addEventListener('click', _laTSClickHandler, true); // capture phase fires before game.js handler
+}
+
+function _laUnhookTopSecret() {
+  var btn = document.getElementById('peri-btn-battlestations');
+  if (btn && _laTSClickHandler) {
+    btn.removeEventListener('click', _laTSClickHandler, true);
+    btn.textContent = 'TOP SECRET';
+    btn.classList.remove('active-btn');
+  }
+  _laTSClickHandler = null;
+  _laShowIceCeiling = false;
+}
+
 // ── DRAW HOOK (all non-periscope view modes + periscope via game.js hook) ──
 function _laDraw(ctx, pcx, pcy) {
+  try { _laDrawInner(ctx, pcx, pcy); } catch(e) { /* swallow — never let draw errors hit game.js resize() */ }
+}
+function _laDrawInner(ctx, pcx, pcy) {
   var state = window._getGameState ? window._getGameState() : null;
   if (!state) return;
+  // Normalise canvas state — game render may leave globalAlpha/composite dirty
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
   var W = ctx.canvas.width, H = ctx.canvas.height;
-  var isCmd = (state.viewMode === 'command');
-  var isPeri = !isCmd;
+  var isCmd  = (state.viewMode === 'command');
+  // Surface/surfaced use _projectPeriscope (same camera basis), not _projectCmd
+  var isPeri = (state.viewMode === 'periscope' || state.viewMode === 'surface' || state.viewMode === 'surfaced');
+
+  // ── Ice ceiling overlay (command view only) ──
+  if (isCmd) {
+    if (_laShowIceCeiling) _laDrawIceCeiling(ctx, state);
+    _laDrawPlayerOnIce(ctx, state);
+  }
+
+  // ── Icebergs ──
+  _laDrawIcebergs(ctx, state);
 
   // ── Missile visual ──
   if (_laMissile && _laMissile.alive) {
@@ -336,7 +593,7 @@ function _laDraw(ctx, pcx, pcy) {
 
   // ── Countdown overlay (all views) ──
   if (_laLaunchState === 'countdown') {
-    var secsLeft = Math.max(0, Math.ceil(_laCountFrames / 60));
+    var secsLeft = _laCountStart ? Math.max(0, Math.ceil(3 - (Date.now() - _laCountStart) / 1000)) : 3;
     var pulse = 0.75 + 0.25 * Math.sin(Date.now() * 0.012);
     ctx.save();
     ctx.fillStyle = 'rgba(0,4,2,0.82)';
@@ -467,7 +724,7 @@ function launchLaunchAuthority(difficulty) {
   _laActive         = false;
   _laDifficulty     = difficulty || 'captain';
   _laLaunchState    = 'idle';
-  _laCountFrames    = 0;
+  _laCountStart     = 0;
   _laLastSec        = -1;
   _laMissile        = null;
   _laUnderHole      = false;
@@ -478,15 +735,24 @@ function launchLaunchAuthority(difficulty) {
   _laRevertGuard    = false;
   _laEnemyFireOpen  = false;
   _laEnemyFireTimer = 900;
-  _laSmokeRings     = [];
+  _laSmokeRings       = [];
+  _laIcebergs         = [];
+  window._laIcebergs  = _laIcebergs;
+  _laShowIceCeiling   = false;
+  _laTSClickHandler   = null;
 
   _laLoadHeightfields().then(function(grid) {
     window._isHeightfield    = true;
     window._campaignMode     = true;
     window._arcticSurface    = true;
-    window._campaignBriefingImg = LA_ICE_MAP;
+    window._campaignBriefingImg = null; // TOP SECRET button repurposed as ice-ceiling toggle
 
     window.launchGame(grid);
+
+    // Generate icebergs now that _iceCeilingGrid is live
+    var _holeCenters = _laFindHoleCenters();
+    _laIcebergs = _laGenerateIcebergs(_holeCenters);
+    window._laIcebergs = _laIcebergs;
 
     var st = window._getGameState ? window._getGameState() : null;
     if (st) { st.ships = []; st.player.y = LA_SPAWN_Y; }
@@ -508,6 +774,7 @@ function launchLaunchAuthority(difficulty) {
     if (n > 0 && window._spawnExtraEnemies) window._spawnExtraEnemies(n);
 
     _laCreateIcbmBtn();
+    _laHookTopSecret();
 
     _laCanvas = document.getElementById('canvas');
     window._launchAuthorityCleanup = function() {
@@ -515,6 +782,9 @@ function launchLaunchAuthority(difficulty) {
       window._arcticSurface = false;
       window._angelsUpdate = null;
       window._angelsDrawOnPeri = null;
+      _laIcebergs = [];
+      window._laIcebergs = [];
+      _laUnhookTopSecret();
       var btn = document.getElementById('la-icbm-btn'); if (btn) btn.remove();
       _laCanvas = null;
     };
@@ -524,7 +794,7 @@ function launchLaunchAuthority(difficulty) {
 
     if (window._addEvent) window._addEvent('▸ UNDER THE ARCTIC ICE — BEARING NORTH', false);
     setTimeout(function() {
-      if (window._addEvent) window._addEvent('▸ NAVIGATE TO A LAUNCH HOLE — TOP SECRET SHOWS ICE MAP', false);
+      if (window._addEvent) window._addEvent('▸ NAVIGATE TO LAUNCH HOLE — TOP SECRET TOGGLES ICE CEILING VIEW', false);
     }, 4000);
     setTimeout(function() {
       if (window._addEvent) window._addEvent('⚠ HOSTILE CONTACT IN WATER — DO NOT LET THEM STOP YOU', true);

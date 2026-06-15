@@ -37,8 +37,8 @@ let _laEnemyFireTimer = 900;     // first window at 15 s
 let _laSmokeRings     = [];
 // Iceberg obstacles
 let _laIcebergs       = [];
-// Ice ceiling command-view overlay
-let _laShowIceCeiling = false;
+// Ice ceiling command-view overlay  (0=off, 1=cloud, 2=ice-only)
+let _laIceMode        = 0;
 let _laTSClickHandler = null;
 
 // ── COUNTDOWN MESSAGES (techy pre-launch chatter) ──
@@ -246,7 +246,7 @@ function _laFireMissile(st) {
 function _laSuccess(x, z) {
   _laLaunchPositions.push({ x: x, z: z });
   _laSuccessCount++;
-  _laMissile = null;
+  // _laMissile stays alive — it continues flying above the ice as a visual
   _laLaunchState = 'idle';
   if (_laSuccessCount >= LA_LAUNCHES_NEEDED) {
     _laWin();
@@ -383,13 +383,18 @@ function _laUpdate() {
     _laSmokeRings = _laSmokeRings.filter(function(s) { return _laMFrame - s.born < 60; });
     _laSmokeRings.forEach(function(s) { s.r += 0.35; s.alpha -= 0.009; });
 
-    if (_laMissile.y >= LA_GRID_H) {
-      _laMissile.alive = false;
+    if (_laMissile.y >= LA_GRID_H && !_laMissile.triggered) {
+      _laMissile.triggered = true;
       if (_laMissile.throughHole) {
-        _laSuccess(_laMissile.originX, _laMissile.originZ);
+        _laSuccess(_laMissile.originX, _laMissile.originZ); // mission state updated; missile keeps flying
       } else {
+        _laMissile.alive = false;
         _laIceImpact(_laMissile.x, _laMissile.z, _laMissile.y);
       }
+    }
+    // Destroy well above ice so it's visible rising through command view
+    if (_laMissile && _laMissile.y >= LA_GRID_H + 18) {
+      _laMissile = null;
     }
   }
 
@@ -481,11 +486,11 @@ function _laDrawIceCeiling(ctx, state) {
   var icg = window._iceCeilingGrid;
   if (!icg || !window._projectCmd) return;
   ctx.save();
-  var STEP = 3;
+  var STEP = 2;
   for (var gz = 0; gz < LA_GD; gz += STEP) {
     for (var gx = 0; gx < LA_GW; gx += STEP) {
       var icePx = icg[gz][gx];
-      if (icePx < LA_HOLE_THRESH) continue; // holes show as natural gaps
+      if (icePx < LA_HOLE_THRESH) continue; // holes show as natural dark gaps
       var t     = (icePx - LA_HOLE_THRESH) / (255 - LA_HOLE_THRESH);
       var iceY  = LA_GRID_H - (icePx / 255 * LA_ICE_SCALE);
       var p     = window._projectCmd(gx, iceY, gz);
@@ -493,9 +498,9 @@ function _laDrawIceCeiling(ctx, state) {
       var r     = Math.round(80  + t * 140);
       var g     = Math.round(160 + t * 75);
       var b     = Math.round(215 + t * 40);
-      var alpha = (0.35 + t * 0.50).toFixed(2);
+      var alpha = (0.40 + t * 0.55).toFixed(2);
       ctx.beginPath();
-      ctx.arc(p.sx, p.sy, 2, 0, Math.PI * 2);
+      ctx.arc(p.sx, p.sy, 2.5, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
       ctx.fill();
     }
@@ -533,6 +538,7 @@ function _laDrawPlayerOnIce(ctx, state) {
 }
 
 // ── TOP SECRET BUTTON → ICE CEILING TOGGLE ──
+var _LA_TS_LABELS = ['TOP SECRET', 'ICE VIEW', 'ICE ONLY'];
 function _laHookTopSecret() {
   var btn = document.getElementById('peri-btn-battlestations');
   if (!btn) return;
@@ -540,9 +546,9 @@ function _laHookTopSecret() {
   btn.classList.remove('active-btn');
   _laTSClickHandler = function(e) {
     e.stopImmediatePropagation();
-    _laShowIceCeiling = !_laShowIceCeiling;
-    btn.textContent = _laShowIceCeiling ? 'ICE VIEW' : 'TOP SECRET';
-    btn.classList.toggle('active-btn', _laShowIceCeiling);
+    _laIceMode = (_laIceMode + 1) % 3;
+    btn.textContent = _LA_TS_LABELS[_laIceMode];
+    btn.classList.toggle('active-btn', _laIceMode > 0);
   };
   btn.addEventListener('click', _laTSClickHandler, true); // capture phase fires before game.js handler
 }
@@ -555,7 +561,7 @@ function _laUnhookTopSecret() {
     btn.classList.remove('active-btn');
   }
   _laTSClickHandler = null;
-  _laShowIceCeiling = false;
+  _laIceMode = 0;
 }
 
 // ── DRAW HOOK (all non-periscope view modes + periscope via game.js hook) ──
@@ -575,7 +581,12 @@ function _laDrawInner(ctx, pcx, pcy) {
 
   // ── Ice ceiling overlay (command view only) ──
   if (isCmd) {
-    if (_laShowIceCeiling) _laDrawIceCeiling(ctx, state);
+    if (_laIceMode === 2) {
+      // Ice-only: cover terrain and water with dark fill, then draw ice
+      ctx.fillStyle = 'rgba(0,4,12,0.96)';
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (_laIceMode >= 1) _laDrawIceCeiling(ctx, state);
     _laDrawPlayerOnIce(ctx, state);
   }
 
@@ -655,7 +666,7 @@ function _laDrawMissilePeri(ctx) {
   var proj = window._projectPeriscope;
   var tip  = proj(_laMissile.x, _laMissile.y, _laMissile.z);
   var tail = proj(_laMissile.x, Math.max(0, _laMissile.y - 10), _laMissile.z);
-  if (!tip || !tail || tip.depth < 0.1 || tip.depth > 90) return;
+  if (!tip || !tail || tip.depth < 0.1 || tip.depth > 300) return;
   ctx.save();
   var g = ctx.createLinearGradient(tip.sx, tip.sy, tail.sx, tail.sy);
   g.addColorStop(0,    'rgba(255,255,255,0.95)');
@@ -686,6 +697,17 @@ function _laDrawMissileCmd(ctx, W, H) {
   var nose = proj(_laMissile.x, _laMissile.y, _laMissile.z);
   var base = proj(_laMissile.x, Math.max(0, _laMissile.y - 4), _laMissile.z);
   if (!nose || !base) return;
+  // Off-screen arrow when missile has risen above the visible area
+  if (nose.sy < 0) {
+    var ix = Math.max(24, Math.min(W - 24, nose.sx));
+    ctx.save();
+    ctx.shadowBlur = 12; ctx.shadowColor = '#ffaa00';
+    ctx.fillStyle  = 'rgba(255,200,80,0.92)';
+    ctx.beginPath(); ctx.moveTo(ix, 8); ctx.lineTo(ix - 9, 22); ctx.lineTo(ix + 9, 22); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    return;
+  }
   ctx.save();
   var cw = 5, bodyH = Math.abs(base.sy - nose.sy) + 4;
   // Body
@@ -738,7 +760,7 @@ function launchLaunchAuthority(difficulty) {
   _laSmokeRings       = [];
   _laIcebergs         = [];
   window._laIcebergs  = _laIcebergs;
-  _laShowIceCeiling   = false;
+  _laIceMode          = 0;
   _laTSClickHandler   = null;
 
   _laLoadHeightfields().then(function(grid) {

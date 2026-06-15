@@ -8,12 +8,12 @@ const LA_ICE_MAP         = '/maps/LaunchAuth_Ice.png';
 const LA_ICE_SCALE       = 10;
 const LA_FLOOR_SCALE     = 18;
 const LA_GRID_H          = 32;
-const LA_HOLE_THRESH     = 30;
+const LA_HOLE_THRESH     = 55;   // raised: accept lighter hole pixels
 const LA_SPAWN_X         = 64;
 const LA_SPAWN_Z         = 108;
 const LA_SPAWN_Y         = 14;
 const LA_LAUNCHES_NEEDED = 3;
-const LA_MIN_HOLE_DIST   = 15;   // min units between distinct holes
+const LA_MIN_HOLE_DIST   = 6;    // lowered: only exclude the same spot
 const LA_COUNTDOWN_FRAMES = 180; // 3 seconds
 
 // ── STATE ──
@@ -122,10 +122,8 @@ function _laCreateIcbmBtn() {
 
 function _laUpdateIcbmBtn() {
   var btn = document.getElementById('la-icbm-btn'); if (!btn) return;
-  var show = (_laLaunchState === 'idle' && _laUnderHole && _laIsNewHole(
-    (window._getGameState ? window._getGameState() : { player: { x: 0, z: 0 } }).player.x,
-    (window._getGameState ? window._getGameState() : { player: { x: 0, z: 0 } }).player.z
-  ));
+  // Show the button whenever idle and under any hole — distinctness checked on click
+  var show = (_laLaunchState === 'idle' && _laUnderHole);
   btn.style.display = show ? '' : 'none';
   if (show) {
     var g = 0.55 + 0.45 * Math.abs(Math.sin(Date.now() * 0.0045));
@@ -148,6 +146,11 @@ function _laSetObjBar(msg) {
 // ── COUNTDOWN ──
 function _laStartCountdown() {
   if (_laLaunchState !== 'idle') return;
+  var st = window._getGameState ? window._getGameState() : null;
+  if (st && !_laIsNewHole(st.player.x, st.player.z)) {
+    if (window._addEvent) window._addEvent('⚠ POSITION ALREADY USED — NAVIGATE TO A DIFFERENT HOLE', true);
+    return;
+  }
   _laLaunchState = 'countdown';
   _laCountFrames = LA_COUNTDOWN_FRAMES;
   _laLastSec = 3;
@@ -363,9 +366,8 @@ function _laDraw(ctx, pcx, pcy) {
   if (_laLaunchState === 'idle') {
     ctx.save(); ctx.textAlign = 'center'; ctx.shadowBlur = 0;
     if (_laUnderHole) {
-      var newHole = _laIsNewHole(state.player.x, state.player.z);
-      if (newHole) {
-        var glow = 0.80 + 0.20 * Math.sin(Date.now() * 0.007);
+      var glow = 0.80 + 0.20 * Math.sin(Date.now() * 0.007);
+      if (_laIsNewHole(state.player.x, state.player.z)) {
         ctx.fillStyle = 'rgba(0,255,150,' + glow + ')';
         ctx.shadowBlur = 16; ctx.shadowColor = '#00ff80';
         ctx.font = 'bold ' + Math.round(W*0.012) + 'px Share Tech Mono';

@@ -2704,9 +2704,9 @@ function update() {
   if (state.silentRunning && state.enemy.alive) {
     state.enemyPingTimer--;
     if (state.enemyPingTimer <= 0) {
-      state.enemyPingTimer = 720 + Math.floor(Math.random() * 720); // 12–24s between pings
+      state.enemyPingTimer = 1800 + Math.floor(Math.random() * 1200); // 30–50s between pings
       state.enemyPings.push({wx: state.enemy.x, wz: state.enemy.z, r: 0, alpha: 1.0});
-      revealPlayerToEnemy(360);
+      revealPlayerToEnemy(180); // 3 s detection window (was 6 s)
       // Briefly reveal enemy on 3D views
       state.revealTimer = Math.max(state.revealTimer, 180);
       state.revealAlpha = 1.0;
@@ -2729,13 +2729,24 @@ function update() {
       state.enemyKnowsTimer--;
       if (state.enemyKnowsTimer === 0) {
         state.enemyKnowsPlayer = false;
+        state._enemyBlindFrames = 0;
         addEvent('◎ CONTACT LOST — BRAVO IS BLIND', false);
+      }
+    }
+    // After 15 s of continuous blindness, enemy loses the trail and patrols randomly
+    if (!state.enemyKnowsPlayer && state.enemyLastKnown) {
+      state._enemyBlindFrames = (state._enemyBlindFrames || 0) + 1;
+      if (state._enemyBlindFrames > 900) {
+        state.enemyLastKnown = null;
+        state._enemyBlindFrames = 0;
+        addEvent('◎ BRAVO LOST YOUR TRAIL', false);
       }
     }
   } else {
     // Standard steaming: enemy always knows player position
     state.enemyKnowsPlayer = true;
     state.enemyKnowsTimer = 0;
+    state._enemyBlindFrames = 0;
   }
 
   // Update HUD - y=GRID.H is surface (0m), y=0 is seabed (deepest)
@@ -6248,7 +6259,8 @@ document.getElementById('peri-btn-reveal-peri').addEventListener('click', () => 
     state.enemyKnowsPlayer = true;
     state.enemyKnowsTimer = 240;
     state.enemyLastKnown = {x: state.player.x, z: state.player.z};
-    state.enemyPingTimer = 720 + Math.floor(Math.random() * 480); // 12-20s until first enemy ping
+    state.enemyPingTimer = 1800 + Math.floor(Math.random() * 1200); // 30-50s until first ping
+    state._enemyBlindFrames = 0;
     state.playerNoise = 0;
     // Save and apply preset: dense points, lines off, black fill
     _silentPreset = { cloudDensity, showWireframe: state.showWireframe, terrainFillOpacity, lineOpacity };
@@ -7787,7 +7799,8 @@ window._engageSilentRunning = function() {
   state.enemyKnowsPlayer = true;
   state.enemyKnowsTimer = 240;
   state.enemyLastKnown = { x: state.player.x, z: state.player.z };
-  state.enemyPingTimer = 720 + Math.floor(Math.random() * 480);
+  state.enemyPingTimer = 1800 + Math.floor(Math.random() * 1200);
+  state._enemyBlindFrames = 0;
   state.playerNoise = 0;
   _silentPreset = { cloudDensity, showWireframe: state.showWireframe, terrainFillOpacity, lineOpacity };
   cloudDensity = DENSITY_MIN;

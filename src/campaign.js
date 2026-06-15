@@ -121,14 +121,14 @@ const MISSIONS = [
       'OPERATION PREDATOR — NORTH ATLANTIC\n\n' +
       'SIGINT confirms three enemy supply ships are crossing the drop-off at slow speed, heavily laden with munitions and fuel bound for the eastern front. They must not reach port.\n\n' +
       'You have a narrow window. The convoy moves slow — use it. Torpedo run from depth, stay submerged, and don\'t surface. Enemy patrol boats are in the area.\n\n' +
-      'Three ships. Five hits each. All three must go down.\n\n' +
+      'Three ships. Three hits each. All three must go down.\n\n' +
       'THREATS: Surface escorts · Enemy submarine · Convoy crossing timer\n\n' +
       'The supply line ends here, Commander.',
     objectiveType: 'convoy',
     killTarget: 3,
     convoy: {
       heading: Math.PI / 2,
-      speed: 0.018,
+      speed: 0.04,
       ships: [
         { label: 'CARGO-01', x: 3,   z: 48 },
         { label: 'CARGO-02', x: -28, z: 64 },
@@ -423,7 +423,7 @@ function launchMission(missionIndex, difficulty) {
   if (!bg) { console.error('[campaign] No battleground found:', mission.mapId); return; }
 
   _missionKillCount = 0;
-  var _killTarget = mission.enemyCount[difficulty] || 1;
+  var _killTarget = (isConvoy && mission.killTarget) ? mission.killTarget : (mission.enemyCount[difficulty] || 1);
   window._campaignLives = diff.lives;
   window._campaignMode = true;
   window._campaignBriefingImg = mission.briefingImg;

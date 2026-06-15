@@ -10052,7 +10052,7 @@ function updateShips() {
       // Must be a player torpedo near the surface to hit a ship (mines handled separately)
       const dx = t.x - ship.x, dz = t.z - ship.z;
       const dist2d = Math.sqrt(dx*dx + dz*dz);
-      if (!t.isMine && !t.isEnemy && t.y >= GRID.H - 1.5 && dist2d < ship.length/2 + 1.5) {
+      if (!t.isMine && !t.isEnemy && (ship.isConvoy || t.y >= GRID.H - 1.5) && dist2d < ship.length/2 + 1.5) {
         const maxHits = ship.type === 'supply' ? 3 : ship.type === 'destroyer' ? 3 : 2;
         const killBonus = ship.type === 'supply' ? 200 : ship.type === 'destroyer' ? 30 : 20;
         ship.hits++;
